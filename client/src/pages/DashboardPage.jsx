@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { CalendarRange, Flame, HeartPulse, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { apiFetch } from "../api";
+import { MetricSkeleton, PageState } from "../ui";
 
 const ranges = ["today", "week", "month"];
 const moodColors = {
@@ -25,11 +26,16 @@ export default function DashboardPage() {
   const [data, setData] = useState(null);
   const [range, setRange] = useState("week");
   const [entryLimit, setEntryLimit] = useState(8);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
+    setLoading(true);
+    setError("");
     apiFetch(`/api/dashboard/summary?range=${range}`)
       .then(setData)
-      .catch(() => {});
+      .catch((err) => setError(err.message || "Could not load dashboard."))
+      .finally(() => setLoading(false));
   }, [range]);
 
   useEffect(() => {
@@ -64,7 +70,7 @@ export default function DashboardPage() {
           <div className="mt-5 flex gap-2 flex-wrap">
             <Link
               to="/journal/new"
-              className="inline-flex rounded-xl px-4 py-2.5 bg-[#8fae73] hover:bg-[#9fbe83] text-sm font-medium text-slate-900"
+              className="inline-flex rounded-xl px-4 py-2.5 bg-brand-300 hover:bg-brand-200 text-sm font-medium text-slate-950"
             >
               Write journal
             </Link>
@@ -79,9 +85,10 @@ export default function DashboardPage() {
             <button
               key={item}
               type="button"
+              aria-pressed={item === range}
               onClick={() => setRange(item)}
               className={`px-4 py-2.5 rounded-lg text-sm capitalize border ${
-                item === range ? "bg-[#8fae73]/25 border-[#d9d2b0]/50" : "bg-white/5 border-white/10"
+                item === range ? "bg-brand-300/25 border-brand-100/50" : "bg-white/5 border-white/10"
               }`}
             >
               {item === "week" ? "This week" : item === "month" ? "This month" : "Today"}
@@ -89,15 +96,23 @@ export default function DashboardPage() {
           ))}
         </div>
 
+        {error ? <PageState title="Dashboard could not load" message={error} /> : null}
+
         <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-          <StatCard label="Daily wellness" value={data?.dailyWellnessScore ?? "--"} icon={HeartPulse} />
-          <StatCard label="Journaling streak" value={data?.journalingStreak ?? "--"} icon={Flame} highlight />
-          <StatCard
-            label={range === "today" ? "Entries today" : range === "week" ? "Entries this week" : "Entries this month"}
-            value={data?.entriesInRange ?? "--"}
-            icon={CalendarRange}
-          />
-          <StatCard label="Current emotional state" value={data?.todaysMood ?? "--"} icon={Sparkles} />
+          {loading
+            ? [0, 1, 2, 3].map((item) => <MetricSkeleton key={item} />)
+            : (
+              <>
+                <StatCard label="Daily wellness" value={data?.dailyWellnessScore ?? "--"} icon={HeartPulse} />
+                <StatCard label="Journaling streak" value={data?.journalingStreak ?? "--"} icon={Flame} highlight />
+                <StatCard
+                  label={range === "today" ? "Entries today" : range === "week" ? "Entries this week" : "Entries this month"}
+                  value={data?.entriesInRange ?? "--"}
+                  icon={CalendarRange}
+                />
+                <StatCard label="Current emotional state" value={data?.todaysMood ?? "--"} icon={Sparkles} />
+              </>
+            )}
         </div>
 
         <div className="glass rounded-2xl p-5">
@@ -146,16 +161,28 @@ export default function DashboardPage() {
                 </span>
               ))}
             </div>
-            <div className="mt-3 grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-              {(data?.recentEntries || []).slice(0, entryLimit).map((entry) => (
-                <div key={entry.id} className="rounded-xl bg-white/5 border border-white/10 p-3 relative overflow-hidden">
-                  <span className={`absolute left-0 top-0 bottom-0 w-1 ${moodColors[entry.mood] || "bg-cyan-400/70"}`} />
-                  <p className="text-xs text-white/60 pl-2">{new Date(entry.createdAt).toDateString()}</p>
-                  <p className="text-sm text-white/85 mt-1 pl-2">{entry.title}</p>
-                  <p className="text-[11px] text-[#d9d2b0] mt-2 capitalize pl-2">{entry.mood}</p>
-                </div>
-              ))}
-            </div>
+            {(data?.recentEntries || []).length === 0 && !loading ? (
+              <PageState
+                title="No journal moments yet"
+                message="Write a quick entry to start building your mood history."
+                action={
+                  <Link to="/journal/new" className="text-brand-100 hover:text-brand-50">
+                    Write your first entry
+                  </Link>
+                }
+              />
+            ) : (
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                {(data?.recentEntries || []).slice(0, entryLimit).map((entry) => (
+                  <div key={entry.id} className="rounded-xl bg-white/5 border border-white/10 p-3 relative overflow-hidden">
+                    <span className={`absolute left-0 top-0 bottom-0 w-1 ${moodColors[entry.mood] || "bg-cyan-400/70"}`} />
+                    <p className="text-xs text-white/60 pl-2">{new Date(entry.createdAt).toDateString()}</p>
+                    <p className="text-sm text-white/85 mt-1 pl-2">{entry.title}</p>
+                    <p className="text-[11px] text-brand-100 mt-2 capitalize pl-2">{entry.mood}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

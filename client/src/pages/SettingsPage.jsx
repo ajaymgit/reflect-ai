@@ -25,12 +25,13 @@ export default function SettingsPage() {
   useEffect(() => {
     localStorage.setItem("equoria-settings", JSON.stringify(settings));
     document.body.setAttribute("data-theme-mode", settings.themeMode);
+    document.body.setAttribute("data-reduced-motion", settings.reducedMotion ? "true" : "false");
   }, [settings]);
 
   return (
     <main className="p-4 md:p-6">
       <div className="max-w-4xl mx-auto glass rounded-2xl p-5">
-        <p className="text-cyan-300 text-xs uppercase tracking-wider">Settings</p>
+        <p className="text-brand-100 text-xs uppercase tracking-wider">Settings</p>
         <h2 className="text-2xl font-semibold mt-1">Preferences</h2>
         <div className="mt-4 grid md:grid-cols-2 gap-3">
           <ToggleOption
@@ -78,7 +79,7 @@ function ToggleOption({ title, detail, checked, onChange }) {
           type="button"
           onClick={onChange}
           className={`rounded-full px-3 py-1 text-xs border ${
-            checked ? "bg-cyan-500/25 border-cyan-300/40" : "bg-white/5 border-white/15"
+            checked ? "bg-brand-300/25 border-brand-100/40" : "bg-white/5 border-white/15"
           }`}
         >
           {checked ? "On" : "Off"}

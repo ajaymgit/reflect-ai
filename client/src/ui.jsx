@@ -1,0 +1,50 @@
+export function Button({ children, variant = "primary", className = "", ...props }) {
+  const variants = {
+    primary:
+      "bg-brand-300 text-slate-950 hover:bg-brand-200 focus-visible:ring-brand-200 disabled:opacity-60 disabled:hover:bg-brand-300",
+    secondary:
+      "bg-white/8 text-white border border-white/15 hover:bg-white/12 focus-visible:ring-white/40",
+    ghost: "bg-transparent text-brand-100 hover:bg-white/8 focus-visible:ring-brand-200",
+  };
+
+  return (
+    <button
+      className={`inline-flex min-h-11 items-center justify-center rounded-xl px-4 py-2.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${variants[variant]} ${className}`}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function TextField({ label, id, className = "", as: Component = "input", ...props }) {
+  return (
+    <label className="block space-y-1.5 text-sm text-white/80" htmlFor={id}>
+      <span>{label}</span>
+      <Component
+        id={id}
+        className={`w-full rounded-xl border border-white/10 bg-slate-950/70 p-3 text-white outline-none transition placeholder:text-white/35 focus:border-brand-200 focus:ring-2 focus:ring-brand-200/30 ${className}`}
+        {...props}
+      />
+    </label>
+  );
+}
+
+export function PageState({ title, message, action }) {
+  return (
+    <div className="glass rounded-2xl p-5 text-sm text-white/75">
+      <p className="text-base font-medium text-white">{title}</p>
+      {message ? <p className="mt-2 leading-6">{message}</p> : null}
+      {action ? <div className="mt-4">{action}</div> : null}
+    </div>
+  );
+}
+
+export function MetricSkeleton() {
+  return (
+    <div className="glass skeleton-pulse rounded-2xl p-5" aria-hidden="true">
+      <div className="h-4 w-24 rounded bg-white/10" />
+      <div className="mt-3 h-8 w-16 rounded bg-white/10" />
+    </div>
+  );
+}

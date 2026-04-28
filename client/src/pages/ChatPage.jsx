@@ -3,15 +3,16 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiFetch } from "../api";
 import { useAuth } from "../context/AuthContext";
+import { Button, PageState } from "../ui";
 
 const moodOptions = ["happy", "calm", "reflective", "sad", "stressed", "angry"];
 const moodMeta = {
-  happy: { icon: "☀️", label: "Happy" },
-  calm: { icon: "🍃", label: "Calm" },
-  reflective: { icon: "🌿", label: "Reflective" },
-  sad: { icon: "🌧️", label: "Sad" },
-  stressed: { icon: "🟠", label: "Stressed" },
-  angry: { icon: "🔴", label: "Angry" },
+  happy: { label: "Happy" },
+  calm: { label: "Calm" },
+  reflective: { label: "Reflective" },
+  sad: { label: "Sad" },
+  stressed: { label: "Stressed" },
+  angry: { label: "Angry" },
 };
 const quickPrompts = [
   "Quick emotional check-in",
@@ -35,9 +36,7 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false);
   const [quickEntry, setQuickEntry] = useState("");
   const [mood, setMood] = useState("calm");
-  const [themeMode] = useState("midnight");
-  const [writingMode] = useState("focus");
-  const [ambientOn] = useState(true);
+  const [settings, setSettings] = useState({ themeMode: "daylight", reducedMotion: false, privacyMode: false });
   const [recentEntries, setRecentEntries] = useState([]);
   const [selectedEntryId, setSelectedEntryId] = useState(null);
   const [smartPrompt, setSmartPrompt] = useState("");
@@ -46,6 +45,8 @@ export default function ChatPage() {
   const [responseStyle, setResponseStyle] = useState(50);
   const [useMemory, setUseMemory] = useState(true);
   const [statusText, setStatusText] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [quickEntryStatus, setQuickEntryStatus] = useState("");
   function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
@@ -54,21 +55,30 @@ export default function ChatPage() {
   const endRef = useRef(null);
 
   useEffect(() => {
+    try {
+      const raw = localStorage.getItem("equoria-settings");
+      if (raw) setSettings((prev) => ({ ...prev, ...JSON.parse(raw) }));
+    } catch {
+      setSettings({ themeMode: "daylight", reducedMotion: false, privacyMode: false });
+    }
+  }, []);
+
+  useEffect(() => {
     apiFetch("/api/chat/session")
       .then((data) => setTurns(data.turns || []))
-      .catch(() => {});
+      .catch((error) => setLoadError(error.message));
     apiFetch("/api/journal/recent")
       .then((data) => {
         const entries = data.entries || [];
         setRecentEntries(entries);
         setSelectedEntryId(entries[0]?._id || null);
       })
-      .catch(() => {});
+      .catch((error) => setLoadError(error.message));
   }, []);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [turns, loading]);
+    endRef.current?.scrollIntoView({ behavior: settings.reducedMotion ? "auto" : "smooth", block: "end" });
+  }, [turns, loading, settings.reducedMotion]);
 
   useEffect(() => {
     if (!recentEntries.length) {
@@ -153,13 +163,19 @@ export default function ChatPage() {
 
   async function saveQuickEntry() {
     if (!quickEntry.trim()) return;
-    const saved = await apiFetch("/api/journal/quick-entry", {
-      method: "POST",
-      body: JSON.stringify({ content: quickEntry, mood }),
-    });
-    setRecentEntries((prev) => [saved, ...prev].slice(0, 30));
-    setSelectedEntryId(saved._id);
-    setQuickEntry("");
+    setQuickEntryStatus("Saving...");
+    try {
+      const saved = await apiFetch("/api/journal/quick-entry", {
+        method: "POST",
+        body: JSON.stringify({ content: quickEntry, mood }),
+      });
+      setRecentEntries((prev) => [saved, ...prev].slice(0, 30));
+      setSelectedEntryId(saved._id);
+      setQuickEntry("");
+      setQuickEntryStatus("Saved");
+    } catch (error) {
+      setQuickEntryStatus(error.message || "Save failed");
+    }
   }
 
   function useQuickPrompt(prompt) {
@@ -194,8 +210,8 @@ export default function ChatPage() {
 
   return (
     <div
-      className={`text-white flex flex-col theme-${themeMode} ${
-        ambientOn ? "living-bg" : ""
+      className={`text-white flex flex-col theme-${settings.themeMode} ${
+        !settings.reducedMotion ? "living-bg" : ""
       }`}
     >
       <main className="p-3 md:p-6">
@@ -225,6 +241,7 @@ export default function ChatPage() {
                   <button
                     key={item.id}
                     type="button"
+                    aria-pressed={chatMode === item.id}
                     onClick={() => setChatMode(item.id)}
                     className={`text-xs px-3 py-2 rounded-full border ${
                       chatMode === item.id
@@ -275,6 +292,12 @@ export default function ChatPage() {
             )}
 
             <div ref={listRef} className="flex-1 overflow-y-auto scroll-area p-4 md:p-6 space-y-4">
+              {loadError && (
+                <PageState
+                  title="Chat history could not load"
+                  message={loadError}
+                />
+              )}
               {turns.length === 0 && (
                 <div className="text-sm text-white/75 glass rounded-2xl p-4 max-w-2xl">
                   Start with anything. ReflectAI will respond like a normal chat and adapt as your topic changes.
@@ -282,7 +305,12 @@ export default function ChatPage() {
               )}
 
               {turns.map((turn, idx) => (
-                <motion.div key={idx} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2">
+                <motion.div
+                  key={`${turn.createdAt || idx}-${turn.userMessage}`}
+                  initial={settings.reducedMotion ? false : { opacity: 0, y: 4 }}
+                  animate={settings.reducedMotion ? undefined : { opacity: 1, y: 0 }}
+                  className="space-y-2"
+                >
                   <div className="rounded-2xl p-3 max-w-2xl ml-auto bg-[#8fae73]/30 soft-border">
                     <p className="text-[11px] text-[#d9d2b0] mb-1">You</p>
                     <p className="text-sm leading-6">{turn.userMessage}</p>
@@ -332,21 +360,21 @@ export default function ChatPage() {
               </div>
               <form onSubmit={sendMessage} className="flex gap-2 items-end">
                 <textarea
+                  aria-label="Message ReflectAI"
                   rows={2}
                   className={`flex-1 rounded-xl bg-[#1f2a22] p-3 border border-white/10 outline-none focus:border-[#8fae73] resize-none min-h-11 ${
-                    writingMode === "typewriter" ? "text-lg leading-8" : ""
+                    settings.focusMode === false ? "text-lg leading-8" : ""
                   }`}
                   placeholder="Message ReflectAI... (Enter to send, Shift+Enter for new line)"
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   onKeyDown={onComposerKeyDown}
                 />
-                <button
-                  className="rounded-xl px-5 bg-[#8fae73] hover:bg-[#9fbe83] text-slate-900 min-h-11 font-medium disabled:opacity-60"
+                <Button
                   disabled={loading || !message.trim()}
                 >
                   Send
-                </button>
+                </Button>
               </form>
               <p className="text-xs text-white/60">
                 ReflectAI supports self-reflection and is not a medical service.
@@ -360,6 +388,7 @@ export default function ChatPage() {
               <p className="text-sm text-white/70 mt-1">Capture your current state without leaving chat.</p>
             </div>
             <textarea
+              aria-label="Quick journal entry"
               className="w-full rounded-xl bg-[#1f2a22] p-3 border border-white/10 min-h-28 outline-none focus:border-[#8fae73]"
               value={quickEntry}
               onChange={(e) => setQuickEntry(e.target.value)}
@@ -370,38 +399,45 @@ export default function ChatPage() {
                 <button
                   type="button"
                   key={m}
+                  aria-pressed={mood === m}
                   onClick={() => setMood(m)}
                   className={`px-3 py-2 min-h-11 rounded-xl border text-sm flex items-center justify-center gap-2 ${
                     mood === m ? "bg-[#8fae73]/30 border-[#c5d7a6]" : "border-white/10"
                   }`}
                 >
-                  <span>{moodMeta[m]?.icon || "•"}</span>
+                  <span className={`h-2.5 w-2.5 rounded-full ${moodColor[m] || "bg-white/40"}`} aria-hidden="true" />
                   <span>{moodMeta[m]?.label || m}</span>
                 </button>
               ))}
             </div>
-            <button
+            <Button
               type="button"
-              className="w-full px-4 py-3 min-h-11 rounded-xl bg-[#8fae73] hover:bg-[#9fbe83] text-slate-900 font-medium"
+              className="w-full"
               onClick={saveQuickEntry}
             >
               Save Journal Entry
-            </button>
+            </Button>
+            {quickEntryStatus && <p className="text-xs text-white/65">{quickEntryStatus}</p>}
 
             <div className="border-t border-white/10 pt-4 space-y-3">
               <p className="text-[#d9d2b0] text-xs uppercase tracking-wider">Emotional Timeline</p>
               <div className="flex items-end gap-1 h-8">
-                {sparkline.map((entry) => (
-                  <button
-                    key={entry._id}
-                    type="button"
-                    title={`${new Date(entry.createdAt).toDateString()} • ${entry.mood}`}
-                    onClick={() => setSelectedEntryId(entry._id)}
-                    className={`w-3 rounded-t ${moodColor[entry.mood] || "bg-white/40"} ${
-                      selectedEntryId === entry._id ? "h-8 ring-1 ring-white/80" : "h-5"
-                    }`}
-                  />
-                ))}
+                {sparkline.length ? (
+                  sparkline.map((entry) => (
+                    <button
+                      key={entry._id}
+                      type="button"
+                      aria-label={`Select ${entry.mood} entry from ${new Date(entry.createdAt).toDateString()}`}
+                      title={`${new Date(entry.createdAt).toDateString()} • ${entry.mood}`}
+                      onClick={() => setSelectedEntryId(entry._id)}
+                      className={`w-3 rounded-t ${moodColor[entry.mood] || "bg-white/40"} ${
+                        selectedEntryId === entry._id ? "h-8 ring-1 ring-white/80" : "h-5"
+                      }`}
+                    />
+                  ))
+                ) : (
+                  <p className="text-xs text-white/60">Your mood timeline appears after your first journal entry.</p>
+                )}
               </div>
               <div className="max-h-48 overflow-y-auto scroll-area space-y-2">
                 {recentEntries.map((entry) => (
@@ -418,7 +454,9 @@ export default function ChatPage() {
                     <p className="text-[11px] text-white/60">
                       {new Date(entry.createdAt).toDateString()} • {entry.mood}
                     </p>
-                    <p className="text-xs line-clamp-2 text-white/80">{entry.content}</p>
+                    <p className="text-xs line-clamp-2 text-white/80">
+                      {settings.privacyMode ? "Private preview hidden" : entry.content}
+                    </p>
                   </button>
                 ))}
               </div>
@@ -427,7 +465,9 @@ export default function ChatPage() {
                   <p className="text-[11px] text-[#d9d2b0]">
                     {new Date(selectedEntry.createdAt).toDateString()} • {selectedEntry.mood}
                   </p>
-                  <p className="text-sm text-white/85 mt-1">{selectedEntry.content}</p>
+                  <p className="text-sm text-white/85 mt-1">
+                    {settings.privacyMode ? "Private preview hidden" : selectedEntry.content}
+                  </p>
                 </div>
               )}
             </div>
