@@ -255,7 +255,7 @@ export default function ChatPage() {
                 <label className="text-xs text-white/70 flex items-center gap-2">
                   <span className="shrink-0">Response style</span>
                   <input
-                    className="w-full"
+                    className="w-full accent-brand-300"
                     type="range"
                     min={0}
                     max={100}
