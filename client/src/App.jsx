@@ -12,6 +12,7 @@ const RetrospectPage = lazy(() => import("./pages/RetrospectPage"));
 const ChatPage = lazy(() => import("./pages/ChatPage"));
 const HealthPage = lazy(() => import("./pages/HealthPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
 
 export default function App() {
   const routeFallback = (
@@ -99,6 +100,14 @@ export default function App() {
           }
         />
         <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route
+          path="*"
+          element={
+            <Suspense fallback={routeFallback}>
+              <NotFoundPage />
+            </Suspense>
+          }
+        />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>

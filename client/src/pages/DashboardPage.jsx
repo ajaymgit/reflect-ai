@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { CalendarRange, Flame, HeartPulse, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { apiFetch } from "../api";
-import { MetricSkeleton, PageState } from "../ui";
+import { ButtonLink, Card, MetricSkeleton, PageHeader, PageState } from "../ui";
 
 const ranges = ["today", "week", "month"];
 const moodColors = {
@@ -61,24 +61,17 @@ export default function DashboardPage() {
   return (
     <main className={`p-4 md:p-6 living-bg ${moodClass}`}>
       <div className="max-w-6xl mx-auto space-y-4">
-        <div className="glass rounded-3xl p-6 md:p-7">
-          <p className="text-[#d9d2b0] text-sm">{data?.greeting || "Welcome back"}</p>
-          <h2 className="text-3xl md:text-4xl font-semibold mt-2">How are you feeling today?</h2>
-          <p className="text-sm text-white/70 mt-3 max-w-2xl">
-            Start with a quick entry. Keep it short or write deeply, your history and mood patterns will build over time.
-          </p>
-          <div className="mt-5 flex gap-2 flex-wrap">
-            <Link
-              to="/journal/new"
-              className="inline-flex rounded-xl px-4 py-2.5 bg-brand-300 hover:bg-brand-200 text-sm font-medium text-slate-950"
-            >
-              Write journal
-            </Link>
-            <Link to="/chat" className="inline-flex rounded-xl px-5 py-3 bg-white/10 border border-white/15 hover:bg-white/15 text-base">
-              Continue reflection
-            </Link>
-          </div>
-        </div>
+        <PageHeader
+          eyebrow={data?.greeting || "Welcome back"}
+          title="How are you feeling today?"
+          description="Start with a quick entry. Keep it short or write deeply, your history and mood patterns will build over time."
+          action={
+            <>
+              <ButtonLink to="/journal/new">Write journal</ButtonLink>
+              <ButtonLink to="/chat" variant="secondary">Continue reflection</ButtonLink>
+            </>
+          }
+        />
 
         <div className="glass rounded-2xl p-4 flex flex-wrap gap-2">
           {ranges.map((item) => (
@@ -115,7 +108,7 @@ export default function DashboardPage() {
             )}
         </div>
 
-        <div className="glass rounded-2xl p-5">
+        <Card>
           <p className="text-xs text-[#d9d2b0] uppercase tracking-wider">How You've Been Feeling</p>
           <p className="text-sm text-white/75 mt-2">
             A simple mood snapshot from your recent journals.
@@ -135,15 +128,15 @@ export default function DashboardPage() {
               );
             })}
           </div>
-        </div>
+        </Card>
 
-        <div className="glass rounded-2xl p-4">
+        <Card>
           <p className="text-xs text-[#c5d7a6] uppercase tracking-wider">Cumulative Insight</p>
           <p className="text-sm text-white/85 mt-2">{data?.cumulativeInsight || "Building your insight..."}</p>
-        </div>
+        </Card>
 
         <div className="grid gap-4">
-          <div className="glass rounded-2xl p-4">
+          <Card>
             <div className="flex items-center justify-between">
               <h3 className="font-medium">Your recent moments</h3>
               <Link to="/journal/new" className="text-xs text-[#d9d2b0] hover:text-[#e6dfbf]">
@@ -183,7 +176,7 @@ export default function DashboardPage() {
                 ))}
               </div>
             )}
-          </div>
+          </Card>
         </div>
       </div>
     </main>
@@ -192,12 +185,12 @@ export default function DashboardPage() {
 
 function StatCard({ label, value, icon: Icon, highlight = false }) {
   return (
-    <div className={`glass rounded-2xl p-5 ${highlight ? "shadow-[0_0_24px_rgba(143,174,115,0.28)]" : ""}`}>
+    <Card className={highlight ? "shadow-[0_0_24px_rgba(143,174,115,0.28)]" : ""}>
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm text-white/70">{label}</p>
         {Icon ? <Icon size={18} className="text-[#d9d2b0]" /> : null}
       </div>
       <p className="text-3xl font-semibold mt-2 capitalize">{value}</p>
-    </div>
+    </Card>
   );
 }

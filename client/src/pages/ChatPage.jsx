@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiFetch } from "../api";
 import { useAuth } from "../context/AuthContext";
-import { Button, PageState } from "../ui";
+import { Button, Card, PageHeader, PageState, StatusPill, ToggleButton } from "../ui";
 
 const moodOptions = ["happy", "calm", "reflective", "sad", "stressed", "angry"];
 const moodMeta = {
@@ -218,14 +218,9 @@ export default function ChatPage() {
         <div className="max-w-7xl mx-auto grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4 h-full">
           <section className={`glass rounded-3xl flex flex-col min-h-[70vh] ${toneClass}`}>
             <div className="p-4 md:p-5 border-b border-white/10 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm text-white/80">{heroGreeting}, {user?.name}</p>
-                <p className="text-xs text-white/60 mt-1">{smartPrompt}</p>
-              </div>
+              <PageHeader eyebrow={`${heroGreeting}, ${user?.name || "there"}`} title="Reflective chat" description={smartPrompt} />
               <div className="flex items-center gap-2">
-                <span className="text-xs px-3 py-1 rounded-full bg-[#8fae73]/25 border border-[#c5d7a6]/35">
-                  Confidence {(meta.confidence * 100).toFixed(0)}%
-                </span>
+                <StatusPill>Confidence {(meta.confidence * 100).toFixed(0)}%</StatusPill>
                 <Link to="/dashboard" className="text-xs px-3 py-1 rounded-full bg-white/5 border border-white/10 hover:bg-white/10">
                   Home
                 </Link>
@@ -238,19 +233,13 @@ export default function ChatPage() {
                   { id: "deep", label: "Deep reflection" },
                   { id: "analysis", label: "Pattern analysis" },
                 ].map((item) => (
-                  <button
+                  <ToggleButton
                     key={item.id}
-                    type="button"
-                    aria-pressed={chatMode === item.id}
+                    selected={chatMode === item.id}
                     onClick={() => setChatMode(item.id)}
-                    className={`text-xs px-3 py-2 rounded-full border ${
-                      chatMode === item.id
-                        ? "bg-[#8fae73]/30 border-[#c5d7a6]"
-                        : "bg-white/5 border-white/10 hover:bg-white/10"
-                    }`}
                   >
                     {item.label}
-                  </button>
+                  </ToggleButton>
                 ))}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-3 items-center">
@@ -299,9 +288,24 @@ export default function ChatPage() {
                 />
               )}
               {turns.length === 0 && (
-                <div className="text-sm text-white/75 glass rounded-2xl p-4 max-w-2xl">
-                  Start with anything. ReflectAI will respond like a normal chat and adapt as your topic changes.
-                </div>
+                <PageState
+                  title="Start with anything"
+                  message="ReflectAI will respond like a normal chat and adapt as your topic changes."
+                  action={
+                    <div className="flex flex-wrap gap-2">
+                      {quickPrompts.slice(0, 2).map((prompt) => (
+                        <button
+                          key={prompt}
+                          type="button"
+                          onClick={() => useQuickPrompt(prompt)}
+                          className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/80 hover:bg-brand-300/20"
+                        >
+                          {prompt}
+                        </button>
+                      ))}
+                    </div>
+                  }
+                />
               )}
 
               {turns.map((turn, idx) => (
@@ -315,37 +319,31 @@ export default function ChatPage() {
                     <p className="text-[11px] text-[#d9d2b0] mb-1">You</p>
                     <p className="text-sm leading-6">{turn.userMessage}</p>
                   </div>
-                  <div className="glass rounded-2xl p-4 max-w-2xl">
-                    <p className="text-[11px] text-[#d9d2b0] mb-1">ReflectAI</p>
-                    <p className="text-sm leading-6">{turn.aiResponse}</p>
-                    {turn.evidence?.length > 0 && (
-                      <details className="mt-3 rounded-lg bg-[#111827] p-2 border border-white/10 text-xs">
-                        <summary className="cursor-pointer text-[#d9d2b0]">Why this response</summary>
-                        <div className="mt-2 grid gap-2">
-                          {turn.evidence.map((ev, i) => (
-                            <div key={i} className="rounded-lg bg-white/5 p-2 border border-white/10">
-                              <p className="text-[#d9d2b0]">
-                                {ev.date ? new Date(ev.date).toDateString() : "Journal evidence"}
-                              </p>
-                              <p className="text-white/80">{ev.quote || "Related journal reference."}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </details>
-                    )}
-                  </div>
+                  <AssistantMessage turn={turn} />
                 </motion.div>
               ))}
               {loading && (
-                <div className="glass rounded-2xl p-3 max-w-2xl">
-                  <p className="text-[11px] text-[#d9d2b0] mb-1">ReflectAI</p>
-                  <p className="text-sm text-white/70">{statusText || "Thinking..."}</p>
+                <div className="glass rounded-2xl p-4 max-w-2xl">
+                  <p className="text-[11px] text-brand-100 mb-2">ReflectAI</p>
+                  <div className="flex items-center gap-3 text-sm text-white/70">
+                    <span className="flex gap-1" aria-hidden="true">
+                      <span className="h-2 w-2 rounded-full bg-brand-200 skeleton-pulse" />
+                      <span className="h-2 w-2 rounded-full bg-brand-200 skeleton-pulse [animation-delay:120ms]" />
+                      <span className="h-2 w-2 rounded-full bg-brand-200 skeleton-pulse [animation-delay:240ms]" />
+                    </span>
+                    {statusText || "Thinking..."}
+                  </div>
                 </div>
               )}
               <div ref={endRef} />
             </div>
 
             <div className="border-t border-white/10 p-4 md:p-5 space-y-3">
+              <div className="grid grid-cols-3 gap-2">
+                <StatusPill>Mode: {chatMode}</StatusPill>
+                <StatusPill>Style: {responseStyle < 35 ? "gentle" : responseStyle < 70 ? "balanced" : "analytical"}</StatusPill>
+                <StatusPill>{useMemory ? "Memory on" : "Memory off"}</StatusPill>
+              </div>
               <div className="flex flex-wrap gap-2">
                 {quickPrompts.map((prompt) => (
                   <button
@@ -402,7 +400,7 @@ export default function ChatPage() {
                   aria-pressed={mood === m}
                   onClick={() => setMood(m)}
                   className={`px-3 py-2 min-h-11 rounded-xl border text-sm flex items-center justify-center gap-2 ${
-                    mood === m ? "bg-[#8fae73]/30 border-[#c5d7a6]" : "border-white/10"
+                    mood === m ? "bg-brand-300/30 border-brand-100" : "border-white/10"
                   }`}
                 >
                   <span className={`h-2.5 w-2.5 rounded-full ${moodColor[m] || "bg-white/40"}`} aria-hidden="true" />
@@ -475,6 +473,35 @@ export default function ChatPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+function AssistantMessage({ turn }) {
+  return (
+    <Card className="max-w-2xl">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] text-brand-100 mb-1">ReflectAI</p>
+          <p className="text-sm leading-6">{turn.aiResponse}</p>
+        </div>
+        <StatusPill>{Math.round((turn.confidence || 0) * 100)}%</StatusPill>
+      </div>
+      {turn.evidence?.length > 0 && (
+        <details className="mt-3 rounded-xl bg-slate-950/70 p-3 border border-white/10 text-xs">
+          <summary className="cursor-pointer text-brand-100">Evidence used</summary>
+          <div className="mt-3 grid gap-2">
+            {turn.evidence.map((ev, i) => (
+              <div key={`${ev.journalId || i}-${ev.date || ""}`} className="rounded-lg bg-white/5 p-3 border border-white/10">
+                <p className="text-brand-100">
+                  {ev.date ? new Date(ev.date).toDateString() : "Journal evidence"}
+                </p>
+                <p className="text-white/80 mt-1">{ev.quote || "Related journal reference."}</p>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </Card>
   );
 }
 
