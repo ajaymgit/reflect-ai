@@ -5,7 +5,7 @@ export function Button({ children, variant = "primary", className = "", ...props
     primary:
       "bg-brand-300 text-slate-950 hover:bg-brand-200 focus-visible:ring-brand-200 disabled:opacity-60 disabled:hover:bg-brand-300",
     secondary:
-      "bg-white/8 text-white border border-white/15 hover:bg-white/12 focus-visible:ring-white/40",
+      "bg-surface-200/80 text-white border border-cream-200/15 hover:bg-surface-100 focus-visible:ring-cream-200/40",
     ghost: "bg-transparent text-brand-100 hover:bg-white/8 focus-visible:ring-brand-200",
   };
 
@@ -22,7 +22,7 @@ export function Button({ children, variant = "primary", className = "", ...props
 export function ButtonLink({ children, to, variant = "primary", className = "", ...props }) {
   const variants = {
     primary: "bg-brand-300 text-slate-950 hover:bg-brand-200",
-    secondary: "bg-white/8 text-white border border-white/15 hover:bg-white/12",
+    secondary: "bg-surface-200/80 text-white border border-cream-200/15 hover:bg-surface-100",
     ghost: "bg-transparent text-brand-100 hover:bg-white/8",
   };
 
@@ -68,7 +68,7 @@ export function ToggleButton({ selected, pressed, children, className = "", ...p
       type="button"
       aria-pressed={isSelected}
       className={`rounded-xl border px-3 py-2 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200/60 ${
-        isSelected ? "border-brand-100/50 bg-brand-300/25 text-white" : "border-white/10 bg-white/5 text-white/85 hover:bg-white/10"
+        isSelected ? "border-brand-100/50 bg-brand-300/25 text-white" : "border-cream-200/10 bg-surface-200/50 text-white/85 hover:bg-surface-100"
       } ${className}`}
       {...props}
     >
@@ -91,7 +91,7 @@ export function TextField({ label, id, className = "", as: Component = "input", 
       <span>{label}</span>
       <Component
         id={id}
-        className={`w-full rounded-xl border border-white/10 bg-slate-950/70 p-3 text-white outline-none transition placeholder:text-white/35 focus:border-brand-200 focus:ring-2 focus:ring-brand-200/30 ${className}`}
+        className={`w-full rounded-xl border border-cream-200/10 bg-surface-300/80 p-3 text-white outline-none transition placeholder:text-white/35 focus:border-brand-200 focus:ring-2 focus:ring-brand-200/30 ${className}`}
         {...props}
       />
     </label>
@@ -110,7 +110,7 @@ export function PageState({ title, message, action }) {
 
 export function EmptyState({ eyebrow, title, message, action }) {
   return (
-    <div className="rounded-2xl border border-dashed border-white/15 bg-white/[0.04] p-5 text-sm text-white/75">
+    <div className="rounded-2xl border border-dashed border-cream-200/20 bg-surface-200/45 p-5 text-sm text-white/75">
       {eyebrow ? <p className="text-brand-100 text-xs uppercase tracking-wider">{eyebrow}</p> : null}
       <p className="mt-1 text-lg font-medium text-white">{title}</p>
       {message ? <p className="mt-2 leading-6">{message}</p> : null}

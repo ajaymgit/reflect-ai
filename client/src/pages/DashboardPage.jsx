@@ -6,20 +6,20 @@ import { ButtonLink, Card, MetricSkeleton, PageHeader, PageState } from "../ui";
 
 const ranges = ["today", "week", "month"];
 const moodColors = {
-  happy: "bg-[#e8ab5f]/80",
-  calm: "bg-[#8eb184]/80",
-  reflective: "bg-[#a989b2]/80",
-  sad: "bg-[#84689d]/80",
-  stressed: "bg-[#da8b5b]/80",
-  angry: "bg-[#ef4444]/80",
+  happy: "bg-mood-happy",
+  calm: "bg-mood-calm",
+  reflective: "bg-mood-reflective",
+  sad: "bg-mood-sad",
+  stressed: "bg-mood-stressed",
+  angry: "bg-mood-angry",
 };
 const emotionMeta = [
-  { key: "happy", label: "Happy", color: "bg-[#e8ab5f]" },
-  { key: "calm", label: "Calm", color: "bg-[#8eb184]" },
-  { key: "reflective", label: "Reflective", color: "bg-[#a989b2]" },
-  { key: "sad", label: "Sad", color: "bg-[#84689d]" },
-  { key: "stressed", label: "Stressed", color: "bg-[#da8b5b]" },
-  { key: "angry", label: "Angry", color: "bg-[#ef4444]" },
+  { key: "happy", label: "Happy", color: "bg-mood-happy" },
+  { key: "calm", label: "Calm", color: "bg-mood-calm" },
+  { key: "reflective", label: "Reflective", color: "bg-mood-reflective" },
+  { key: "sad", label: "Sad", color: "bg-mood-sad" },
+  { key: "stressed", label: "Stressed", color: "bg-mood-stressed" },
+  { key: "angry", label: "Angry", color: "bg-mood-angry" },
 ];
 
 export default function DashboardPage() {
@@ -109,7 +109,7 @@ export default function DashboardPage() {
         </div>
 
         <Card>
-          <p className="text-xs text-[#d9d2b0] uppercase tracking-wider">How You've Been Feeling</p>
+          <p className="text-xs text-brand-100 uppercase tracking-wider">How You've Been Feeling</p>
           <p className="text-sm text-white/75 mt-2">
             A simple mood snapshot from your recent journals.
           </p>
@@ -131,7 +131,7 @@ export default function DashboardPage() {
         </Card>
 
         <Card>
-          <p className="text-xs text-[#c5d7a6] uppercase tracking-wider">Cumulative Insight</p>
+          <p className="text-xs text-brand-200 uppercase tracking-wider">Cumulative Insight</p>
           <p className="text-sm text-white/85 mt-2">{data?.cumulativeInsight || "Building your insight..."}</p>
         </Card>
 
@@ -139,7 +139,7 @@ export default function DashboardPage() {
           <Card>
             <div className="flex items-center justify-between">
               <h3 className="font-medium">Your recent moments</h3>
-              <Link to="/journal/new" className="text-xs text-[#d9d2b0] hover:text-[#e6dfbf]">
+              <Link to="/journal/new" className="text-xs text-brand-100 hover:text-brand-50">
                 Add new
               </Link>
             </div>
@@ -168,7 +168,7 @@ export default function DashboardPage() {
               <div className="mt-3 grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
                 {(data?.recentEntries || []).slice(0, entryLimit).map((entry) => (
                   <div key={entry.id} className="rounded-xl bg-white/5 border border-white/10 p-3 relative overflow-hidden">
-                    <span className={`absolute left-0 top-0 bottom-0 w-1 ${moodColors[entry.mood] || "bg-cyan-400/70"}`} />
+                    <span className={`absolute left-0 top-0 bottom-0 w-1 ${moodColors[entry.mood] || "bg-brand-300"}`} />
                     <p className="text-xs text-white/60 pl-2">{new Date(entry.createdAt).toDateString()}</p>
                     <p className="text-sm text-white/85 mt-1 pl-2">{entry.title}</p>
                     <p className="text-[11px] text-brand-100 mt-2 capitalize pl-2">{entry.mood}</p>
@@ -188,7 +188,7 @@ function StatCard({ label, value, icon: Icon, highlight = false }) {
     <Card className={highlight ? "shadow-[0_0_24px_rgba(143,174,115,0.28)]" : ""}>
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm text-white/70">{label}</p>
-        {Icon ? <Icon size={18} className="text-[#d9d2b0]" /> : null}
+        {Icon ? <Icon size={18} className="text-brand-100" /> : null}
       </div>
       <p className="text-3xl font-semibold mt-2 capitalize">{value}</p>
     </Card>

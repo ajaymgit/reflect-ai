@@ -68,7 +68,7 @@ export default function RetrospectPage() {
                           tickFormatter={(v) => scoreToLabel(v)}
                         />
                         <Tooltip formatter={(value) => scoreToLabel(value)} />
-                        <Bar dataKey="score" fill="#9fbe83" radius={[8, 8, 0, 0]} />
+                        <Bar dataKey="score" fill="#a4bd81" radius={[8, 8, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>

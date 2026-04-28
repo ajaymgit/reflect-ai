@@ -66,7 +66,7 @@ export default function LoginPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          {error && <p className="text-red-300 text-sm" role="alert">{error}</p>}
+          {error && <p className="text-mood-coral text-sm" role="alert">{error}</p>}
           <Button className="w-full">
             Login
           </Button>

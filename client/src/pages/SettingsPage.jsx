@@ -98,7 +98,7 @@ function SelectOption({ title, detail, value, onChange }) {
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="rounded-lg bg-[#111827] border border-white/15 px-2 py-1 text-xs"
+          className="rounded-lg bg-surface-950 border border-white/15 px-2 py-1 text-xs"
         >
           <option value="midnight">Midnight</option>
           <option value="daylight">Daylight</option>

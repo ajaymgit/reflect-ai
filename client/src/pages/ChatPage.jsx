@@ -21,12 +21,12 @@ const quickPrompts = [
   "I am feeling grateful",
 ];
 const moodColor = {
-  happy: "bg-[#e8ab5f]/80",
-  calm: "bg-[#8eb184]/80",
-  reflective: "bg-[#a7b899]/80",
-  sad: "bg-[#7f8b74]/80",
-  stressed: "bg-[#da8b5b]/80",
-  angry: "bg-red-400/70",
+  happy: "bg-mood-happy",
+  calm: "bg-mood-calm",
+  reflective: "bg-mood-reflective",
+  sad: "bg-mood-sad",
+  stressed: "bg-mood-stressed",
+  angry: "bg-mood-angry",
 };
 
 export default function ChatPage() {
@@ -201,12 +201,12 @@ export default function ChatPage() {
     .find((t) => String(t.userMessage || "").trim().length > 10)?.userMessage;
   const toneClass =
     latestFocus === "emotional_safety"
-      ? "bg-[#1a3a44]/20"
+      ? "bg-surface-teal/20"
       : latestFocus === "positive_state"
-        ? "bg-[#3a4f3a]/20"
+        ? "bg-brand-500/15"
         : latestFocus === "relationships"
-          ? "bg-[#4a3550]/20"
-          : "bg-[#1f2a22]/20";
+          ? "bg-mood-reflective/10"
+          : "bg-surface-olive/35";
 
   return (
     <div
@@ -248,7 +248,7 @@ export default function ChatPage() {
                     type="checkbox"
                     checked={useMemory}
                     onChange={(e) => setUseMemory(e.target.checked)}
-                    className="accent-[#8fae73]"
+                    className="accent-brand-300"
                   />
                   Use journal memory
                 </label>
@@ -315,8 +315,8 @@ export default function ChatPage() {
                   animate={settings.reducedMotion ? undefined : { opacity: 1, y: 0 }}
                   className="space-y-2"
                 >
-                  <div className="rounded-2xl p-3 max-w-2xl ml-auto bg-[#8fae73]/30 soft-border">
-                    <p className="text-[11px] text-[#d9d2b0] mb-1">You</p>
+                  <div className="rounded-2xl p-3 max-w-2xl ml-auto bg-brand-300/25 soft-border">
+                    <p className="text-[11px] text-brand-100 mb-1">You</p>
                     <p className="text-sm leading-6">{turn.userMessage}</p>
                   </div>
                   <AssistantMessage turn={turn} />
@@ -350,7 +350,7 @@ export default function ChatPage() {
                     key={prompt}
                     type="button"
                     onClick={() => useQuickPrompt(prompt)}
-                    className="text-xs px-3 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-[#8fae73]/20"
+                    className="text-xs px-3 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-brand-300/20"
                   >
                     {prompt}
                   </button>
@@ -360,7 +360,7 @@ export default function ChatPage() {
                 <textarea
                   aria-label="Message ReflectAI"
                   rows={2}
-                  className={`flex-1 rounded-xl bg-[#1f2a22] p-3 border border-white/10 outline-none focus:border-[#8fae73] resize-none min-h-11 ${
+                  className={`flex-1 rounded-xl bg-surface-field p-3 border border-white/10 outline-none focus:border-brand-200 resize-none min-h-11 ${
                     settings.focusMode === false ? "text-lg leading-8" : ""
                   }`}
                   placeholder="Message ReflectAI... (Enter to send, Shift+Enter for new line)"
@@ -382,12 +382,12 @@ export default function ChatPage() {
 
           <aside className="glass rounded-3xl p-4 md:p-5 h-fit xl:sticky xl:top-6 space-y-4">
             <div>
-              <p className="text-[#d9d2b0] text-xs uppercase tracking-wider">Quick Journal</p>
+              <p className="text-brand-100 text-xs uppercase tracking-wider">Quick Journal</p>
               <p className="text-sm text-white/70 mt-1">Capture your current state without leaving chat.</p>
             </div>
             <textarea
               aria-label="Quick journal entry"
-              className="w-full rounded-xl bg-[#1f2a22] p-3 border border-white/10 min-h-28 outline-none focus:border-[#8fae73]"
+              className="w-full rounded-xl bg-surface-field p-3 border border-white/10 min-h-28 outline-none focus:border-brand-200"
               value={quickEntry}
               onChange={(e) => setQuickEntry(e.target.value)}
               placeholder="How are you feeling today?"
@@ -418,7 +418,7 @@ export default function ChatPage() {
             {quickEntryStatus && <p className="text-xs text-white/65">{quickEntryStatus}</p>}
 
             <div className="border-t border-white/10 pt-4 space-y-3">
-              <p className="text-[#d9d2b0] text-xs uppercase tracking-wider">Emotional Timeline</p>
+              <p className="text-brand-100 text-xs uppercase tracking-wider">Emotional Timeline</p>
               <div className="flex items-end gap-1 h-8">
                 {sparkline.length ? (
                   sparkline.map((entry) => (
@@ -459,8 +459,8 @@ export default function ChatPage() {
                 ))}
               </div>
               {selectedEntry && (
-                <div className="rounded-xl p-3 bg-[#111827] border border-white/10">
-                  <p className="text-[11px] text-[#d9d2b0]">
+                <div className="rounded-xl p-3 bg-surface-field border border-white/10">
+                  <p className="text-[11px] text-brand-100">
                     {new Date(selectedEntry.createdAt).toDateString()} • {selectedEntry.mood}
                   </p>
                   <p className="text-sm text-white/85 mt-1">

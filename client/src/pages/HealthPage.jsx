@@ -23,7 +23,7 @@ export default function HealthPage() {
     <main className="p-4 md:p-6">
       <div className="max-w-6xl mx-auto space-y-4">
         <div className="glass rounded-2xl p-5">
-          <p className="text-[#d9d2b0] text-xs uppercase tracking-wider">Health Dashboard</p>
+          <p className="text-brand-100 text-xs uppercase tracking-wider">Health Dashboard</p>
           <h2 className="text-3xl font-semibold mt-1">Mind-body metrics</h2>
           <p className="text-base text-white/75 mt-2">
             Current status: <span className="font-medium text-white">{loading ? "Loading..." : data?.status || "No data yet"}</span>
@@ -92,9 +92,9 @@ export default function HealthPage() {
                       return value;
                     }}
                   />
-                  <Line yAxisId="steps" type="monotone" dataKey="steps" stroke="#e8ab5f" strokeWidth={2} dot={false} />
-                  <Line yAxisId="wellbeing" type="monotone" dataKey="stress" stroke="#da8b5b" strokeWidth={2} dot={false} />
-                  <Line yAxisId="wellbeing" type="monotone" dataKey="sleep" stroke="#8eb184" strokeWidth={2} dot={false} />
+                  <Line yAxisId="steps" type="monotone" dataKey="steps" stroke="#d9a15f" strokeWidth={2} dot={false} />
+                  <Line yAxisId="wellbeing" type="monotone" dataKey="stress" stroke="#c77959" strokeWidth={2} dot={false} />
+                  <Line yAxisId="wellbeing" type="monotone" dataKey="sleep" stroke="#a9c78e" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
@@ -104,7 +104,7 @@ export default function HealthPage() {
         </div>
 
         <div className="glass rounded-2xl p-4">
-          <p className="text-[#d9d2b0] text-xs uppercase tracking-wider">Insight</p>
+          <p className="text-brand-100 text-xs uppercase tracking-wider">Insight</p>
           <p className="text-sm text-white/80 mt-2">{data?.insight || "No health insight available yet."}</p>
           <p className="text-xs text-white/60 mt-2">
             Weekly avg stress: {data?.averages?.weekly?.stressScore ?? "--"} | Weekly avg sleep:{" "}

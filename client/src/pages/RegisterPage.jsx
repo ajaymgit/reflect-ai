@@ -74,7 +74,7 @@ export default function RegisterPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          {error && <p className="text-red-300 text-sm" role="alert">{error}</p>}
+          {error && <p className="text-mood-angry text-sm" role="alert">{error}</p>}
           <Button className="w-full">
             Register
           </Button>
