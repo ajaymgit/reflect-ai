@@ -4,6 +4,7 @@ import authRoutes from "./modules/auth/routes.js";
 import chatRoutes from "./modules/chat/routes.js";
 import dashboardRoutes from "./modules/dashboard/routes.js";
 import healthRoutes from "./modules/health/routes.js";
+import hypothesisRoutes from "./modules/hypotheses/routes.js";
 import journalRoutes from "./modules/journal/routes.js";
 import retrospectRoutes from "./modules/retrospect/routes.js";
 import { env } from "./shared/config/env.js";
@@ -25,6 +26,7 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/journal", journalRoutes);
 app.use("/api/retrospect", retrospectRoutes);
 app.use("/api/health-data", healthRoutes);
+app.use("/api/hypotheses", hypothesisRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

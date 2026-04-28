@@ -12,6 +12,7 @@ const RetrospectPage = lazy(() => import("./pages/RetrospectPage"));
 const ChatPage = lazy(() => import("./pages/ChatPage"));
 const HealthPage = lazy(() => import("./pages/HealthPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const ExperimentsPage = lazy(() => import("./pages/ExperimentsPage"));
 
 export default function App() {
   const routeFallback = (
@@ -87,6 +88,14 @@ export default function App() {
           element={
             <Suspense fallback={routeFallback}>
               <HealthPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="experiments"
+          element={
+            <Suspense fallback={routeFallback}>
+              <ExperimentsPage />
             </Suspense>
           }
         />

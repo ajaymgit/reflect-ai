@@ -4,6 +4,7 @@ import { requireAuth } from "../../shared/middleware/auth.js";
 import { validateRequest } from "../../shared/middleware/validateRequest.js";
 import { quickJournalSchema } from "../../shared/validators/chatSchemas.js";
 import { asyncHandler } from "../../shared/utils/asyncHandler.js";
+import { refreshHypothesesForUser } from "../hypotheses/service.js";
 
 const router = Router();
 
@@ -29,7 +30,8 @@ router.post(
       content: req.validated.body.content,
       mood: req.validated.body.mood,
     });
-    res.status(201).json(entry);
+    const hypothesisSummary = await refreshHypothesesForUser(req.user._id);
+    res.status(201).json({ ...entry.toObject(), hypothesisSummary });
   }),
 );
 

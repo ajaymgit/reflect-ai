@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
 
 const moods = ["happy", "calm", "reflective", "sad", "stressed", "angry"];
@@ -9,20 +9,30 @@ export default function JournalPage() {
   const [mood, setMood] = useState("reflective");
   const [tags, setTags] = useState("");
   const [status, setStatus] = useState("Idle");
+  const [experiments, setExperiments] = useState(null);
 
   const moodClass = useMemo(() => `mood-${mood}`, [mood]);
+
+  useEffect(() => {
+    apiFetch("/api/hypotheses/summary")
+      .then(setExperiments)
+      .catch(() => {});
+  }, []);
 
   async function save() {
     if (!content.trim()) return;
     setStatus("Saving...");
     try {
-      await apiFetch("/api/journal/quick-entry", {
+      const saved = await apiFetch("/api/journal/quick-entry", {
         method: "POST",
         body: JSON.stringify({
           content: `${title ? `${title}\n` : ""}${content}\n${tags ? `#${tags}` : ""}`,
           mood,
         }),
       });
+      if (saved?.hypothesisSummary) {
+        setExperiments(saved.hypothesisSummary);
+      }
       setStatus("Saved");
     } catch {
       setStatus("Save failed");
@@ -76,6 +86,21 @@ export default function JournalPage() {
 
         <aside className="glass rounded-2xl p-4 space-y-3 h-fit">
           <h3 className="font-medium">Writing support</h3>
+          <Card
+            title="Experiment-validated patterns"
+            body={
+              experiments?.total
+                ? `${experiments.supported} supported · ${experiments.testing} testing · ${experiments.contradicted} contradicted`
+                : "Write a few entries to generate personal reflection experiments."
+            }
+          />
+          {(experiments?.hypotheses || []).slice(0, 2).map((hypothesis) => (
+            <Card
+              key={hypothesis.id}
+              title={`${hypothesis.status} · ${(hypothesis.confidence * 100).toFixed(0)}%`}
+              body={hypothesis.hypothesisText}
+            />
+          ))}
           <Card title="Today's health stats" body="Sleep: 7.6h · Steps: 6,200 · Stress: 52" />
           <Card title="AI writing prompt" body="What changed in your energy between morning and evening today?" />
           <Card title="Related previous entry" body="You wrote about focus and boundaries three days ago." />

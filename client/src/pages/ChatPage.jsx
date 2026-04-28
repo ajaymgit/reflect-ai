@@ -127,7 +127,11 @@ export default function ChatPage() {
         focus: data.payload.currentFocus || "general_reflection",
       };
       setTurns((prev) => [...prev, next]);
-      setMeta({ readiness: data.readiness, confidence: data.payload.confidence });
+      setMeta({
+        readiness: data.readiness,
+        confidence: data.payload.confidence,
+        hypothesisSummary: data.hypothesisSummary,
+      });
     } catch (error) {
       const friendlyError =
         error?.message?.includes("Connection issue")
@@ -387,6 +391,28 @@ export default function ChatPage() {
             >
               Save Journal Entry
             </button>
+
+            <div className="border-t border-white/10 pt-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[#d9d2b0] text-xs uppercase tracking-wider">Experiment locks</p>
+                <Link to="/experiments" className="text-[11px] text-white/65 hover:text-white">
+                  View all
+                </Link>
+              </div>
+              {(meta.hypothesisSummary?.supportedHypotheses || []).slice(0, 2).map((hypothesis) => (
+                <div key={hypothesis.id} className="rounded-xl bg-white/5 border border-white/10 p-3">
+                  <p className="text-xs text-white/85">{hypothesis.hypothesisText}</p>
+                  <p className="text-[11px] text-[#c5d7a6] mt-2">
+                    Claim lock open · {(hypothesis.confidence * 100).toFixed(0)}%
+                  </p>
+                </div>
+              ))}
+              {!meta.hypothesisSummary?.supportedHypotheses?.length && (
+                <p className="text-xs text-white/60">
+                  Strong pattern claims stay locked until repeated journal evidence supports them.
+                </p>
+              )}
+            </div>
 
             <div className="border-t border-white/10 pt-4 space-y-3">
               <p className="text-[#d9d2b0] text-xs uppercase tracking-wider">Emotional Timeline</p>

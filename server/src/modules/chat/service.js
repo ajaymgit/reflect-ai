@@ -4,8 +4,14 @@ import ChatSession from "../../models/ChatSession.js";
 import HealthData from "../../models/HealthData.js";
 import JournalEntry from "../../models/JournalEntry.js";
 import RetrospectAnalysis from "../../models/RetrospectAnalysis.js";
+import { getHypothesisSummary } from "../hypotheses/service.js";
 import { env, policyConfig } from "../../shared/config/env.js";
 import { AppError } from "../../shared/utils/AppError.js";
+import {
+  applyEvidenceGate,
+  buildEvidenceGate,
+  verifyEvidenceGate,
+} from "./egrsAlgorithm.js";
 
 const usingGeminiCompat = !env.OPENAI_API_KEY && !!env.GEMINI_API_KEY;
 const aiApiKey = env.OPENAI_API_KEY || env.GEMINI_API_KEY;
@@ -869,13 +875,16 @@ function verifyInsight({ payload, healthQuality }) {
 }
 
 export async function buildChatContext(userId) {
-  const journals = await JournalEntry.find({ userId }).sort({ createdAt: -1 }).limit(20);
-  const retrospect = await RetrospectAnalysis.findOne({ userId }).sort({ createdAt: -1 });
-  const health = await HealthData.find({
-    userId,
-    date: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-  }).sort({ date: -1 });
-  const session = await ChatSession.findOne({ userId });
+  const [journals, retrospect, health, session, hypothesisSummary] = await Promise.all([
+    JournalEntry.find({ userId }).sort({ createdAt: -1 }).limit(20),
+    RetrospectAnalysis.findOne({ userId }).sort({ createdAt: -1 }),
+    HealthData.find({
+      userId,
+      date: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+    }).sort({ date: -1 }),
+    ChatSession.findOne({ userId }),
+    getHypothesisSummary(userId),
+  ]);
   const themes = detectThemes(journals);
   const healthQuality = calculateHealthQuality(health);
   const readiness = buildReadiness({ journals, healthQuality, themes });
@@ -887,6 +896,7 @@ export async function buildChatContext(userId) {
     session,
     themes,
     healthQuality,
+    hypothesisSummary,
     readiness,
   };
 }
@@ -895,7 +905,18 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
   const normalizedSettings = normalizeChatSettings(chatSettings);
   const context = await buildChatContext(userId);
   const journalPool = normalizedSettings.useMemory ? context.journals : [];
-  const evidenceCandidates = buildEvidenceCandidates(journalPool, userMessage, "reflection");
+  const evidenceGate = buildEvidenceGate({
+    userMessage,
+    journals: journalPool,
+    healthQuality: context.healthQuality,
+    themes: context.themes,
+    settings: normalizedSettings,
+    supportedHypotheses: context.hypothesisSummary?.supportedHypotheses || [],
+    contradictedHypotheses: context.hypothesisSummary?.contradictedHypotheses || [],
+  });
+  const evidenceCandidates = evidenceGate.selectedEvidence.length
+    ? evidenceGate.selectedEvidence
+    : buildEvidenceCandidates(journalPool, userMessage, "reflection");
   const blueprint = buildLongitudinalBlueprint({
     userMessage,
     journals: journalPool,
@@ -912,7 +933,7 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
     try {
       const generated = await generateInsight(
         {
-          journals: context.journals.map((j) => ({
+          journals: journalPool.map((j) => ({
             id: String(j._id),
             content: j.content,
             mood: j.mood,
@@ -921,6 +942,7 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
           evidenceCandidates,
           themes: context.themes,
           latestRetrospect: context.retrospect?.summary || "",
+          supportedHypotheses: context.hypothesisSummary?.supportedHypotheses || [],
           healthQuality: context.healthQuality,
           blueprint,
           settings: normalizedSettings,
@@ -970,12 +992,41 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
   if (!context.healthQuality.eligible && !payload.fallback) {
     payload = scrubHealthReferences(payload);
   }
+  payload = applyEvidenceGate(payload, evidenceGate);
 
   const verification = verifyInsight({ payload, healthQuality: context.healthQuality });
-  const accepted = verification.accepted;
-  const finalPayload = accepted ? payload : fallbackPayload();
+  const gateVerification = verifyEvidenceGate({
+    payload,
+    gate: evidenceGate,
+    minConfidence: policyConfig.minConfidence,
+  });
+  const accepted = verification.accepted && gateVerification.acceptedByEvidenceGate;
+  const finalPayload = accepted
+    ? payload
+    : applyEvidenceGate(
+        fallbackPayload({
+          question: evidenceGate.fallbackQuestion,
+          currentFocus: evidenceGate.focus,
+          reasoning: "Fallback activated after EGRS or policy verification rejected the generated response.",
+        }),
+        evidenceGate,
+      );
   finalPayload.source = accepted ? responseSource : "fallback";
   finalPayload.chatSettings = normalizedSettings;
+  finalPayload.algorithm = {
+    name: evidenceGate.algorithm,
+    version: evidenceGate.version,
+    claimType: finalPayload.egrs?.effectiveClaimType || evidenceGate.effectiveClaimType,
+    evidenceScore: evidenceGate.evidenceScore,
+    confidenceCeiling: evidenceGate.confidenceCeiling,
+    contradictionDetected: Boolean(finalPayload.egrs?.contradiction?.contradictionDetected),
+    supportedHypotheses: (context.hypothesisSummary?.supportedHypotheses || []).slice(0, 3).map((hypothesis) => ({
+      hypothesisText: hypothesis.hypothesisText,
+      confidence: hypothesis.confidence,
+      status: hypothesis.status,
+    })),
+    blockedReasons: finalPayload.egrs?.blockedReasons || evidenceGate.blockedReasons,
+  };
 
   const audit = await AuditLog.create({
     userId,
@@ -987,6 +1038,29 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
     confidence: finalPayload.confidence,
     policyDecisions: {
       ...verification.decisions,
+      ...gateVerification,
+      egrs: {
+        version: evidenceGate.version,
+        requestedClaimType: evidenceGate.requestedClaimType,
+        effectiveClaimType: finalPayload.egrs?.effectiveClaimType || evidenceGate.effectiveClaimType,
+        evidenceScore: evidenceGate.evidenceScore,
+        confidenceCeiling: evidenceGate.confidenceCeiling,
+        blockedReasons: finalPayload.egrs?.blockedReasons || evidenceGate.blockedReasons,
+        claimPermission: finalPayload.egrs?.claimPermission || evidenceGate.claimPermission,
+        retraction: finalPayload.egrs?.retraction || evidenceGate.retraction,
+        contradiction: finalPayload.egrs?.contradiction || null,
+        patternLedger: evidenceGate.patternLedger,
+        experimentValidatedHypotheses: context.hypothesisSummary?.supportedHypotheses || [],
+        contradictedHypotheses: context.hypothesisSummary?.contradictedHypotheses || [],
+        evidenceGraphSummary: {
+          nodeCount: evidenceGate.evidenceGraph?.nodeCount || 0,
+          edgeCount: evidenceGate.evidenceGraph?.edgeCount || 0,
+          strongestNodes: evidenceGate.evidenceGraph?.strongestNodes?.slice(0, 5) || [],
+          strongestEdges: evidenceGate.evidenceGraph?.strongestEdges?.slice(0, 5) || [],
+        },
+        healthTopic: evidenceGate.healthTopic,
+        patternRequest: evidenceGate.patternRequest,
+      },
       parseFailed,
       responseSource: finalPayload.source,
       healthQuality: context.healthQuality,
@@ -1025,6 +1099,15 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
     readiness: context.readiness,
     themes: context.themes,
     healthQuality: context.healthQuality,
+    hypothesisSummary: context.hypothesisSummary,
+    evidenceGate: {
+      version: evidenceGate.version,
+      claimType: finalPayload.egrs?.effectiveClaimType || evidenceGate.effectiveClaimType,
+      evidenceScore: evidenceGate.evidenceScore,
+      confidenceCeiling: evidenceGate.confidenceCeiling,
+      contradictionDetected: Boolean(finalPayload.egrs?.contradiction?.contradictionDetected),
+      blockedReasons: finalPayload.egrs?.blockedReasons || evidenceGate.blockedReasons,
+    },
     session,
   };
 }
