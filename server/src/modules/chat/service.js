@@ -6,6 +6,11 @@ import JournalEntry from "../../models/JournalEntry.js";
 import RetrospectAnalysis from "../../models/RetrospectAnalysis.js";
 import { env, policyConfig } from "../../shared/config/env.js";
 import { AppError } from "../../shared/utils/AppError.js";
+import {
+  applyEvidenceGate,
+  buildEvidenceGate,
+  verifyEvidenceGate,
+} from "./egrsAlgorithm.js";
 
 const usingGeminiCompat = !env.OPENAI_API_KEY && !!env.GEMINI_API_KEY;
 const aiApiKey = env.OPENAI_API_KEY || env.GEMINI_API_KEY;
@@ -895,7 +900,16 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
   const normalizedSettings = normalizeChatSettings(chatSettings);
   const context = await buildChatContext(userId);
   const journalPool = normalizedSettings.useMemory ? context.journals : [];
-  const evidenceCandidates = buildEvidenceCandidates(journalPool, userMessage, "reflection");
+  const evidenceGate = buildEvidenceGate({
+    userMessage,
+    journals: journalPool,
+    healthQuality: context.healthQuality,
+    themes: context.themes,
+    settings: normalizedSettings,
+  });
+  const evidenceCandidates = evidenceGate.selectedEvidence.length
+    ? evidenceGate.selectedEvidence
+    : buildEvidenceCandidates(journalPool, userMessage, "reflection");
   const blueprint = buildLongitudinalBlueprint({
     userMessage,
     journals: journalPool,
@@ -912,7 +926,7 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
     try {
       const generated = await generateInsight(
         {
-          journals: context.journals.map((j) => ({
+          journals: journalPool.map((j) => ({
             id: String(j._id),
             content: j.content,
             mood: j.mood,
@@ -970,12 +984,34 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
   if (!context.healthQuality.eligible && !payload.fallback) {
     payload = scrubHealthReferences(payload);
   }
+  payload = applyEvidenceGate(payload, evidenceGate);
 
   const verification = verifyInsight({ payload, healthQuality: context.healthQuality });
-  const accepted = verification.accepted;
-  const finalPayload = accepted ? payload : fallbackPayload();
+  const gateVerification = verifyEvidenceGate({
+    payload,
+    gate: evidenceGate,
+    minConfidence: policyConfig.minConfidence,
+  });
+  const accepted = verification.accepted && gateVerification.acceptedByEvidenceGate;
+  const finalPayload = accepted
+    ? payload
+    : applyEvidenceGate(
+        fallbackPayload({
+          question: evidenceGate.fallbackQuestion,
+          currentFocus: evidenceGate.focus,
+          reasoning: "Fallback activated after EGRS or policy verification rejected the generated response.",
+        }),
+        evidenceGate,
+      );
   finalPayload.source = accepted ? responseSource : "fallback";
   finalPayload.chatSettings = normalizedSettings;
+  finalPayload.algorithm = {
+    name: evidenceGate.algorithm,
+    version: evidenceGate.version,
+    evidenceScore: evidenceGate.evidenceScore,
+    confidenceCeiling: evidenceGate.confidenceCeiling,
+    blockedReasons: evidenceGate.blockedReasons,
+  };
 
   const audit = await AuditLog.create({
     userId,
@@ -987,6 +1023,15 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
     confidence: finalPayload.confidence,
     policyDecisions: {
       ...verification.decisions,
+      ...gateVerification,
+      egrs: {
+        version: evidenceGate.version,
+        evidenceScore: evidenceGate.evidenceScore,
+        confidenceCeiling: evidenceGate.confidenceCeiling,
+        blockedReasons: evidenceGate.blockedReasons,
+        healthTopic: evidenceGate.healthTopic,
+        patternRequest: evidenceGate.patternRequest,
+      },
       parseFailed,
       responseSource: finalPayload.source,
       healthQuality: context.healthQuality,
@@ -1025,6 +1070,12 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
     readiness: context.readiness,
     themes: context.themes,
     healthQuality: context.healthQuality,
+    evidenceGate: {
+      version: evidenceGate.version,
+      evidenceScore: evidenceGate.evidenceScore,
+      confidenceCeiling: evidenceGate.confidenceCeiling,
+      blockedReasons: evidenceGate.blockedReasons,
+    },
     session,
   };
 }
