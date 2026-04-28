@@ -4,6 +4,7 @@ import ChatSession from "../../models/ChatSession.js";
 import HealthData from "../../models/HealthData.js";
 import JournalEntry from "../../models/JournalEntry.js";
 import RetrospectAnalysis from "../../models/RetrospectAnalysis.js";
+import { getHypothesisSummary } from "../hypotheses/service.js";
 import { env, policyConfig } from "../../shared/config/env.js";
 import { AppError } from "../../shared/utils/AppError.js";
 import {
@@ -874,13 +875,16 @@ function verifyInsight({ payload, healthQuality }) {
 }
 
 export async function buildChatContext(userId) {
-  const journals = await JournalEntry.find({ userId }).sort({ createdAt: -1 }).limit(20);
-  const retrospect = await RetrospectAnalysis.findOne({ userId }).sort({ createdAt: -1 });
-  const health = await HealthData.find({
-    userId,
-    date: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-  }).sort({ date: -1 });
-  const session = await ChatSession.findOne({ userId });
+  const [journals, retrospect, health, session, hypothesisSummary] = await Promise.all([
+    JournalEntry.find({ userId }).sort({ createdAt: -1 }).limit(20),
+    RetrospectAnalysis.findOne({ userId }).sort({ createdAt: -1 }),
+    HealthData.find({
+      userId,
+      date: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+    }).sort({ date: -1 }),
+    ChatSession.findOne({ userId }),
+    getHypothesisSummary(userId),
+  ]);
   const themes = detectThemes(journals);
   const healthQuality = calculateHealthQuality(health);
   const readiness = buildReadiness({ journals, healthQuality, themes });
@@ -892,6 +896,7 @@ export async function buildChatContext(userId) {
     session,
     themes,
     healthQuality,
+    hypothesisSummary,
     readiness,
   };
 }
@@ -906,6 +911,7 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
     healthQuality: context.healthQuality,
     themes: context.themes,
     settings: normalizedSettings,
+    supportedHypotheses: context.hypothesisSummary?.supportedHypotheses || [],
   });
   const evidenceCandidates = evidenceGate.selectedEvidence.length
     ? evidenceGate.selectedEvidence
@@ -935,6 +941,7 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
           evidenceCandidates,
           themes: context.themes,
           latestRetrospect: context.retrospect?.summary || "",
+          supportedHypotheses: context.hypothesisSummary?.supportedHypotheses || [],
           healthQuality: context.healthQuality,
           blueprint,
           settings: normalizedSettings,
@@ -1012,6 +1019,11 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
     evidenceScore: evidenceGate.evidenceScore,
     confidenceCeiling: evidenceGate.confidenceCeiling,
     contradictionDetected: Boolean(finalPayload.egrs?.contradiction?.contradictionDetected),
+    supportedHypotheses: (context.hypothesisSummary?.supportedHypotheses || []).slice(0, 3).map((hypothesis) => ({
+      hypothesisText: hypothesis.hypothesisText,
+      confidence: hypothesis.confidence,
+      status: hypothesis.status,
+    })),
     blockedReasons: finalPayload.egrs?.blockedReasons || evidenceGate.blockedReasons,
   };
 
@@ -1036,6 +1048,7 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
         claimPermission: finalPayload.egrs?.claimPermission || evidenceGate.claimPermission,
         contradiction: finalPayload.egrs?.contradiction || null,
         patternLedger: evidenceGate.patternLedger,
+        experimentValidatedHypotheses: context.hypothesisSummary?.supportedHypotheses || [],
         evidenceGraphSummary: {
           nodeCount: evidenceGate.evidenceGraph?.nodeCount || 0,
           edgeCount: evidenceGate.evidenceGraph?.edgeCount || 0,
@@ -1083,6 +1096,7 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
     readiness: context.readiness,
     themes: context.themes,
     healthQuality: context.healthQuality,
+    hypothesisSummary: context.hypothesisSummary,
     evidenceGate: {
       version: evidenceGate.version,
       claimType: finalPayload.egrs?.effectiveClaimType || evidenceGate.effectiveClaimType,

@@ -1,4 +1,4 @@
-import { MessageCircle, PenSquare, Settings, HeartPulse } from "lucide-react";
+import { FlaskConical, MessageCircle, PenSquare, Settings, HeartPulse } from "lucide-react";
 import { useEffect } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 
@@ -7,6 +7,7 @@ const pageTitles = {
   "/journal/new": "New Journal",
   "/retrospect": "Retrospect",
   "/chat": "Chat",
+  "/experiments": "Experiments",
   "/health": "Health",
   "/settings": "Settings",
 };
@@ -17,6 +18,7 @@ export default function AppShell() {
   const navItems = [
     { to: "/journal/new", label: "Write", Icon: PenSquare },
     { to: "/chat", label: "Chat", Icon: MessageCircle },
+    { to: "/experiments", label: "Proof", Icon: FlaskConical },
     { to: "/health", label: "Health", Icon: HeartPulse },
     { to: "/settings", label: "Settings", Icon: Settings },
   ];
@@ -64,7 +66,7 @@ export default function AppShell() {
       </div>
 
       <nav className="md:hidden fixed bottom-0 inset-x-0 border-t border-white/10 bg-[#0b1020]/95 backdrop-blur z-30">
-        <div className="grid grid-cols-4 gap-1 px-2 py-2">
+        <div className="grid grid-cols-5 gap-1 px-2 py-2">
           {navItems.map(({ to, label, Icon }) => (
             <Link
               key={to}

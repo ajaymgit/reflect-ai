@@ -344,6 +344,7 @@ export function buildEvidenceGate({
   journals = [],
   healthQuality = {},
   themes = [],
+  supportedHypotheses = [],
   settings = {},
 } = {}) {
   const normalizedMessage = normalizeText(userMessage);
@@ -381,6 +382,16 @@ export function buildEvidenceGate({
     selectedEvidence.length >= permission.minEvidenceCount &&
     (permission.minEvidenceCount === 0 || evidenceScoreOk);
   const healthClaimAllowed = !permission.requiresHealth || Boolean(healthQuality?.eligible);
+  const hypothesisSignals = new Set(
+    supportedHypotheses.flatMap((hypothesis) => {
+      const sourceSignals = Array.isArray(hypothesis.sourceSignals) ? hypothesis.sourceSignals : [];
+      return [...sourceSignals, hypothesis.signal].filter(Boolean);
+    }),
+  );
+  const hypothesisClaimAllowed =
+    !["repeated_pattern", "health_correlation", "causation_claim"].includes(requestedClaimType) ||
+    queryTokens.some((token) => hypothesisSignals.has(token)) ||
+    supportedHypotheses.some((hypothesis) => String(hypothesis.hypothesisText || "").toLowerCase().includes(focus));
   const memoryDisabled = settings.useMemory === false;
   const requiresFallback =
     crisisDetected ||
@@ -388,6 +399,7 @@ export function buildEvidenceGate({
     memoryDisabled ||
     !enoughEvidence ||
     !healthClaimAllowed ||
+    !hypothesisClaimAllowed ||
     confidenceCeiling < permission.minConfidence;
   const blockedReasons = [
     crisisDetected ? "crisis_signal_detected" : null,
@@ -395,6 +407,7 @@ export function buildEvidenceGate({
     memoryDisabled ? "memory_disabled_by_user" : null,
     !enoughEvidence ? "insufficient_personal_evidence" : null,
     !healthClaimAllowed ? "health_data_not_eligible" : null,
+    !hypothesisClaimAllowed ? "validated_hypothesis_not_supported" : null,
     confidenceCeiling < permission.minConfidence ? "confidence_below_claim_permission" : null,
   ].filter(Boolean);
 
@@ -414,10 +427,12 @@ export function buildEvidenceGate({
     rankedEvidence: rankedEvidence.slice(0, 5),
     evidenceGraph,
     patternLedger,
+    supportedHypotheses,
     evidenceScore: Number((rankedEvidence[0]?.score || 0).toFixed(3)),
     evidenceScoreOk,
     confidenceCeiling: Number(confidenceCeiling.toFixed(3)),
     healthClaimAllowed,
+    hypothesisClaimAllowed,
     requiresFallback,
     blockedReasons,
     fallbackQuestion: buildFallbackQuestion({ crisisDetected, healthTopic, patternRequest, focus }),

@@ -6,6 +6,8 @@ The Evidence-Gated Reflective Safety Algorithm (EGRS) makes the chatbot answer o
 
 Version 2 adds a claim-control layer. The system now decides what type of claim the chatbot is trying to make before it decides whether the claim is allowed.
 
+The broader app now includes the Experiment-Validated Personal Evidence (EVPE) layer. EVPE turns repeated journal signals into testable personal hypotheses, evaluates later entries as supporting, weakening, contradicting, or neutral evidence, and unlocks stronger chatbot claims only after the hypothesis becomes supported.
+
 ## Patent-focused method
 
 For every chat message, EGRS performs these steps:
@@ -19,9 +21,10 @@ For every chat message, EGRS performs these steps:
 7. Calculate a confidence ceiling from evidence strength, query specificity, recurring themes, and health-data quality.
 8. Apply a claim permission matrix that assigns different evidence, confidence, and health-data requirements to each claim type.
 9. Check whether the generated response contradicts the personal evidence graph.
-10. Block unsupported, unsafe, contradictory, directive, or memory-disabled responses before they reach the user.
-11. Replace blocked responses with a focused fallback question.
-12. Store the EGRS version, claim type, evidence graph summary, pattern ledger, confidence ceiling, contradiction status, blocked reasons, and gate decisions in the audit log.
+10. Check whether a strong pattern claim has a supported EVPE hypothesis.
+11. Block unsupported, unsafe, contradictory, directive, unvalidated, or memory-disabled responses before they reach the user.
+12. Replace blocked responses with a focused fallback question.
+13. Store the EGRS version, claim type, evidence graph summary, pattern ledger, supported hypotheses, confidence ceiling, contradiction status, blocked reasons, and gate decisions in the audit log.
 
 ## Why this is stronger than a normal chatbot
 
@@ -41,6 +44,7 @@ User message
   -> personal pattern ledger
   -> journal evidence ranking
   -> claim-specific permission matrix
+  -> experiment-validated hypothesis lock
   -> adaptive confidence ceiling calculation
   -> health, crisis, and contradiction gates
   -> AI generation
@@ -65,10 +69,33 @@ Different chatbot statements require different proof:
 
 This makes the app less like a normal chatbot and more like a response-control system.
 
+## EVPE hypothesis lifecycle
+
+The hypothesis layer follows this cycle:
+
+```text
+Repeated journal signal
+  -> detected hypothesis
+  -> future entries evaluated as supports / weakens / contradicts / neutral
+  -> confidence timeline updated
+  -> status becomes supported, testing, weakened, or contradicted
+  -> chatbot strong claim lock opens only for supported hypotheses
+```
+
+Example:
+
+```text
+Hypothesis: meetings may be linked with heavier mood.
+Entry A: meeting + stressed -> supports
+Entry B: meeting + calm -> contradicts
+Entry C: no meeting + stressed -> weakens
+Status and confidence update after every journal save.
+```
+
 ## Patent-focused claim direction
 
 The strongest narrow claim is:
 
 ```text
-A computer-implemented method for controlling generated reflective chatbot responses by classifying a generated response into a claim type, constructing a personal evidence graph from user journal records, deriving a pattern ledger from repeated evidence-graph edges, calculating a claim-specific confidence ceiling, detecting contradictions between the generated response and the personal evidence graph, and delivering the generated response only when claim-specific permission rules are satisfied.
+A computer-implemented method for controlling generated reflective chatbot responses by classifying a generated response into a claim type, constructing a personal evidence graph from user journal records, deriving a pattern ledger from repeated evidence-graph edges, converting repeated signals into experiment-validated personal hypotheses, calculating a claim-specific confidence ceiling, detecting contradictions between the generated response and the personal evidence graph, and delivering the generated response only when claim-specific permission rules and hypothesis claim locks are satisfied.
 ```
