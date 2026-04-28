@@ -7,6 +7,7 @@ body {
   color: #f8fafc;
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   margin: 0;
+  min-width: 320px;
 }
 
 * {
@@ -14,9 +15,12 @@ body {
 }
 
 .glass {
-  background: rgba(32, 45, 38, 0.58);
-  border: 1px solid rgba(168, 184, 156, 0.24);
-  backdrop-filter: blur(12px);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.045)),
+    rgba(24, 35, 30, 0.68);
+  border: 1px solid rgba(214, 226, 197, 0.22);
+  box-shadow: 0 24px 70px rgba(4, 10, 8, 0.24);
+  backdrop-filter: blur(18px);
 }
 
 .soft-border {
@@ -25,10 +29,10 @@ body {
 
 .page-gradient {
   background:
-    radial-gradient(980px 320px at 0% 0%, rgba(210, 126, 86, 0.24), transparent 62%),
-    radial-gradient(900px 340px at 65% 0%, rgba(139, 167, 109, 0.2), transparent 70%),
-    radial-gradient(920px 360px at 100% 10%, rgba(173, 136, 181, 0.16), transparent 72%),
-    #1b241f;
+    radial-gradient(980px 320px at 0% 0%, rgba(223, 147, 91, 0.28), transparent 62%),
+    radial-gradient(900px 340px at 65% 0%, rgba(160, 193, 122, 0.24), transparent 70%),
+    radial-gradient(920px 360px at 100% 10%, rgba(180, 147, 194, 0.2), transparent 72%),
+    linear-gradient(135deg, #19231f 0%, #121a25 55%, #111827 100%);
 }
 
 body[data-theme-mode="midnight"] {
@@ -37,8 +41,10 @@ body[data-theme-mode="midnight"] {
 }
 
 body[data-theme-mode="midnight"] .glass {
-  background: rgba(20, 28, 24, 0.66);
-  border: 1px solid rgba(146, 166, 139, 0.22);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.035)),
+    rgba(12, 19, 17, 0.74);
+  border: 1px solid rgba(174, 194, 158, 0.18);
 }
 
 body[data-theme-mode="midnight"] .page-gradient {
@@ -92,6 +98,11 @@ body[data-theme-mode="midnight"] .page-gradient {
   overflow: hidden;
 }
 
+.living-bg > * {
+  position: relative;
+  z-index: 1;
+}
+
 .living-bg::before {
   content: "";
   position: absolute;
@@ -120,5 +131,108 @@ body[data-theme-mode="midnight"] .page-gradient {
 .scroll-area::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.2);
   border-radius: 999px;
+}
+
+.premium-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.premium-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(120deg, rgba(255, 255, 255, 0.14), transparent 34%),
+    radial-gradient(520px 180px at 88% 6%, rgba(217, 210, 176, 0.18), transparent 70%);
+  pointer-events: none;
+}
+
+.premium-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+.glow-card {
+  box-shadow:
+    0 28px 80px rgba(5, 11, 9, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.shadow-card {
+  box-shadow: 0 26px 80px rgba(0, 0, 0, 0.28);
+}
+
+.eyebrow-chip {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(217, 210, 176, 0.24);
+  background: rgba(217, 210, 176, 0.11);
+  padding: 0.45rem 0.8rem;
+  color: #d9d2b0;
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+  padding: 0.8rem 1.1rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #d9d2b0 0%, #9fbe83 100%);
+  color: #122018;
+  box-shadow: 0 14px 32px rgba(159, 190, 131, 0.26);
+  transition: filter 160ms ease, transform 160ms ease;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.04);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+  padding: 0.8rem 1.1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.field {
+  background: rgba(9, 16, 24, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.field:focus {
+  background: rgba(11, 19, 28, 0.88);
+  border-color: rgba(217, 210, 176, 0.72);
+  box-shadow: 0 0 0 4px rgba(217, 210, 176, 0.12);
+}
+
+.lift-card {
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+
+.lift-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(217, 210, 176, 0.38);
+  background: rgba(255, 255, 255, 0.08);
 }
 
