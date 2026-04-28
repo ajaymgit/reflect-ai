@@ -1008,9 +1008,11 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
   finalPayload.algorithm = {
     name: evidenceGate.algorithm,
     version: evidenceGate.version,
+    claimType: finalPayload.egrs?.effectiveClaimType || evidenceGate.effectiveClaimType,
     evidenceScore: evidenceGate.evidenceScore,
     confidenceCeiling: evidenceGate.confidenceCeiling,
-    blockedReasons: evidenceGate.blockedReasons,
+    contradictionDetected: Boolean(finalPayload.egrs?.contradiction?.contradictionDetected),
+    blockedReasons: finalPayload.egrs?.blockedReasons || evidenceGate.blockedReasons,
   };
 
   const audit = await AuditLog.create({
@@ -1026,9 +1028,20 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
       ...gateVerification,
       egrs: {
         version: evidenceGate.version,
+        requestedClaimType: evidenceGate.requestedClaimType,
+        effectiveClaimType: finalPayload.egrs?.effectiveClaimType || evidenceGate.effectiveClaimType,
         evidenceScore: evidenceGate.evidenceScore,
         confidenceCeiling: evidenceGate.confidenceCeiling,
-        blockedReasons: evidenceGate.blockedReasons,
+        blockedReasons: finalPayload.egrs?.blockedReasons || evidenceGate.blockedReasons,
+        claimPermission: finalPayload.egrs?.claimPermission || evidenceGate.claimPermission,
+        contradiction: finalPayload.egrs?.contradiction || null,
+        patternLedger: evidenceGate.patternLedger,
+        evidenceGraphSummary: {
+          nodeCount: evidenceGate.evidenceGraph?.nodeCount || 0,
+          edgeCount: evidenceGate.evidenceGraph?.edgeCount || 0,
+          strongestNodes: evidenceGate.evidenceGraph?.strongestNodes?.slice(0, 5) || [],
+          strongestEdges: evidenceGate.evidenceGraph?.strongestEdges?.slice(0, 5) || [],
+        },
         healthTopic: evidenceGate.healthTopic,
         patternRequest: evidenceGate.patternRequest,
       },
@@ -1072,9 +1085,11 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
     healthQuality: context.healthQuality,
     evidenceGate: {
       version: evidenceGate.version,
+      claimType: finalPayload.egrs?.effectiveClaimType || evidenceGate.effectiveClaimType,
       evidenceScore: evidenceGate.evidenceScore,
       confidenceCeiling: evidenceGate.confidenceCeiling,
-      blockedReasons: evidenceGate.blockedReasons,
+      contradictionDetected: Boolean(finalPayload.egrs?.contradiction?.contradictionDetected),
+      blockedReasons: finalPayload.egrs?.blockedReasons || evidenceGate.blockedReasons,
     },
     session,
   };

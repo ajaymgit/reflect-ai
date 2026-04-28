@@ -1,4 +1,4 @@
-const ALGORITHM_VERSION = "EGRS-1.0.0";
+const ALGORITHM_VERSION = "EGRS-2.0.0";
 
 const STOP_WORDS = new Set([
   "the",
@@ -50,6 +50,67 @@ const HEALTH_REGEX = /\b(sleep|slept|stress|stressed|heart|steps|walking|walk|ac
 const PATTERN_REGEX = /\b(pattern|why|always|again|usually|linked|connect|correlation|because|trigger|affect|impact)\b/i;
 const CRISIS_REGEX =
   /\b(kill myself|suicide|suicidal|self harm|self-harm|hurt myself|end my life|want to die|no reason to live)\b/i;
+const CAUSATION_REGEX = /\b(cause|caused|causing|because of|leads to|makes me|main reason|root cause)\b/i;
+const ADVICE_REGEX = /\b(should|must|need to|have to|do this|stop doing|start doing|fix|solution|recommend)\b/i;
+
+const CLAIM_PERMISSION_MATRIX = {
+  crisis_response: {
+    minEvidenceCount: 0,
+    minEvidenceScore: 0,
+    minConfidence: 0,
+    requiresHealth: false,
+    blocksAdvice: false,
+    allowFallbackOnly: true,
+  },
+  current_reflection: {
+    minEvidenceCount: 0,
+    minEvidenceScore: 0,
+    minConfidence: 0.45,
+    requiresHealth: false,
+    blocksAdvice: true,
+    allowFallbackOnly: false,
+  },
+  journal_insight: {
+    minEvidenceCount: 1,
+    minEvidenceScore: 0.18,
+    minConfidence: 0.62,
+    requiresHealth: false,
+    blocksAdvice: true,
+    allowFallbackOnly: false,
+  },
+  repeated_pattern: {
+    minEvidenceCount: 2,
+    minEvidenceScore: 0.24,
+    minConfidence: 0.68,
+    requiresHealth: false,
+    blocksAdvice: true,
+    allowFallbackOnly: false,
+  },
+  health_correlation: {
+    minEvidenceCount: 2,
+    minEvidenceScore: 0.28,
+    minConfidence: 0.72,
+    requiresHealth: true,
+    blocksAdvice: true,
+    allowFallbackOnly: false,
+  },
+  causation_claim: {
+    minEvidenceCount: 3,
+    minEvidenceScore: 0.32,
+    minConfidence: 0.78,
+    requiresHealth: false,
+    blocksAdvice: true,
+    allowFallbackOnly: false,
+  },
+  directive_advice: {
+    minEvidenceCount: 0,
+    minEvidenceScore: 0,
+    minConfidence: 1,
+    requiresHealth: false,
+    blocksAdvice: true,
+    allowFallbackOnly: true,
+  },
+};
 
 function normalizeText(text) {
   return String(text || "")
@@ -75,6 +136,150 @@ function inferFocus(tokens, themes = []) {
   const allTokens = new Set([...tokens, ...themeTokens]);
   const matched = FOCUS_TOKEN_MAP.find((item) => item.tokens.some((token) => allTokens.has(token)));
   return matched?.focus || "general_reflection";
+}
+
+function classifyClaimType(text = "") {
+  if (CRISIS_REGEX.test(text)) return "crisis_response";
+  if (ADVICE_REGEX.test(text)) return "directive_advice";
+  if (HEALTH_REGEX.test(text) && (PATTERN_REGEX.test(text) || CAUSATION_REGEX.test(text))) {
+    return "health_correlation";
+  }
+  if (CAUSATION_REGEX.test(text)) return "causation_claim";
+  if (PATTERN_REGEX.test(text)) return "repeated_pattern";
+  if (String(text || "").trim().split(/\s+/).length <= 6) return "current_reflection";
+  return "journal_insight";
+}
+
+function combineClaimTypes(...types) {
+  const priority = [
+    "crisis_response",
+    "directive_advice",
+    "health_correlation",
+    "causation_claim",
+    "repeated_pattern",
+    "journal_insight",
+    "current_reflection",
+  ];
+  return priority.find((type) => types.includes(type)) || "journal_insight";
+}
+
+function buildEvidenceGraph(journals = []) {
+  const nodes = new Map();
+  const edges = new Map();
+  const moodCounts = {};
+
+  for (const journal of journals) {
+    const journalId = String(journal._id);
+    const tokens = Array.from(new Set(tokenize(`${journal.content || ""} ${(journal.themes || []).join(" ")}`))).slice(0, 18);
+    moodCounts[journal.mood] = (moodCounts[journal.mood] || 0) + 1;
+
+    for (const token of tokens) {
+      const existing = nodes.get(token) || {
+        signal: token,
+        count: 0,
+        journalIds: new Set(),
+        moods: {},
+      };
+      existing.count += 1;
+      existing.journalIds.add(journalId);
+      existing.moods[journal.mood] = (existing.moods[journal.mood] || 0) + 1;
+      nodes.set(token, existing);
+    }
+
+    for (let i = 0; i < tokens.length; i += 1) {
+      for (let j = i + 1; j < Math.min(tokens.length, i + 7); j += 1) {
+        const key = [tokens[i], tokens[j]].sort().join("::");
+        const existing = edges.get(key) || {
+          signals: [tokens[i], tokens[j]].sort(),
+          weight: 0,
+          journalIds: new Set(),
+          moods: {},
+        };
+        existing.weight += 1;
+        existing.journalIds.add(journalId);
+        existing.moods[journal.mood] = (existing.moods[journal.mood] || 0) + 1;
+        edges.set(key, existing);
+      }
+    }
+  }
+
+  const serializeNode = (node) => ({
+    signal: node.signal,
+    count: node.count,
+    journalIds: Array.from(node.journalIds).slice(0, 8),
+    moods: node.moods,
+  });
+  const serializeEdge = (edge) => ({
+    signals: edge.signals,
+    weight: edge.weight,
+    journalIds: Array.from(edge.journalIds).slice(0, 8),
+    moods: edge.moods,
+  });
+
+  return {
+    nodeCount: nodes.size,
+    edgeCount: edges.size,
+    moodCounts,
+    strongestNodes: Array.from(nodes.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 12)
+      .map(serializeNode),
+    strongestEdges: Array.from(edges.values())
+      .sort((a, b) => b.weight - a.weight)
+      .slice(0, 12)
+      .map(serializeEdge),
+  };
+}
+
+function derivePatternLedger(evidenceGraph, queryTokens = []) {
+  const querySet = new Set(queryTokens);
+  const patterns = evidenceGraph.strongestEdges
+    .filter((edge) => edge.signals.some((signal) => querySet.has(signal)) || edge.weight >= 2)
+    .slice(0, 6)
+    .map((edge) => ({
+      patternId: edge.signals.join("_"),
+      signals: edge.signals,
+      evidenceCount: edge.journalIds.length,
+      recurrence: edge.weight,
+      confidence: Number(clamp(0.42 + edge.weight * 0.08 + Math.min(edge.journalIds.length, 5) * 0.04, 0, 0.88).toFixed(3)),
+      supportingJournalIds: edge.journalIds,
+    }));
+
+  return patterns;
+}
+
+function detectContradiction({ text = "", claimType, evidenceGraph, queryTokens = [] }) {
+  const responseTokens = tokenize(text);
+  const graphSignals = new Set(evidenceGraph.strongestNodes.map((node) => node.signal));
+  const graphEdges = evidenceGraph.strongestEdges.map((edge) => edge.signals);
+  const unsupportedResponseSignals = responseTokens
+    .filter((token) => !graphSignals.has(token) && !queryTokens.includes(token))
+    .filter((token) => FOCUS_TOKEN_MAP.some((item) => item.tokens.includes(token)))
+    .slice(0, 8);
+  const hasGraphSupport = responseTokens.some((token) => graphSignals.has(token));
+  const hasEdgeSupport = graphEdges.some((signals) => signals.every((signal) => responseTokens.includes(signal) || queryTokens.includes(signal)));
+  const strictClaim = ["health_correlation", "causation_claim", "repeated_pattern"].includes(claimType);
+  const contradictionDetected = strictClaim && unsupportedResponseSignals.length > 0 && !hasEdgeSupport;
+
+  return {
+    contradictionDetected,
+    unsupportedResponseSignals,
+    hasGraphSupport,
+    hasEdgeSupport,
+  };
+}
+
+function adaptPermission({ permission, journals, evidenceGraph, patternLedger, healthQuality }) {
+  const dataRichnessBoost = journals.length >= 14 ? -0.03 : journals.length >= 7 ? -0.015 : 0.02;
+  const graphBoost = evidenceGraph.edgeCount >= 20 ? -0.015 : 0;
+  const recurringPatternBoost = patternLedger.some((pattern) => pattern.recurrence >= 3) ? -0.02 : 0;
+  const healthPenalty = permission.requiresHealth && !healthQuality?.eligible ? 0.08 : 0;
+
+  return {
+    ...permission,
+    minEvidenceScore: Number(clamp(permission.minEvidenceScore + dataRichnessBoost + graphBoost + recurringPatternBoost + healthPenalty, 0, 0.5).toFixed(3)),
+    minConfidence: Number(clamp(permission.minConfidence + healthPenalty, 0, 1).toFixed(3)),
+  };
 }
 
 function scoreJournalEvidence({ journal, queryTokens, focus, now }) {
@@ -143,15 +348,26 @@ export function buildEvidenceGate({
 } = {}) {
   const normalizedMessage = normalizeText(userMessage);
   const queryTokens = tokenize(normalizedMessage);
+  const requestedClaimType = classifyClaimType(userMessage);
   const healthTopic = HEALTH_REGEX.test(userMessage);
   const patternRequest = PATTERN_REGEX.test(userMessage);
   const crisisDetected = CRISIS_REGEX.test(userMessage);
   const focus = inferFocus(queryTokens, themes);
   const now = Date.now();
+  const evidenceGraph = buildEvidenceGraph(journals);
+  const patternLedger = derivePatternLedger(evidenceGraph, queryTokens);
+  const basePermission = CLAIM_PERMISSION_MATRIX[requestedClaimType] || CLAIM_PERMISSION_MATRIX.journal_insight;
+  const permission = adaptPermission({
+    permission: basePermission,
+    journals,
+    evidenceGraph,
+    patternLedger,
+    healthQuality,
+  });
   const rankedEvidence = journals
     .map((journal) => scoreJournalEvidence({ journal, queryTokens, focus, now }))
     .sort((a, b) => b.score - a.score);
-  const selectedEvidence = rankedEvidence.filter((item) => item.score >= 0.18).slice(0, 3);
+  const selectedEvidence = rankedEvidence.filter((item) => item.score >= Math.min(0.18, permission.minEvidenceScore)).slice(0, 3);
   const confidenceCeiling = calculateEvidenceConfidence({
     rankedEvidence,
     queryTokens,
@@ -159,23 +375,36 @@ export function buildEvidenceGate({
     healthQuality,
     healthTopic,
   });
-  const minimumEvidenceScore = patternRequest || healthTopic ? 0.24 : 0.18;
+  const minimumEvidenceScore = permission.minEvidenceScore;
   const evidenceScoreOk = (rankedEvidence[0]?.score || 0) >= minimumEvidenceScore;
-  const enoughEvidence = selectedEvidence.length > 0 && evidenceScoreOk;
-  const healthClaimAllowed = !healthTopic || Boolean(healthQuality?.eligible);
+  const enoughEvidence =
+    selectedEvidence.length >= permission.minEvidenceCount &&
+    (permission.minEvidenceCount === 0 || evidenceScoreOk);
+  const healthClaimAllowed = !permission.requiresHealth || Boolean(healthQuality?.eligible);
   const memoryDisabled = settings.useMemory === false;
-  const requiresFallback = crisisDetected || memoryDisabled || !enoughEvidence || !healthClaimAllowed;
+  const requiresFallback =
+    crisisDetected ||
+    permission.allowFallbackOnly ||
+    memoryDisabled ||
+    !enoughEvidence ||
+    !healthClaimAllowed ||
+    confidenceCeiling < permission.minConfidence;
   const blockedReasons = [
     crisisDetected ? "crisis_signal_detected" : null,
+    permission.allowFallbackOnly ? `claim_type_requires_fallback:${requestedClaimType}` : null,
     memoryDisabled ? "memory_disabled_by_user" : null,
     !enoughEvidence ? "insufficient_personal_evidence" : null,
     !healthClaimAllowed ? "health_data_not_eligible" : null,
+    confidenceCeiling < permission.minConfidence ? "confidence_below_claim_permission" : null,
   ].filter(Boolean);
 
   return {
-    algorithm: "Evidence-Gated Reflective Safety",
+    algorithm: "Evidence-Gated Reflective Safety with Claim Permission Matrix",
     version: ALGORITHM_VERSION,
     focus,
+    requestedClaimType,
+    effectiveClaimType: requestedClaimType,
+    claimPermission: permission,
     normalizedMessage,
     querySignals: queryTokens.slice(0, 12),
     healthTopic,
@@ -183,6 +412,8 @@ export function buildEvidenceGate({
     crisisDetected,
     selectedEvidence,
     rankedEvidence: rankedEvidence.slice(0, 5),
+    evidenceGraph,
+    patternLedger,
     evidenceScore: Number((rankedEvidence[0]?.score || 0).toFixed(3)),
     evidenceScoreOk,
     confidenceCeiling: Number(confidenceCeiling.toFixed(3)),
@@ -199,6 +430,23 @@ export function applyEvidenceGate(payload, gate) {
     confidence: Number(payload?.confidence || 0),
     evidence: Array.isArray(payload?.evidence) ? payload.evidence : [],
   };
+  const generatedText = `${base.insight || ""} ${base.question || ""} ${base.reasoning || ""}`;
+  const generatedClaimType = classifyClaimType(generatedText);
+  const effectiveClaimType = combineClaimTypes(gate.requestedClaimType, generatedClaimType);
+  const claimPermission = CLAIM_PERMISSION_MATRIX[effectiveClaimType] || gate.claimPermission;
+  const contradiction = detectContradiction({
+    text: generatedText,
+    claimType: effectiveClaimType,
+    evidenceGraph: gate.evidenceGraph,
+    queryTokens: gate.querySignals,
+  });
+  const runtimeGate = {
+    ...gate,
+    generatedClaimType,
+    effectiveClaimType,
+    claimPermission,
+    contradiction,
+  };
 
   if (gate.crisisDetected) {
     return {
@@ -210,52 +458,78 @@ export function applyEvidenceGate(payload, gate) {
       reasoning: "EGRS crisis safety gate blocked reflective analysis and returned immediate support prompt.",
       fallback: true,
       currentFocus: "emotional_safety",
-      egrs: gate,
+      egrs: runtimeGate,
     };
   }
 
-  if (gate.requiresFallback && !base.fallback) {
+  if ((gate.requiresFallback || contradiction.contradictionDetected || claimPermission.allowFallbackOnly) && !base.fallback) {
+    const blockReasons = [
+      ...gate.blockedReasons,
+      contradiction.contradictionDetected ? "contradiction_against_personal_evidence_graph" : null,
+      claimPermission.allowFallbackOnly ? `generated_claim_type_requires_fallback:${effectiveClaimType}` : null,
+    ].filter(Boolean);
     return {
       schemaVersion: "1.0",
       insight: "",
       question: gate.fallbackQuestion,
       evidence: [],
       confidence: 0,
-      reasoning: `EGRS blocked unsupported response: ${gate.blockedReasons.join(", ")}.`,
+      reasoning: `EGRS blocked unsupported response: ${blockReasons.join(", ")}.`,
       fallback: true,
       currentFocus: gate.focus,
-      egrs: gate,
+      egrs: {
+        ...runtimeGate,
+        blockedReasons: blockReasons,
+      },
     };
   }
 
   const gatedConfidence = base.fallback
     ? base.confidence
-    : Math.min(Math.max(base.confidence, 0.62), gate.confidenceCeiling);
+    : Math.min(Math.max(base.confidence, 0.62), gate.confidenceCeiling, claimPermission.minConfidence ? 0.92 : 1);
 
   return {
     ...base,
     confidence: Number(gatedConfidence.toFixed(3)),
-    reasoning: `${base.reasoning || ""} EGRS confidence ceiling=${gate.confidenceCeiling}, evidenceScore=${gate.evidenceScore}.`.trim(),
+    reasoning: `${base.reasoning || ""} EGRS claimType=${effectiveClaimType}, confidence ceiling=${gate.confidenceCeiling}, evidenceScore=${gate.evidenceScore}.`.trim(),
     currentFocus: base.currentFocus || gate.focus,
-    egrs: gate,
+    egrs: runtimeGate,
   };
 }
 
 export function verifyEvidenceGate({ payload, gate, minConfidence }) {
   const fallbackOk = Boolean(payload?.fallback);
+  const effectiveClaimType = payload?.egrs?.effectiveClaimType || gate.effectiveClaimType || gate.requestedClaimType;
+  const claimPermission = payload?.egrs?.claimPermission || gate.claimPermission;
+  const contradiction = payload?.egrs?.contradiction || { contradictionDetected: false };
   const evidenceIds = new Set(gate.selectedEvidence.map((item) => item.journalId));
   const payloadEvidence = Array.isArray(payload?.evidence) ? payload.evidence : [];
   const usesSelectedEvidence = payloadEvidence.some((item) => evidenceIds.has(String(item.journalId || "")));
-  const evidenceGateOk = fallbackOk || (gate.evidenceScoreOk && usesSelectedEvidence);
-  const confidenceGateOk = fallbackOk || Number(payload?.confidence || 0) >= minConfidence;
-  const healthGateOk = fallbackOk || gate.healthClaimAllowed;
+  const evidenceGateOk =
+    fallbackOk ||
+    (gate.evidenceScoreOk &&
+      (claimPermission.minEvidenceCount === 0 || payloadEvidence.length >= claimPermission.minEvidenceCount) &&
+      usesSelectedEvidence);
+  const confidenceGateOk = fallbackOk || Number(payload?.confidence || 0) >= Math.max(minConfidence, claimPermission.minConfidence);
+  const healthGateOk = fallbackOk || (!claimPermission.requiresHealth || gate.healthClaimAllowed);
   const crisisGateOk = !gate.crisisDetected || fallbackOk;
+  const claimPermissionOk = fallbackOk || !claimPermission.allowFallbackOnly;
+  const contradictionGateOk = fallbackOk || !contradiction.contradictionDetected;
 
   return {
+    effectiveClaimType,
     evidenceGateOk,
     confidenceGateOk,
     healthGateOk,
     crisisGateOk,
-    acceptedByEvidenceGate: evidenceGateOk && confidenceGateOk && healthGateOk && crisisGateOk,
+    claimPermissionOk,
+    contradictionGateOk,
+    acceptedByEvidenceGate:
+      evidenceGateOk &&
+      confidenceGateOk &&
+      healthGateOk &&
+      crisisGateOk &&
+      claimPermissionOk &&
+      contradictionGateOk,
   };
 }
