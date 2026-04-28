@@ -345,6 +345,7 @@ export function buildEvidenceGate({
   healthQuality = {},
   themes = [],
   supportedHypotheses = [],
+  contradictedHypotheses = [],
   settings = {},
 } = {}) {
   const normalizedMessage = normalizeText(userMessage);
@@ -392,6 +393,16 @@ export function buildEvidenceGate({
     !["repeated_pattern", "health_correlation", "causation_claim"].includes(requestedClaimType) ||
     queryTokens.some((token) => hypothesisSignals.has(token)) ||
     supportedHypotheses.some((hypothesis) => String(hypothesis.hypothesisText || "").toLowerCase().includes(focus));
+  const contradictedHypothesis = contradictedHypotheses.find((hypothesis) => {
+    const sourceSignals = Array.isArray(hypothesis.sourceSignals) ? hypothesis.sourceSignals : [];
+    return (
+      sourceSignals.some((signal) => queryTokens.includes(signal)) ||
+      String(hypothesis.hypothesisText || "").toLowerCase().includes(focus)
+    );
+  });
+  const retractionRequired =
+    ["repeated_pattern", "health_correlation", "causation_claim"].includes(requestedClaimType) &&
+    Boolean(contradictedHypothesis);
   const memoryDisabled = settings.useMemory === false;
   const requiresFallback =
     crisisDetected ||
@@ -399,6 +410,7 @@ export function buildEvidenceGate({
     memoryDisabled ||
     !enoughEvidence ||
     !healthClaimAllowed ||
+    retractionRequired ||
     !hypothesisClaimAllowed ||
     confidenceCeiling < permission.minConfidence;
   const blockedReasons = [
@@ -407,6 +419,7 @@ export function buildEvidenceGate({
     memoryDisabled ? "memory_disabled_by_user" : null,
     !enoughEvidence ? "insufficient_personal_evidence" : null,
     !healthClaimAllowed ? "health_data_not_eligible" : null,
+    retractionRequired ? "matching_hypothesis_contradicted_retraction_required" : null,
     !hypothesisClaimAllowed ? "validated_hypothesis_not_supported" : null,
     confidenceCeiling < permission.minConfidence ? "confidence_below_claim_permission" : null,
   ].filter(Boolean);
@@ -428,6 +441,9 @@ export function buildEvidenceGate({
     evidenceGraph,
     patternLedger,
     supportedHypotheses,
+    contradictedHypotheses,
+    contradictedHypothesis: contradictedHypothesis || null,
+    retractionRequired,
     evidenceScore: Number((rankedEvidence[0]?.score || 0).toFixed(3)),
     evidenceScoreOk,
     confidenceCeiling: Number(confidenceCeiling.toFixed(3)),
@@ -435,7 +451,9 @@ export function buildEvidenceGate({
     hypothesisClaimAllowed,
     requiresFallback,
     blockedReasons,
-    fallbackQuestion: buildFallbackQuestion({ crisisDetected, healthTopic, patternRequest, focus }),
+    fallbackQuestion: retractionRequired
+      ? `Earlier this looked like a possible pattern, but your newer entries do not support it strongly. What changed recently around ${focus.replace(/_/g, " ")}?`
+      : buildFallbackQuestion({ crisisDetected, healthTopic, patternRequest, focus }),
   };
 }
 
@@ -461,6 +479,15 @@ export function applyEvidenceGate(payload, gate) {
     effectiveClaimType,
     claimPermission,
     contradiction,
+    retraction: gate.retractionRequired
+      ? {
+          required: true,
+          hypothesis: gate.contradictedHypothesis,
+          message:
+            gate.contradictedHypothesis?.retractionMessage ||
+            "Earlier this looked like a possible pattern, but newer journal evidence no longer supports it strongly.",
+        }
+      : { required: false },
   };
 
   if (gate.crisisDetected) {
@@ -489,7 +516,9 @@ export function applyEvidenceGate(payload, gate) {
       question: gate.fallbackQuestion,
       evidence: [],
       confidence: 0,
-      reasoning: `EGRS blocked unsupported response: ${blockReasons.join(", ")}.`,
+      reasoning: gate.retractionRequired
+        ? `EGRS retraction gate replaced a contradicted claim: ${blockReasons.join(", ")}.`
+        : `EGRS blocked unsupported response: ${blockReasons.join(", ")}.`,
       fallback: true,
       currentFocus: gate.focus,
       egrs: {

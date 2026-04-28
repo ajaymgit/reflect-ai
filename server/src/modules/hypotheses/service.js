@@ -90,6 +90,10 @@ function serializeHypothesis(hypothesis) {
     contradictionCount: plain.contradictionCount,
     neutralCount: plain.neutralCount,
     claimLock: plain.claimLock,
+    retractionMessage:
+      plain.status === "contradicted" || plain.status === "weakened"
+        ? `Earlier this pattern looked possible, but newer journal evidence does not support it strongly: ${plain.hypothesisText}`
+        : "",
     evidence: (plain.evidence || []).slice(-8),
     confidenceTimeline: (plain.confidenceTimeline || []).slice(-12),
     lastEvaluatedAt: plain.lastEvaluatedAt,
@@ -238,6 +242,7 @@ export async function getHypothesisSummary(userId, prefetched = null) {
     contradicted: serialized.filter((item) => item.status === "contradicted" || item.status === "weakened").length,
     hypotheses: serialized,
     supportedHypotheses: serialized.filter((item) => item.claimLock?.strongClaimsAllowed),
+    contradictedHypotheses: serialized.filter((item) => item.status === "contradicted" || item.status === "weakened"),
   };
 }
 

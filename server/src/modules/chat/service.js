@@ -912,6 +912,7 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
     themes: context.themes,
     settings: normalizedSettings,
     supportedHypotheses: context.hypothesisSummary?.supportedHypotheses || [],
+    contradictedHypotheses: context.hypothesisSummary?.contradictedHypotheses || [],
   });
   const evidenceCandidates = evidenceGate.selectedEvidence.length
     ? evidenceGate.selectedEvidence
@@ -1046,9 +1047,11 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
         confidenceCeiling: evidenceGate.confidenceCeiling,
         blockedReasons: finalPayload.egrs?.blockedReasons || evidenceGate.blockedReasons,
         claimPermission: finalPayload.egrs?.claimPermission || evidenceGate.claimPermission,
+        retraction: finalPayload.egrs?.retraction || evidenceGate.retraction,
         contradiction: finalPayload.egrs?.contradiction || null,
         patternLedger: evidenceGate.patternLedger,
         experimentValidatedHypotheses: context.hypothesisSummary?.supportedHypotheses || [],
+        contradictedHypotheses: context.hypothesisSummary?.contradictedHypotheses || [],
         evidenceGraphSummary: {
           nodeCount: evidenceGate.evidenceGraph?.nodeCount || 0,
           edgeCount: evidenceGate.evidenceGraph?.edgeCount || 0,

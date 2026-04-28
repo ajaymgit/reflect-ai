@@ -122,6 +122,11 @@ function HypothesisCard({ hypothesis }) {
           </div>
           <h3 className="text-xl font-semibold mt-3">{hypothesis.hypothesisText}</h3>
           <p className="text-sm text-white/65 mt-2">{hypothesis.claimLock?.reason}</p>
+          {hypothesis.retractionMessage && (
+            <p className="text-sm text-orange-100/85 mt-2 rounded-xl border border-orange-300/20 bg-orange-400/10 p-3">
+              {hypothesis.retractionMessage}
+            </p>
+          )}
         </div>
         <div className="rounded-2xl bg-white/5 border border-white/10 p-4 min-w-36">
           <p className="text-xs text-white/60">Confidence</p>

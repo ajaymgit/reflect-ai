@@ -22,9 +22,10 @@ For every chat message, EGRS performs these steps:
 8. Apply a claim permission matrix that assigns different evidence, confidence, and health-data requirements to each claim type.
 9. Check whether the generated response contradicts the personal evidence graph.
 10. Check whether a strong pattern claim has a supported EVPE hypothesis.
-11. Block unsupported, unsafe, contradictory, directive, unvalidated, or memory-disabled responses before they reach the user.
-12. Replace blocked responses with a focused fallback question.
-13. Store the EGRS version, claim type, evidence graph summary, pattern ledger, supported hypotheses, confidence ceiling, contradiction status, blocked reasons, and gate decisions in the audit log.
+11. Check whether a matching EVPE hypothesis has become contradicted or weakened.
+12. Block unsupported, unsafe, contradictory, directive, unvalidated, retracted, or memory-disabled responses before they reach the user.
+13. Replace blocked responses with a focused fallback or retraction question.
+14. Store the EGRS version, claim type, evidence graph summary, pattern ledger, supported/retracted hypotheses, confidence ceiling, contradiction status, blocked reasons, and gate decisions in the audit log.
 
 ## Why this is stronger than a normal chatbot
 
@@ -45,6 +46,7 @@ User message
   -> journal evidence ranking
   -> claim-specific permission matrix
   -> experiment-validated hypothesis lock
+  -> retraction check for weakened or contradicted hypotheses
   -> adaptive confidence ceiling calculation
   -> health, crisis, and contradiction gates
   -> AI generation
@@ -92,10 +94,12 @@ Entry C: no meeting + stressed -> weakens
 Status and confidence update after every journal save.
 ```
 
+If a hypothesis becomes weakened or contradicted, EGRS treats matching strong claims as retracted. The chatbot must soften the statement and ask for fresh context instead of repeating the old insight as fact.
+
 ## Patent-focused claim direction
 
 The strongest narrow claim is:
 
 ```text
-A computer-implemented method for controlling generated reflective chatbot responses by classifying a generated response into a claim type, constructing a personal evidence graph from user journal records, deriving a pattern ledger from repeated evidence-graph edges, converting repeated signals into experiment-validated personal hypotheses, calculating a claim-specific confidence ceiling, detecting contradictions between the generated response and the personal evidence graph, and delivering the generated response only when claim-specific permission rules and hypothesis claim locks are satisfied.
+A computer-implemented method for controlling generated reflective chatbot responses by classifying a generated response into a claim type, constructing a personal evidence graph from user journal records, deriving a pattern ledger from repeated evidence-graph edges, converting repeated signals into experiment-validated personal hypotheses, calculating a claim-specific confidence ceiling, detecting contradictions between the generated response and the personal evidence graph, retracting claims that match weakened or contradicted hypotheses, and delivering the generated response only when claim-specific permission rules and hypothesis claim locks are satisfied.
 ```
