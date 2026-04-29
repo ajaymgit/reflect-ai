@@ -41,10 +41,7 @@ services:
       - key: OLLAMA_MODEL
         value: llama3.2:3b
       - key: CLIENT_URL
-        fromService:
-          type: web
-          name: reflectai-web
-          property: url
+        sync: false
       - key: DEMO_EMAIL
         value: demo@reflectai.com
       - key: DEMO_PASSWORD
@@ -60,10 +57,7 @@ services:
       - key: NODE_VERSION
         value: 20
       - key: VITE_API_URL
-        fromService:
-          type: web
-          name: reflectai-api
-          property: url
+        sync: false
     routes:
       - type: rewrite
         source: /*
