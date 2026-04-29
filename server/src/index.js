@@ -11,7 +11,7 @@ import { env } from "./shared/config/env.js";
 import { errorHandler, notFoundHandler } from "./shared/middleware/errorHandler.js";
 import { requestIdMiddleware } from "./shared/middleware/requestId.js";
 import { requestLogger } from "./shared/middleware/requestLogger.js";
-import { logInfo } from "./shared/utils/logger.js";
+import { logError, logInfo } from "./shared/utils/logger.js";
 import { runStartupChecks } from "./startup.js";
 
 const app = express();
@@ -52,7 +52,7 @@ runStartupChecks()
     });
   })
   .catch((error) => {
-    console.error("Startup failed:", error.message);
+    logError("Startup failed", { error: error.message });
     process.exit(1);
   });
 

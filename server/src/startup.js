@@ -13,7 +13,11 @@ export async function runStartupChecks() {
     throw new Error("Policy configuration missing.");
   }
 
-  await mongoose.connect(env.MONGO_URI);
+  logInfo("Connecting to MongoDB");
+  await mongoose.connect(env.MONGO_URI, {
+    serverSelectionTimeoutMS: 10000,
+    connectTimeoutMS: 10000,
+  });
   logInfo("MongoDB connected");
 
   const hasGemini = !!env.GEMINI_API_KEY;
