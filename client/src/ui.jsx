@@ -3,15 +3,15 @@ import { Link } from "react-router-dom";
 export function Button({ children, variant = "primary", className = "", ...props }) {
   const variants = {
     primary:
-      "bg-brand-300 text-slate-950 hover:bg-brand-200 focus-visible:ring-brand-200 disabled:opacity-60 disabled:hover:bg-brand-300",
+      "bg-brand-300 text-slate-950 shadow-[0_10px_24px_rgba(154,191,117,0.24)] hover:bg-brand-200 focus-visible:ring-brand-200 disabled:opacity-60 disabled:hover:bg-brand-300",
     secondary:
-      "bg-surface-200/80 text-white border border-cream-200/15 hover:bg-surface-100 focus-visible:ring-cream-200/40",
+      "bg-surface-200/80 text-white border border-cream-200/15 hover:bg-surface-100/90 focus-visible:ring-cream-200/40",
     ghost: "bg-transparent text-brand-100 hover:bg-white/8 focus-visible:ring-brand-200",
   };
 
   return (
     <button
-      className={`inline-flex min-h-11 items-center justify-center rounded-xl px-4 py-2.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${variants[variant]} ${className}`}
+      className={`inline-flex min-h-11 items-center justify-center rounded-2xl px-4 py-2.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${variants[variant]} ${className}`}
       {...props}
     >
       {children}
@@ -29,7 +29,7 @@ export function ButtonLink({ children, to, variant = "primary", className = "", 
   return (
     <Link
       to={to}
-      className={`inline-flex min-h-11 items-center justify-center rounded-xl px-4 py-2.5 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200/60 ${variants[variant]} ${className}`}
+      className={`inline-flex min-h-11 items-center justify-center rounded-2xl px-4 py-2.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200/60 ${variants[variant]} ${className}`}
       {...props}
     >
       {children}
@@ -39,7 +39,7 @@ export function ButtonLink({ children, to, variant = "primary", className = "", 
 
 export function Card({ children, className = "", title, ...props }) {
   return (
-    <section className={`glass rounded-2xl p-4 md:p-5 ${className}`} {...props}>
+    <section className={`glass rounded-3xl p-5 md:p-6 ${className}`} {...props}>
       {title ? <p className="mb-2 text-xs uppercase tracking-wider text-brand-100">{title}</p> : null}
       {children}
     </section>
@@ -48,12 +48,12 @@ export function Card({ children, className = "", title, ...props }) {
 
 export function PageHeader({ eyebrow, title, description, action }) {
   return (
-    <Card className="rounded-3xl">
+    <Card className="rounded-[28px]">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           {eyebrow ? <p className="text-brand-100 text-xs uppercase tracking-wider">{eyebrow}</p> : null}
-          <h2 className="mt-2 text-3xl font-semibold md:text-4xl">{title}</h2>
-          {description ? <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70">{description}</p> : null}
+          <h2 className="mt-2 text-3xl font-semibold md:text-[2.45rem] md:leading-[1.06]">{title}</h2>
+          {description ? <p className="mt-3 max-w-2xl text-[15px] leading-7 text-white/70">{description}</p> : null}
         </div>
         {action ? <div className="flex shrink-0 flex-wrap gap-2">{action}</div> : null}
       </div>
@@ -67,7 +67,7 @@ export function ToggleButton({ selected, pressed, children, className = "", ...p
     <button
       type="button"
       aria-pressed={isSelected}
-      className={`rounded-xl border px-3 py-2 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200/60 ${
+      className={`rounded-2xl border px-3 py-2 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200/60 ${
         isSelected ? "border-brand-100/50 bg-brand-300/25 text-white" : "border-cream-200/10 bg-surface-200/50 text-white/85 hover:bg-surface-100"
       } ${className}`}
       {...props}
@@ -100,8 +100,8 @@ export function TextField({ label, id, className = "", as: Component = "input", 
 
 export function PageState({ title, message, action }) {
   return (
-    <div className="glass rounded-2xl p-5 text-sm text-white/75">
-      <p className="text-base font-medium text-white">{title}</p>
+    <div className="glass rounded-3xl p-6 text-sm text-white/75">
+      <p className="text-lg font-semibold text-white">{title}</p>
       {message ? <p className="mt-2 leading-6">{message}</p> : null}
       {action ? <div className="mt-4">{action}</div> : null}
     </div>

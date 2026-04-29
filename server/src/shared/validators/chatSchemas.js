@@ -24,3 +24,22 @@ export const quickJournalSchema = z.object({
   query: z.object({}).optional(),
 });
 
+export const journalEntryByIdSchema = z.object({
+  body: z.object({}).optional(),
+  params: z.object({
+    id: z.string().min(1),
+  }),
+  query: z.object({}).optional(),
+});
+
+export const updateJournalEntrySchema = z.object({
+  body: z.object({
+    content: z.string().min(1).max(10000),
+    mood: z.enum(["happy", "calm", "reflective", "sad", "stressed", "angry"]),
+  }),
+  params: z.object({
+    id: z.string().min(1),
+  }),
+  query: z.object({}).optional(),
+});
+

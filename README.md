@@ -37,6 +37,12 @@ Full-stack AI-powered smart journaling and digital health platform.
 
 - `npm run start`
 
+## Test Coverage Baseline
+
+- Backend unit tests: `cd server && npm test`
+- Frontend smoke tests: `cd client && npm test`
+- Frontend build check: `cd client && npm run build`
+
 ## Demo Credentials
 
 - Email: `demo@reflectai.com`
@@ -62,4 +68,24 @@ Login -> Dashboard -> New Journal -> Retrospect -> AI Chat -> Health Dashboard
 - Invalid AI response retries then falls back safely
 - Audit logging is required for every turn
 - Non-medical disclaimer is visible in chat
+
+## AI Provider Cost Control
+
+- Gemini is used as the primary model.
+- OpenAI is backup-only and can be controlled with `OPENAI_FALLBACK_MODE`:
+  - `manual` (default): stop on Gemini limit and notify user, avoiding paid usage.
+  - `auto`: switch to OpenAI automatically when Gemini is rate-limited.
+
+## Operations Notes
+
+- Security headers are enabled through Helmet in the backend.
+- If chat latency spikes, keep fallback mode in `manual` and retry later to avoid paid OpenAI overuse.
+- For demo reliability, seed data before presentation and verify `/api/health`, `/api/dashboard/summary`, and `/api/chat/session`.
+
+## Added Documentation
+
+- Ops runbook: `docs/OPERATIONS_RUNBOOK.md`
+- Environment policy: `docs/ENV_POLICY.md`
+- Patent readiness checklist: `PATENT_READINESS_CHECKLIST.md`
+- Patent technical evidence map: `PATENT_TECHNICAL_EVIDENCE.md`
 

@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { apiFetch } from "../api";
 import { Button, MetricSkeleton, PageState } from "../ui";
 
 export default function RetrospectPage() {
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -26,10 +28,10 @@ export default function RetrospectPage() {
     <main className="p-4 md:p-6">
       <div className="max-w-6xl mx-auto space-y-4">
         <div className="glass rounded-2xl p-5">
-          <p className="text-brand-100 text-xs uppercase tracking-wider">Retrospect Analysis</p>
-          <h2 className="text-2xl font-semibold mt-1">Pattern and behavior review</h2>
+          <p className="text-brand-100 text-xs uppercase tracking-wider">Look Back</p>
+          <h2 className="text-2xl font-semibold mt-1">Your pattern summary</h2>
           <p className="text-sm text-white/70 mt-2">
-            {loading ? "Analyzing entries..." : data?.emotionalPatternSummary || "No retrospect summary is available yet."}
+            {loading ? "Reading your entries..." : data?.emotionalPatternSummary || "No summary is available yet."}
           </p>
         </div>
 
@@ -53,9 +55,9 @@ export default function RetrospectPage() {
           <>
             <div className="grid lg:grid-cols-3 gap-4">
               <div className="glass rounded-2xl p-4 lg:col-span-2">
-                <h3 className="font-medium">Emotional timeline</h3>
+                <h3 className="font-medium">Mood timeline</h3>
                 <p className="text-xs text-white/60 mt-1">
-                  Each bar shows the emotional intensity of that day (higher means more uplifting/steady tone).
+                  Each bar shows how your mood felt that day.
                 </p>
                 {moodSeries.length ? (
                   <div className="h-64 mt-3" aria-label="Emotional timeline chart">
@@ -78,7 +80,7 @@ export default function RetrospectPage() {
               </div>
 
               <div className="glass rounded-2xl p-4 space-y-3">
-                <h3 className="font-medium">Recurring themes</h3>
+                <h3 className="font-medium">Topics that repeat</h3>
                 {(data?.recurringThemes || []).length ? (
                   (data?.recurringThemes || []).map((theme) => (
                     <div key={theme} className="rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm">
@@ -86,20 +88,20 @@ export default function RetrospectPage() {
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-white/65">Themes appear after a few journal entries.</p>
+                  <p className="text-sm text-white/65">Topics appear after a few journal entries.</p>
                 )}
               </div>
             </div>
 
             <div className="grid md:grid-cols-2 gap-4">
-              <Card title="Behavioral loops" body={(data?.behavioralLoops || []).join(" • ")} />
-              <Card title="Health correlation" body={data?.healthCorrelation || "No correlation data yet."} />
+              <Card title="Repeating habits" body={(data?.behavioralLoops || []).join(" • ")} />
+              <Card title="Health connection" body={data?.healthCorrelation || "No health connection data yet."} />
             </div>
 
             <div className="glass rounded-2xl p-4">
-              <p className="text-brand-100 text-xs uppercase tracking-wider">Socratic question</p>
-              <p className="text-white/90 mt-2">{data?.socraticQuestion || "What pattern feels most meaningful to reflect on next?"}</p>
-              <Button type="button" className="mt-4">
+              <p className="text-brand-100 text-xs uppercase tracking-wider">Helpful reflection question</p>
+              <p className="text-white/90 mt-2">{data?.socraticQuestion || "What pattern feels most important to reflect on next?"}</p>
+              <Button type="button" className="mt-4" onClick={() => navigate("/chat")}>
                 Continue Reflection
               </Button>
             </div>

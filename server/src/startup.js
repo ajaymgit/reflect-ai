@@ -16,8 +16,8 @@ export async function runStartupChecks() {
   await mongoose.connect(env.MONGO_URI);
   logInfo("MongoDB connected");
 
-  const usingGeminiCompat = !env.OPENAI_API_KEY && !!env.GEMINI_API_KEY;
-  const aiApiKey = env.OPENAI_API_KEY || env.GEMINI_API_KEY;
+  const hasGemini = !!env.GEMINI_API_KEY;
+  const hasOpenAI = !!env.OPENAI_API_KEY;
   const useOllama = String(env.USE_OLLAMA || "true").toLowerCase() !== "false";
   const ollamaBaseUrl = env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
   const ollamaModel = env.OLLAMA_MODEL || "llama3.2:3b";
@@ -35,13 +35,18 @@ export async function runStartupChecks() {
     }
   }
 
-  if (aiApiKey) {
-    const ai = new OpenAI({
-      apiKey: aiApiKey,
-      ...(usingGeminiCompat ? { baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/" } : {}),
-    });
-    if (ai) logInfo("OpenAI client initialized");
-    if (usingGeminiCompat) logInfo("Gemini key detected; using OpenAI-compatible Gemini endpoint");
+  if (hasGemini || hasOpenAI) {
+    if (hasGemini) {
+      const gemini = new OpenAI({
+        apiKey: env.GEMINI_API_KEY,
+        baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+      });
+      if (gemini) logInfo("Gemini client initialized (primary)");
+    }
+    if (hasOpenAI) {
+      const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
+      if (openai) logInfo("OpenAI client initialized (backup)");
+    }
   } else {
     logInfo("No AI key set; using heuristic chat mode");
   }

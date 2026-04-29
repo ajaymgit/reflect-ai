@@ -1,0 +1,67 @@
+workflows:
+  ios_testflight:
+    name: ReflectAI iOS TestFlight
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+
+    environment:
+      xcode: latest
+      node: latest
+      vars:
+        XCODE_WORKSPACE: "client/ios/App/App.xcworkspace"
+        XCODE_SCHEME: "App"
+        APP_STORE_APPLE_ID: "" # Numeric App ID from App Store Connect
+        BUNDLE_ID: "com.equoria.reflectai"
+      groups:
+        - app_store_credentials
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.equoria.reflectai
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+
+    scripts:
+      - name: Install dependencies
+        script: |
+          cd client
+          npm ci
+      - name: Build web and sync iOS
+        script: |
+          cd client
+          npm run ios:build
+      - name: Set API URL if provided
+        script: |
+          if [ -n "$VITE_API_URL" ]; then
+            echo "Using VITE_API_URL from secure env var"
+            cd client
+            echo "VITE_API_URL=$VITE_API_URL" > .env.production
+            npm run ios:build
+          fi
+      - name: Build IPA for App Store
+        script: |
+          xcode-project build-ipa \
+            --workspace "$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        submit_to_app_store: false
+      email:
+        recipients:
+          - ajaym23cs@rnsit.ac.in
+        notify:
+          success: true
+          failure: true

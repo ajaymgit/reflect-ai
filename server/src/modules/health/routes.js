@@ -73,4 +73,32 @@ router.get(
   }),
 );
 
+// Backward-compatible alias used by older scripts/clients.
+router.get(
+  "/trends",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const days = Math.max(1, Math.min(60, Number(req.query.days) || 14));
+    const rows = await HealthData.find({ userId: req.user._id }).sort({ date: -1 }).limit(days);
+    res.json({
+      days,
+      points: rows
+        .slice()
+        .reverse()
+        .map((r) => ({
+          date: r.date,
+          steps: r.steps,
+          sleep: r.sleepHours,
+          stress: r.stressScore,
+          heartRate: r.restingHeartRate,
+        })),
+      averages: {
+        steps: avg(rows, "steps"),
+        sleepHours: avg(rows, "sleepHours", 1),
+        stressScore: avg(rows, "stressScore"),
+      },
+    });
+  }),
+);
+
 export default router;

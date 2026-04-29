@@ -64,7 +64,7 @@ export default function DashboardPage() {
         <PageHeader
           eyebrow={data?.greeting || "Welcome back"}
           title="How are you feeling today?"
-          description="Start with a quick entry. Keep it short or write deeply, your history and mood patterns will build over time."
+          description="Start with a quick note. Keep it short or write in detail. Over time, this helps you understand your feelings better."
           action={
             <>
               <ButtonLink to="/journal/new">Write journal</ButtonLink>
@@ -96,14 +96,14 @@ export default function DashboardPage() {
             ? [0, 1, 2, 3].map((item) => <MetricSkeleton key={item} />)
             : (
               <>
-                <StatCard label="Daily wellness" value={data?.dailyWellnessScore ?? "--"} icon={HeartPulse} />
+                <StatCard label="Today's wellness score" value={data?.dailyWellnessScore ?? "--"} icon={HeartPulse} />
                 <StatCard label="Journaling streak" value={data?.journalingStreak ?? "--"} icon={Flame} highlight />
                 <StatCard
                   label={range === "today" ? "Entries today" : range === "week" ? "Entries this week" : "Entries this month"}
                   value={data?.entriesInRange ?? "--"}
                   icon={CalendarRange}
                 />
-                <StatCard label="Current emotional state" value={data?.todaysMood ?? "--"} icon={Sparkles} />
+                <StatCard label="How you feel now" value={data?.todaysMood ?? "--"} icon={Sparkles} />
               </>
             )}
         </div>
@@ -131,9 +131,20 @@ export default function DashboardPage() {
         </Card>
 
         <Card>
-          <p className="text-xs text-brand-200 uppercase tracking-wider">Cumulative Insight</p>
+          <p className="text-xs text-brand-200 uppercase tracking-wider">Simple Takeaway</p>
           <p className="text-sm text-white/85 mt-2">{data?.cumulativeInsight || "Building your insight..."}</p>
         </Card>
+
+        {(data?.recentEntries || []).length === 0 && !loading ? (
+          <Card>
+            <p className="text-xs text-brand-100 uppercase tracking-wider">Start Here</p>
+            <div className="mt-2 space-y-2 text-sm text-white/80">
+              <p>1) Write your first journal note in your own words.</p>
+              <p>2) Open Ask ReflectAI and talk naturally like a normal chat.</p>
+              <p>3) Check Look Back to see repeating patterns over time.</p>
+            </div>
+          </Card>
+        ) : null}
 
         <div className="grid gap-4">
           <Card>

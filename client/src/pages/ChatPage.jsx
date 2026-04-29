@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Search, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { apiFetch } from "../api";
 import { useAuth } from "../context/AuthContext";
@@ -45,6 +46,8 @@ export default function ChatPage() {
   const [responseStyle, setResponseStyle] = useState(50);
   const [useMemory, setUseMemory] = useState(true);
   const [statusText, setStatusText] = useState("");
+  const [chatSearch, setChatSearch] = useState("");
+  const [providerAlert, setProviderAlert] = useState("");
   const [loadError, setLoadError] = useState("");
   const [quickEntryStatus, setQuickEntryStatus] = useState("");
   function sleep(ms) {
@@ -129,13 +132,20 @@ export default function ChatPage() {
       }
       const next = {
         userMessage: userMsg,
-        aiResponse: data.payload.question,
+        aiResponse: [String(data.payload.insight || "").trim(), String(data.payload.question || "").trim()]
+          .filter(Boolean)
+          .join("\n\n"),
         evidence: data.payload.evidence,
         confidence: data.payload.confidence,
         fallback: data.payload.fallback,
         reasoning: data.payload.reasoning,
         focus: data.payload.currentFocus || "general_reflection",
       };
+      if (data.payload.providerAlert) {
+        setProviderAlert(data.payload.providerAlert);
+      } else {
+        setProviderAlert("");
+      }
       setTurns((prev) => [...prev, next]);
       setMeta({ readiness: data.readiness, confidence: data.payload.confidence });
     } catch (error) {
@@ -191,6 +201,28 @@ export default function ChatPage() {
     }
   }
 
+  function jumpToLatest() {
+    endRef.current?.scrollIntoView({ behavior: settings.reducedMotion ? "auto" : "smooth", block: "end" });
+  }
+
+  function exportChatHistory() {
+    if (!turns.length) return;
+    const lines = turns.flatMap((turn) => [
+      `You: ${String(turn.userMessage || "").trim()}`,
+      `ReflectAI: ${String(turn.aiResponse || "").trim()}`,
+      "",
+    ]);
+    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = `reflectai-chat-${new Date().toISOString().slice(0, 10)}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(href);
+  }
+
   const selectedEntry = recentEntries.find((e) => e._id === selectedEntryId) || null;
   const sparkline = recentEntries.slice(0, 14).reverse();
   const heroGreeting = new Date().getHours() < 16 ? "Good day" : "Good evening";
@@ -207,6 +239,16 @@ export default function ChatPage() {
         : latestFocus === "relationships"
           ? "bg-mood-reflective/10"
           : "bg-surface-olive/35";
+  const searchText = chatSearch.trim().toLowerCase();
+  const displayedTurns = useMemo(
+    () =>
+      !searchText
+        ? turns
+        : turns.filter((turn) =>
+            `${turn.userMessage || ""} ${turn.aiResponse || ""}`.toLowerCase().includes(searchText),
+          ),
+    [searchText, turns],
+  );
 
   return (
     <div
@@ -215,23 +257,52 @@ export default function ChatPage() {
       }`}
     >
       <main className="p-3 md:p-6">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4 h-full">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-4 h-full">
           <section className={`glass rounded-3xl flex flex-col min-h-[70vh] ${toneClass}`}>
             <div className="p-4 md:p-5 border-b border-white/10 flex items-center justify-between gap-3">
-              <PageHeader eyebrow={`${heroGreeting}, ${user?.name || "there"}`} title="Reflective chat" description={smartPrompt} />
-              <div className="flex items-center gap-2">
-                <StatusPill>Confidence {(meta.confidence * 100).toFixed(0)}%</StatusPill>
+              <PageHeader eyebrow={`${heroGreeting}, ${user?.name || "there"}`} title="Ask ReflectAI" description={smartPrompt} />
+              <div className="flex items-center gap-2 shrink-0">
+                <StatusPill className="hidden sm:inline-flex">How sure: {(meta.confidence * 100).toFixed(0)}%</StatusPill>
                 <Link to="/dashboard" className="text-xs px-3 py-1 rounded-full bg-white/5 border border-white/10 hover:bg-white/10">
                   Home
                 </Link>
               </div>
             </div>
             <div className="px-4 md:px-5 py-3 border-b border-white/10 space-y-3">
+              {providerAlert ? (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="rounded-xl border border-orange-300/35 bg-orange-500/10 px-3 py-2 text-xs text-orange-100"
+                >
+                  {providerAlert}
+                </div>
+              ) : null}
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50" />
+                <input
+                  type="text"
+                  value={chatSearch}
+                  onChange={(e) => setChatSearch(e.target.value)}
+                  placeholder="Search in this chat..."
+                  className="w-full rounded-xl bg-surface-field border border-white/10 pl-9 pr-9 py-2.5 text-sm outline-none focus:border-brand-200"
+                />
+                {chatSearch ? (
+                  <button
+                    type="button"
+                    onClick={() => setChatSearch("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1 text-white/60 hover:bg-white/10"
+                    aria-label="Clear search"
+                  >
+                    <X size={14} />
+                  </button>
+                ) : null}
+              </div>
               <div className="flex flex-wrap gap-2">
                 {[
-                  { id: "quick", label: "Quick chat" },
-                  { id: "deep", label: "Deep reflection" },
-                  { id: "analysis", label: "Pattern analysis" },
+                  { id: "quick", label: "Quick reply" },
+                  { id: "deep", label: "Go deeper" },
+                  { id: "analysis", label: "Find patterns" },
                 ].map((item) => (
                   <ToggleButton
                     key={item.id}
@@ -250,10 +321,10 @@ export default function ChatPage() {
                     onChange={(e) => setUseMemory(e.target.checked)}
                     className="accent-brand-300"
                   />
-                  Use journal memory
+                  Use past journal notes
                 </label>
                 <label className="text-xs text-white/70 flex items-center gap-2">
-                  <span className="shrink-0">Response style</span>
+                  <span className="shrink-0">Reply style</span>
                   <input
                     className="w-full accent-brand-300"
                     type="range"
@@ -263,9 +334,26 @@ export default function ChatPage() {
                     onChange={(e) => setResponseStyle(Number(e.target.value))}
                   />
                   <span className="text-[11px] text-white/55 shrink-0">
-                    {responseStyle < 35 ? "Very gentle" : responseStyle < 70 ? "Balanced" : "Analytical"}
+                    {responseStyle < 35 ? "Very gentle" : responseStyle < 70 ? "Balanced" : "More detailed"}
                   </span>
                 </label>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={jumpToLatest}
+                  className="text-xs px-3 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-brand-300/20"
+                >
+                  Jump to latest
+                </button>
+                <button
+                  type="button"
+                  onClick={exportChatHistory}
+                  disabled={!turns.length}
+                  className="text-xs px-3 py-2 rounded-full bg-white/5 border border-white/10 disabled:opacity-50 hover:bg-brand-300/20"
+                >
+                  Export chat
+                </button>
               </div>
             </div>
             {lastUserThread && (
@@ -275,12 +363,12 @@ export default function ChatPage() {
                   onClick={() => setMessage(lastUserThread)}
                   className="w-full text-left text-xs rounded-xl px-3 py-2 bg-white/5 border border-white/10 hover:bg-white/10"
                 >
-                  Continue thread: "{lastUserThread.slice(0, 90)}{lastUserThread.length > 90 ? "..." : ""}"
+                  Continue this topic: "{lastUserThread.slice(0, 90)}{lastUserThread.length > 90 ? "..." : ""}"
                 </button>
               </div>
             )}
 
-            <div ref={listRef} className="flex-1 overflow-y-auto scroll-area p-4 md:p-6 space-y-4">
+            <div ref={listRef} className="flex-1 overflow-y-auto scroll-area p-4 md:p-6 space-y-4" role="log" aria-live="polite">
               {loadError && (
                 <PageState
                   title="Chat history could not load"
@@ -307,8 +395,11 @@ export default function ChatPage() {
                   }
                 />
               )}
+              {turns.length > 0 && displayedTurns.length === 0 ? (
+                <PageState title="No matching messages" message="Try another word to search your chat history." />
+              ) : null}
 
-              {turns.map((turn, idx) => (
+              {displayedTurns.map((turn, idx) => (
                 <motion.div
                   key={`${turn.createdAt || idx}-${turn.userMessage}`}
                   initial={settings.reducedMotion ? false : { opacity: 0, y: 4 }}
@@ -317,13 +408,13 @@ export default function ChatPage() {
                 >
                   <div className="rounded-2xl p-3 max-w-2xl ml-auto bg-brand-300/25 soft-border">
                     <p className="text-[11px] text-brand-100 mb-1">You</p>
-                    <p className="text-sm leading-6">{turn.userMessage}</p>
+                    <p className="text-sm leading-6 whitespace-pre-line">{turn.userMessage}</p>
                   </div>
                   <AssistantMessage turn={turn} />
                 </motion.div>
               ))}
               {loading && (
-                <div className="glass rounded-2xl p-4 max-w-2xl">
+                <div className="glass rounded-2xl p-4 max-w-2xl" role="status" aria-live="polite">
                   <p className="text-[11px] text-brand-100 mb-2">ReflectAI</p>
                   <div className="flex items-center gap-3 text-sm text-white/70">
                     <span className="flex gap-1" aria-hidden="true">
@@ -339,10 +430,10 @@ export default function ChatPage() {
             </div>
 
             <div className="border-t border-white/10 p-4 md:p-5 space-y-3">
-              <div className="grid grid-cols-3 gap-2">
-                <StatusPill>Mode: {chatMode}</StatusPill>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <StatusPill>Chat mode: {chatMode}</StatusPill>
                 <StatusPill>Style: {responseStyle < 35 ? "gentle" : responseStyle < 70 ? "balanced" : "analytical"}</StatusPill>
-                <StatusPill>{useMemory ? "Memory on" : "Memory off"}</StatusPill>
+                <StatusPill>{useMemory ? "Past notes on" : "Past notes off"}</StatusPill>
               </div>
               <div className="flex flex-wrap gap-2">
                 {quickPrompts.map((prompt) => (
@@ -356,7 +447,7 @@ export default function ChatPage() {
                   </button>
                 ))}
               </div>
-              <form onSubmit={sendMessage} className="flex gap-2 items-end">
+              <form onSubmit={sendMessage} className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-end">
                 <textarea
                   aria-label="Message ReflectAI"
                   rows={2}
@@ -370,20 +461,21 @@ export default function ChatPage() {
                 />
                 <Button
                   disabled={loading || !message.trim()}
+                  className="w-full sm:w-auto"
                 >
                   Send
                 </Button>
               </form>
               <p className="text-xs text-white/60">
-                ReflectAI supports self-reflection and is not a medical service.
+                ReflectAI is for self-reflection and support. It is not medical care.
               </p>
             </div>
           </section>
 
-          <aside className="glass rounded-3xl p-4 md:p-5 h-fit xl:sticky xl:top-6 space-y-4">
+          <aside className="glass rounded-3xl p-4 md:p-5 h-fit self-start lg:sticky lg:top-24 space-y-4">
             <div>
-              <p className="text-brand-100 text-xs uppercase tracking-wider">Quick Journal</p>
-              <p className="text-sm text-white/70 mt-1">Capture your current state without leaving chat.</p>
+              <p className="text-brand-100 text-xs uppercase tracking-wider">Quick Journal Note</p>
+              <p className="text-sm text-white/70 mt-1">Write a short note here without leaving chat.</p>
             </div>
             <textarea
               aria-label="Quick journal entry"
@@ -418,7 +510,7 @@ export default function ChatPage() {
             {quickEntryStatus && <p className="text-xs text-white/65">{quickEntryStatus}</p>}
 
             <div className="border-t border-white/10 pt-4 space-y-3">
-              <p className="text-brand-100 text-xs uppercase tracking-wider">Emotional Timeline</p>
+              <p className="text-brand-100 text-xs uppercase tracking-wider">Mood Timeline</p>
               <div className="flex items-end gap-1 h-8">
                 {sparkline.length ? (
                   sparkline.map((entry) => (
@@ -482,7 +574,7 @@ function AssistantMessage({ turn }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] text-brand-100 mb-1">ReflectAI</p>
-          <p className="text-sm leading-6">{turn.aiResponse}</p>
+          <p className="text-sm leading-6 whitespace-pre-line">{turn.aiResponse}</p>
         </div>
         <StatusPill>{Math.round((turn.confidence || 0) * 100)}%</StatusPill>
       </div>

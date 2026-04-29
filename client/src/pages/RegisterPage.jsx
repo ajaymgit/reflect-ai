@@ -22,7 +22,7 @@ export default function RegisterPage() {
       });
       setToken(data.token);
       setUser(data.user);
-      navigate("/chat");
+      navigate("/dashboard");
     } catch (err) {
       setError(err.message);
     }

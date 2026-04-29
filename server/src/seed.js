@@ -66,20 +66,25 @@ async function seed() {
     content: `Day ${i + 1}: ${entry.content}`,
     mood: entry.mood,
     themes: entry.themes,
-    createdAt: new Date(now - (emotionalSeedEntries.length - i) * 24 * 60 * 60 * 1000),
-    updatedAt: new Date(now - (emotionalSeedEntries.length - i) * 24 * 60 * 60 * 1000),
+    createdAt: new Date(now - (emotionalSeedEntries.length - 1 - i) * 24 * 60 * 60 * 1000),
+    updatedAt: new Date(now - (emotionalSeedEntries.length - 1 - i) * 24 * 60 * 60 * 1000),
   }));
-  await JournalEntry.insertMany(journals);
+  const insertedJournals = await JournalEntry.insertMany(journals);
 
-  const health = Array.from({ length: 14 }).map((_, i) => ({
+  const seededSleepHours = [
+    5.1, 6.8, 7.9, 4.9, 8.2, 6.1, 7.4,
+    5.6, 8.0, 6.3, 7.7, 5.2, 8.4, 6.0,
+    7.2, 5.8, 8.1, 6.4, 7.6, 5.4, 8.3,
+  ];
+  const health = Array.from({ length: 21 }).map((_, i) => ({
     userId: demo._id,
-    date: new Date(now - (14 - i) * 24 * 60 * 60 * 1000),
-    sleepHours: i % 2 === 0 ? 7.5 : 8.0,
-    steps: 4200 + i * 250,
-    stressScore: 75 - i * 2,
-    restingHeartRate: 69 + (i % 3),
-    completeness: 0.84,
-    confidence: 0.86,
+    date: new Date(now - (21 - i - 1) * 24 * 60 * 60 * 1000),
+    sleepHours: seededSleepHours[i],
+    steps: 3600 + i * 320 + (i % 3) * 210,
+    stressScore: Math.max(36, 78 - i * 1.6 + (i % 4) * 2),
+    restingHeartRate: 67 + (i % 4),
+    completeness: i % 6 === 0 ? 0.74 : 0.88,
+    confidence: i % 7 === 0 ? 0.72 : 0.9,
     source: "seed",
   }));
   await HealthData.insertMany(health);
@@ -106,13 +111,68 @@ async function seed() {
     turns: [
       {
         userMessage: "I feel tired even after sleeping enough.",
-        aiResponse: "When during the week do you notice the biggest drop in energy?",
-        evidence: [],
-        confidence: 0.62,
-        fallback: true,
-        reasoning: "Bootstrapped starter turn.",
+        aiResponse:
+          "I hear you. Feeling tired even after sleep can feel frustrating.\n\nLooking at your recent notes, does the energy drop feel stronger on work-heavy days or socially heavy days?",
+        evidence: insertedJournals
+          .slice(34, 36)
+          .map((j) => ({ journalId: j._id.toString(), quote: j.content, date: j.createdAt })),
+        confidence: 0.74,
+        fallback: false,
+        reasoning: "Seeded reflective response for realistic chat history.",
         focus: "energy",
-        createdAt: new Date(now - 2 * 24 * 60 * 60 * 1000),
+        createdAt: new Date(now - 4 * 24 * 60 * 60 * 1000),
+      },
+      {
+        userMessage: "Mostly after meetings. I feel mentally drained.",
+        aiResponse:
+          "That pattern makes sense. Mentally dense conversations can drain more than physical effort.\n\nWhat usually happens in the 30 minutes right after those meetings?",
+        evidence: insertedJournals
+          .slice(35, 37)
+          .map((j) => ({ journalId: j._id.toString(), quote: j.content, date: j.createdAt })),
+        confidence: 0.79,
+        fallback: false,
+        reasoning: "Follow-up turn with contextual continuity.",
+        focus: "workload",
+        createdAt: new Date(now - 3 * 24 * 60 * 60 * 1000 + 20 * 60 * 1000),
+      },
+      {
+        userMessage: "I scroll a lot and delay breaks.",
+        aiResponse:
+          "Thanks for noticing that honestly. That small loop can quietly increase fatigue over the day.\n\nWould you like to test one tiny reset routine after your next meeting?",
+        evidence: insertedJournals
+          .slice(37, 39)
+          .map((j) => ({ journalId: j._id.toString(), quote: j.content, date: j.createdAt })),
+        confidence: 0.81,
+        fallback: false,
+        reasoning: "Habit-loop reflective turn.",
+        focus: "motivation",
+        createdAt: new Date(now - 3 * 24 * 60 * 60 * 1000 + 42 * 60 * 1000),
+      },
+      {
+        userMessage: "I feel happy today because I passed my lab exam.",
+        aiResponse:
+          "That is a big win, and you earned it.\n\nWhat do you think helped you perform well this time that you can reuse next time too?",
+        evidence: insertedJournals
+          .slice(0, 2)
+          .map((j) => ({ journalId: j._id.toString(), quote: j.content, date: j.createdAt })),
+        confidence: 0.82,
+        fallback: false,
+        reasoning: "Positive-state continuity example for demo.",
+        focus: "positive_state",
+        createdAt: new Date(now - 1 * 24 * 60 * 60 * 1000 + 15 * 60 * 1000),
+      },
+      {
+        userMessage: "Can we talk about relationships now?",
+        aiResponse:
+          "Of course. I can feel this matters to you.\n\nWhat part of your relationships feels easiest right now, and what feels heaviest?",
+        evidence: insertedJournals
+          .slice(18, 21)
+          .map((j) => ({ journalId: j._id.toString(), quote: j.content, date: j.createdAt })),
+        confidence: 0.77,
+        fallback: false,
+        reasoning: "Topic-switch sample turn for screenshots.",
+        focus: "relationships",
+        createdAt: new Date(now - 10 * 60 * 1000),
       },
     ],
   });

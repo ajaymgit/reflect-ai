@@ -32,35 +32,35 @@ export default function SettingsPage() {
     <main className="p-4 md:p-6">
       <div className="max-w-4xl mx-auto glass rounded-2xl p-5">
         <p className="text-brand-100 text-xs uppercase tracking-wider">Settings</p>
-        <h2 className="text-2xl font-semibold mt-1">Preferences</h2>
+        <h2 className="text-2xl font-semibold mt-1">App Preferences</h2>
         <div className="mt-4 grid md:grid-cols-2 gap-3">
           <ToggleOption
             title="Smoother motion"
-            detail="Reduce animation for a calmer visual experience."
+            detail="Reduce moving effects if you prefer a calmer screen."
             checked={settings.reducedMotion}
             onChange={() => setSettings((prev) => ({ ...prev, reducedMotion: !prev.reducedMotion }))}
           />
           <ToggleOption
             title="Notification sounds"
-            detail="Subtle cues for saves and AI responses."
+            detail="Play soft sounds when entries save and chat replies arrive."
             checked={settings.notificationSounds}
             onChange={() => setSettings((prev) => ({ ...prev, notificationSounds: !prev.notificationSounds }))}
           />
           <SelectOption
             title="Theme mode"
-            detail="Switch instantly between bright and deep background modes."
+            detail="Choose a bright or dark look."
             value={settings.themeMode}
             onChange={(value) => setSettings((prev) => ({ ...prev, themeMode: value }))}
           />
           <ToggleOption
             title="Private previews"
-            detail="Hide journal snippet text in timeline cards."
+            detail="Hide journal preview text on timeline cards."
             checked={settings.privacyMode}
             onChange={() => setSettings((prev) => ({ ...prev, privacyMode: !prev.privacyMode }))}
           />
           <ToggleOption
             title="Focus mode"
-            detail="Use cleaner UI with fewer distractions on writing pages."
+            detail="Show a cleaner writing screen with fewer distractions."
             checked={settings.focusMode}
             onChange={() => setSettings((prev) => ({ ...prev, focusMode: !prev.focusMode }))}
           />

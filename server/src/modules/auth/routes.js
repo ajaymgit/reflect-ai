@@ -1,5 +1,6 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
+import rateLimit from "express-rate-limit";
 import jwt from "jsonwebtoken";
 import User from "../../models/User.js";
 import { env } from "../../shared/config/env.js";
@@ -10,9 +11,29 @@ import { AppError } from "../../shared/utils/AppError.js";
 import { requireAuth } from "../../shared/middleware/auth.js";
 
 const router = Router();
+const authLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    code: "RATE_LIMITED",
+    message: "Too many login attempts. Please try again shortly.",
+  },
+});
+
+function signAccessToken(userId) {
+  return jwt.sign({ userId }, env.JWT_SECRET, {
+    expiresIn: env.JWT_EXPIRES_IN,
+    issuer: env.JWT_ISSUER,
+    audience: env.JWT_AUDIENCE,
+    algorithm: "HS256",
+  });
+}
 
 router.post(
   "/register",
+  authLimiter,
   validateRequest(registerSchema),
   asyncHandler(async (req, res) => {
     const { name, email, password } = req.validated.body;
@@ -23,7 +44,7 @@ router.post(
 
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await User.create({ name, email, passwordHash });
-    const token = jwt.sign({ userId: user._id }, env.JWT_SECRET, { expiresIn: "7d" });
+    const token = signAccessToken(user._id);
 
     res.status(201).json({
       token,
@@ -34,6 +55,7 @@ router.post(
 
 router.post(
   "/login",
+  authLimiter,
   validateRequest(loginSchema),
   asyncHandler(async (req, res) => {
     const { email, password } = req.validated.body;
@@ -47,7 +69,7 @@ router.post(
       throw new AppError("AUTH_INVALID", "Invalid credentials", 401);
     }
 
-    const token = jwt.sign({ userId: user._id }, env.JWT_SECRET, { expiresIn: "7d" });
+    const token = signAccessToken(user._id);
     res.json({
       token,
       user: { id: user._id, name: user.name, email: user.email },

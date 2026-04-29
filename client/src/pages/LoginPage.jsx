@@ -21,7 +21,7 @@ export default function LoginPage() {
       });
       setToken(data.token);
       setUser(data.user);
-      navigate("/chat");
+      navigate("/dashboard");
     } catch (err) {
       setError(err.message);
     }
