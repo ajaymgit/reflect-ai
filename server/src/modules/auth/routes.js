@@ -12,10 +12,13 @@ import { requireAuth } from "../../shared/middleware/auth.js";
 
 const router = Router();
 const isProduction = process.env.NODE_ENV === "production";
+const authWindowMinutes = Number(env.AUTH_RATE_WINDOW_MINUTES ?? 10);
+const authWindowMs = (Number.isFinite(authWindowMinutes) && authWindowMinutes > 0 ? authWindowMinutes : 10) * 60 * 1000;
+const loginRateMax = Number(env.AUTH_LOGIN_RATE_MAX ?? (isProduction ? 120 : 200));
+const registerRateMax = Number(env.AUTH_REGISTER_RATE_MAX ?? (isProduction ? 30 : 50));
 const loginLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000,
-  // Keep strict defaults in production, but avoid demo lockouts in local development.
-  max: isProduction ? 20 : 100,
+  windowMs: authWindowMs,
+  max: Number.isFinite(loginRateMax) && loginRateMax > 0 ? loginRateMax : 120,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -24,8 +27,8 @@ const loginLimiter = rateLimit({
   },
 });
 const registerLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000,
-  max: isProduction ? 10 : 25,
+  windowMs: authWindowMs,
+  max: Number.isFinite(registerRateMax) && registerRateMax > 0 ? registerRateMax : 30,
   standardHeaders: true,
   legacyHeaders: false,
   message: {

@@ -26,6 +26,9 @@ const envSchema = z.object({
   CLIENT_URL: z.string().min(1),
   DEMO_EMAIL: z.string().default("demo@reflectai.com"),
   DEMO_PASSWORD: z.string().default("Demo@123"),
+  AUTH_RATE_WINDOW_MINUTES: z.string().optional(),
+  AUTH_LOGIN_RATE_MAX: z.string().optional(),
+  AUTH_REGISTER_RATE_MAX: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
