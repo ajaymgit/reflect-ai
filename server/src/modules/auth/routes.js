@@ -11,14 +11,26 @@ import { AppError } from "../../shared/utils/AppError.js";
 import { requireAuth } from "../../shared/middleware/auth.js";
 
 const router = Router();
-const authLimiter = rateLimit({
+const isProduction = process.env.NODE_ENV === "production";
+const loginLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
-  max: 20,
+  // Keep strict defaults in production, but avoid demo lockouts in local development.
+  max: isProduction ? 20 : 100,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
     code: "RATE_LIMITED",
     message: "Too many login attempts. Please try again shortly.",
+  },
+});
+const registerLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: isProduction ? 10 : 25,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    code: "RATE_LIMITED",
+    message: "Too many registration attempts. Please try again shortly.",
   },
 });
 
@@ -33,7 +45,7 @@ function signAccessToken(userId) {
 
 router.post(
   "/register",
-  authLimiter,
+  registerLimiter,
   validateRequest(registerSchema),
   asyncHandler(async (req, res) => {
     const { name, email, password } = req.validated.body;
@@ -55,7 +67,7 @@ router.post(
 
 router.post(
   "/login",
-  authLimiter,
+  loginLimiter,
   validateRequest(loginSchema),
   asyncHandler(async (req, res) => {
     const { email, password } = req.validated.body;
