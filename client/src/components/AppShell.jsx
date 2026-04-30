@@ -1,6 +1,7 @@
-import { Home, MessageCircle, PenSquare, Settings, HeartPulse } from "lucide-react";
+import { Home, LogOut, MessageCircle, PenSquare, Settings, HeartPulse } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, Outlet, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 const pageTitles = {
   "/dashboard": "Home",
@@ -13,6 +14,8 @@ const pageTitles = {
 
 export default function AppShell() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { logout } = useAuth();
   const [showTip, setShowTip] = useState(false);
   const title = pageTitles[location.pathname] || "Home";
   const navItems = [
@@ -44,6 +47,11 @@ export default function AppShell() {
     }
   }, []);
 
+  function onLogout() {
+    logout();
+    navigate("/login", { replace: true });
+  }
+
   return (
     <div className="min-h-screen page-gradient text-white pb-24 md:pb-0">
       <header className="sticky top-0 z-40 border-b border-white/10 bg-[#101a15cc] backdrop-blur-xl px-4 md:px-6 py-4">
@@ -68,7 +76,23 @@ export default function AppShell() {
                 {label}
               </Link>
             ))}
+            <button
+              type="button"
+              onClick={onLogout}
+              className="inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 border text-[15px] border-white/15 bg-white/5 hover:bg-white/10 text-white/90"
+            >
+              <LogOut size={15} />
+              Logout
+            </button>
           </div>
+          <button
+            type="button"
+            onClick={onLogout}
+            className="md:hidden inline-flex items-center gap-1 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs text-white/90"
+          >
+            <LogOut size={14} />
+            Logout
+          </button>
         </div>
       </header>
       {showTip ? (

@@ -16,6 +16,7 @@ export default function HealthPage() {
   const [healthKitStatus, setHealthKitStatus] = useState("");
   const [healthKitBusy, setHealthKitBusy] = useState(false);
   const [healthKitSummary, setHealthKitSummary] = useState(null);
+  const nativeIos = isNativeIos();
 
   useEffect(() => {
     setLoading(true);
@@ -58,19 +59,25 @@ export default function HealthPage() {
             Current status: <span className="font-medium text-white">{loading ? "Loading..." : data?.status || "No data yet"}</span>
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={connectHealthKit}
-              disabled={!isNativeIos() || healthKitBusy}
-              className="w-full sm:w-auto"
-            >
-              {healthKitBusy ? "Connecting..." : "Connect Apple Health"}
-            </Button>
+            {nativeIos ? (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={connectHealthKit}
+                disabled={healthKitBusy}
+                className="w-full sm:w-auto"
+              >
+                {healthKitBusy ? "Connecting..." : "Connect Apple Health"}
+              </Button>
+            ) : (
+              <Button type="button" variant="secondary" disabled className="w-full sm:w-auto opacity-70">
+                Apple Health (iPhone app only)
+              </Button>
+            )}
             <p className="text-xs text-white/65">
-              {isNativeIos()
+              {nativeIos
                 ? "On iPhone, this asks Health permissions and reads recent trends."
-                : "Apple Health connection works on iPhone app (Capacitor), not desktop browser."}
+                : "This website cannot access Apple Health. Use the iPhone app build to connect HealthKit."}
             </p>
           </div>
           {healthKitStatus ? <p className="mt-2 text-xs text-brand-100">{healthKitStatus}</p> : null}
