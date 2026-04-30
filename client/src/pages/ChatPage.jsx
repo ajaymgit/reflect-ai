@@ -46,6 +46,7 @@ export default function ChatPage() {
   const [responseStyle, setResponseStyle] = useState(50);
   const [useMemory, setUseMemory] = useState(true);
   const [allowOpenAIFallback, setAllowOpenAIFallback] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [statusText, setStatusText] = useState("");
   const [chatSearch, setChatSearch] = useState("");
   const [providerAlert, setProviderAlert] = useState("");
@@ -270,26 +271,26 @@ export default function ChatPage() {
       <main className="p-3 md:p-6">
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-4 h-full">
           <section className={`glass rounded-3xl flex flex-col min-h-[70vh] ${toneClass}`}>
-            <div className="px-4 md:px-5 pt-3 pb-1">
-              <p className="text-[11px] uppercase tracking-wider text-white/65">Jump to section</p>
+            <details className="px-4 md:px-5 pt-3 pb-1">
+              <summary className="cursor-pointer text-[11px] uppercase tracking-wider text-white/65">Jump to section</summary>
               <div className="mt-2 flex flex-wrap gap-2">
                 {sections.map((section) => (
                   <button
                     key={section.id}
                     type="button"
                     onClick={() => jumpTo(section.id)}
-                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs hover:bg-white/10"
+                    className="rounded-full border border-white/10 bg-white/5 px-3 py-2 min-h-[44px] text-xs hover:bg-white/10"
                   >
                     {section.label}
                   </button>
                 ))}
               </div>
-            </div>
-            <div className="p-4 md:p-5 border-b border-white/10 flex items-center justify-between gap-3">
+            </details>
+            <div className="p-4 md:p-5 border-b border-white/10 flex items-center justify-between gap-2">
               <PageHeader eyebrow={`${heroGreeting}, ${user?.name || "there"}`} title="Ask ReflectAI" description={smartPrompt} />
               <div className="flex items-center gap-2 shrink-0">
                 <StatusPill className="hidden sm:inline-flex">How sure: {(meta.confidence * 100).toFixed(0)}%</StatusPill>
-                <Link to="/dashboard" className="text-xs px-3 py-1 rounded-full bg-white/5 border border-white/10 hover:bg-white/10">
+                <Link to="/dashboard" className="text-xs px-2.5 py-1 rounded-full bg-white/5 border border-white/10 hover:bg-white/10">
                   Home
                 </Link>
               </div>
@@ -324,74 +325,85 @@ export default function ChatPage() {
                   </button>
                 ) : null}
               </div>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { id: "quick", label: "Quick reply" },
-                  { id: "deep", label: "Go deeper" },
-                  { id: "analysis", label: "Find patterns" },
-                ].map((item) => (
-                  <ToggleButton
-                    key={item.id}
-                    selected={chatMode === item.id}
-                    onClick={() => setChatMode(item.id)}
-                  >
-                    {item.label}
-                  </ToggleButton>
-                ))}
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-3 items-center">
-                <div className="flex flex-wrap items-center gap-3">
-                  <label className="text-xs text-white/70 flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={useMemory}
-                      onChange={(e) => setUseMemory(e.target.checked)}
-                      className="accent-brand-300"
-                    />
-                    Use past journal notes
-                  </label>
-                  <label className="text-xs text-white/70 flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={allowOpenAIFallback}
-                      onChange={(e) => setAllowOpenAIFallback(e.target.checked)}
-                      className="accent-brand-300"
-                    />
-                    OpenAI backup (paid)
-                  </label>
-                </div>
-                <label className="text-xs text-white/70 flex items-center gap-2">
-                  <span className="shrink-0">Reply style</span>
-                  <input
-                    className="w-full accent-brand-300"
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={responseStyle}
-                    onChange={(e) => setResponseStyle(Number(e.target.value))}
-                  />
-                  <span className="text-[11px] text-white/55 shrink-0">
-                    {responseStyle < 35 ? "Very gentle" : responseStyle < 70 ? "Balanced" : "More detailed"}
-                  </span>
-                </label>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={jumpToLatest}
-                  className="text-xs px-3 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-brand-300/20"
-                >
-                  Jump to latest
-                </button>
-                <button
-                  type="button"
-                  onClick={exportChatHistory}
-                  disabled={!turns.length}
-                  className="text-xs px-3 py-2 rounded-full bg-white/5 border border-white/10 disabled:opacity-50 hover:bg-brand-300/20"
-                >
-                  Export chat
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowAdvanced((prev) => !prev)}
+                className="text-xs min-h-[44px] px-3 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-white/10"
+              >
+                {showAdvanced ? "Hide advanced controls" : "Show advanced controls"}
+              </button>
+              {showAdvanced ? (
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { id: "quick", label: "Quick reply" },
+                      { id: "deep", label: "Go deeper" },
+                      { id: "analysis", label: "Find patterns" },
+                    ].map((item) => (
+                      <ToggleButton
+                        key={item.id}
+                        selected={chatMode === item.id}
+                        onClick={() => setChatMode(item.id)}
+                      >
+                        {item.label}
+                      </ToggleButton>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-3 items-center">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <label className="text-xs text-white/70 flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={useMemory}
+                          onChange={(e) => setUseMemory(e.target.checked)}
+                          className="accent-brand-300"
+                        />
+                        Use past journal notes
+                      </label>
+                      <label className="text-xs text-white/70 flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={allowOpenAIFallback}
+                          onChange={(e) => setAllowOpenAIFallback(e.target.checked)}
+                          className="accent-brand-300"
+                        />
+                        OpenAI backup (paid)
+                      </label>
+                    </div>
+                    <label className="text-xs text-white/70 flex items-center gap-2">
+                      <span className="shrink-0">Reply style</span>
+                      <input
+                        className="w-full accent-brand-300"
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={responseStyle}
+                        onChange={(e) => setResponseStyle(Number(e.target.value))}
+                      />
+                      <span className="text-[11px] text-white/55 shrink-0">
+                        {responseStyle < 35 ? "Very gentle" : responseStyle < 70 ? "Balanced" : "More detailed"}
+                      </span>
+                    </label>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={jumpToLatest}
+                      className="text-xs px-3 py-2 min-h-[44px] rounded-full bg-white/5 border border-white/10 hover:bg-brand-300/20"
+                    >
+                      Jump to latest
+                    </button>
+                    <button
+                      type="button"
+                      onClick={exportChatHistory}
+                      disabled={!turns.length}
+                      className="text-xs px-3 py-2 min-h-[44px] rounded-full bg-white/5 border border-white/10 disabled:opacity-50 hover:bg-brand-300/20"
+                    >
+                      Export chat
+                    </button>
+                  </div>
+                </>
+              ) : null}
             </div>
             {lastUserThread && (
               <div className="px-4 md:px-5 pt-3">
@@ -443,7 +455,7 @@ export default function ChatPage() {
                   animate={settings.reducedMotion ? undefined : { opacity: 1, y: 0 }}
                   className="space-y-2"
                 >
-                  <div className="rounded-2xl p-3 max-w-2xl ml-auto bg-brand-300/25 soft-border">
+                  <div className="rounded-[20px] p-3 max-w-2xl ml-auto bg-[#ffbfa4]/20 border border-[#ffd8c7]/35 shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
                     <p className="text-[11px] text-brand-100 mb-1">You</p>
                     <p className="text-sm leading-6 whitespace-pre-line">{turn.userMessage}</p>
                   </div>
@@ -475,18 +487,21 @@ export default function ChatPage() {
               <p className="text-[11px] text-white/55">
                 OpenAI backup is {allowOpenAIFallback ? "enabled for this session" : "off"}.
               </p>
-              <div className="flex flex-wrap gap-2">
-                {quickPrompts.map((prompt) => (
-                  <button
-                    key={prompt}
-                    type="button"
-                    onClick={() => useQuickPrompt(prompt)}
-                    className="text-xs px-3 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-brand-300/20"
-                  >
-                    {prompt}
-                  </button>
-                ))}
-              </div>
+              <details className="rounded-xl border border-white/10 bg-white/5 p-2">
+                <summary className="cursor-pointer text-xs text-white/75 px-1">Prompt ideas</summary>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {quickPrompts.map((prompt) => (
+                    <button
+                      key={prompt}
+                      type="button"
+                      onClick={() => useQuickPrompt(prompt)}
+                      className="text-xs px-3 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-brand-300/20"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+              </details>
               <form onSubmit={sendMessage} className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-end">
                 <textarea
                   aria-label="Message ReflectAI"
@@ -499,10 +514,7 @@ export default function ChatPage() {
                   onChange={(e) => setMessage(e.target.value)}
                   onKeyDown={onComposerKeyDown}
                 />
-                <Button
-                  disabled={loading || !message.trim()}
-                  className="w-full sm:w-auto"
-                >
+                <Button disabled={loading || !message.trim()} className="w-full sm:w-auto">
                   Send
                 </Button>
               </form>
@@ -549,9 +561,9 @@ export default function ChatPage() {
             </Button>
             {quickEntryStatus && <p className="text-xs text-white/65">{quickEntryStatus}</p>}
 
-            <div className="border-t border-white/10 pt-4 space-y-3">
-              <p className="text-brand-100 text-xs uppercase tracking-wider">Mood Timeline</p>
-              <div className="flex items-end gap-1 h-8">
+            <details className="border-t border-white/10 pt-4 space-y-3">
+              <summary className="cursor-pointer text-brand-100 text-xs uppercase tracking-wider">Mood timeline</summary>
+              <div className="mt-3 flex items-end gap-1 h-8">
                 {sparkline.length ? (
                   sparkline.map((entry) => (
                     <button
@@ -600,7 +612,7 @@ export default function ChatPage() {
                   </p>
                 </div>
               )}
-            </div>
+            </details>
           </aside>
         </div>
       </main>

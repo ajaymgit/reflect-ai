@@ -3,15 +3,15 @@ import { Link } from "react-router-dom";
 export function Button({ children, variant = "primary", className = "", ...props }) {
   const variants = {
     primary:
-      "bg-brand-300 text-slate-950 shadow-[0_10px_24px_rgba(154,191,117,0.24)] hover:bg-brand-200 focus-visible:ring-brand-200 disabled:opacity-60 disabled:hover:bg-brand-300",
+      "bg-brand-300 text-[#3b2b25] shadow-[0_4px_12px_rgba(0,0,0,0.12)] hover:bg-brand-200 focus-visible:ring-brand-200 disabled:opacity-60 disabled:hover:bg-brand-300",
     secondary:
-      "bg-surface-200/80 text-white border border-cream-200/15 hover:bg-surface-100/90 focus-visible:ring-cream-200/40",
+      "bg-[#43342f]/75 text-[#fff5ef] border border-[#ffc4ab]/25 hover:bg-[#4f3e38]/90 focus-visible:ring-brand-200/40",
     ghost: "bg-transparent text-brand-100 hover:bg-white/8 focus-visible:ring-brand-200",
   };
 
   return (
     <button
-      className={`inline-flex min-h-11 items-center justify-center rounded-2xl px-4 py-2.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 ${variants[variant]} ${className}`}
+      className={`inline-flex min-h-[44px] items-center justify-center rounded-[20px] px-4 py-2.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#2b2220] ${variants[variant]} ${className}`}
       {...props}
     >
       {children}
@@ -21,15 +21,15 @@ export function Button({ children, variant = "primary", className = "", ...props
 
 export function ButtonLink({ children, to, variant = "primary", className = "", ...props }) {
   const variants = {
-    primary: "bg-brand-300 text-slate-950 hover:bg-brand-200",
-    secondary: "bg-surface-200/80 text-white border border-cream-200/15 hover:bg-surface-100",
+    primary: "bg-brand-300 text-[#3b2b25] hover:bg-brand-200 shadow-[0_4px_12px_rgba(0,0,0,0.12)]",
+    secondary: "bg-[#43342f]/75 text-[#fff5ef] border border-[#ffc4ab]/25 hover:bg-[#4f3e38]",
     ghost: "bg-transparent text-brand-100 hover:bg-white/8",
   };
 
   return (
     <Link
       to={to}
-      className={`inline-flex min-h-11 items-center justify-center rounded-2xl px-4 py-2.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200/60 ${variants[variant]} ${className}`}
+      className={`inline-flex min-h-[44px] items-center justify-center rounded-[20px] px-4 py-2.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200/60 ${variants[variant]} ${className}`}
       {...props}
     >
       {children}
@@ -39,7 +39,7 @@ export function ButtonLink({ children, to, variant = "primary", className = "", 
 
 export function Card({ children, className = "", title, ...props }) {
   return (
-    <section className={`glass rounded-3xl p-5 md:p-6 ${className}`} {...props}>
+    <section className={`glass rounded-[24px] p-5 md:p-6 hover:shadow-[0_8px_22px_rgba(0,0,0,0.16)] transition ${className}`} {...props}>
       {title ? <p className="mb-2 text-xs uppercase tracking-wider text-brand-100">{title}</p> : null}
       {children}
     </section>
@@ -48,7 +48,7 @@ export function Card({ children, className = "", title, ...props }) {
 
 export function PageHeader({ eyebrow, title, description, action }) {
   return (
-    <Card className="rounded-[28px]">
+    <Card className="rounded-[24px]">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           {eyebrow ? <p className="text-brand-100 text-xs uppercase tracking-wider">{eyebrow}</p> : null}
@@ -67,8 +67,8 @@ export function ToggleButton({ selected, pressed, children, className = "", ...p
     <button
       type="button"
       aria-pressed={isSelected}
-      className={`rounded-2xl border px-3 py-2 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200/60 ${
-        isSelected ? "border-brand-100/50 bg-brand-300/25 text-white" : "border-cream-200/10 bg-surface-200/50 text-white/85 hover:bg-surface-100"
+      className={`rounded-[20px] border px-3 py-2 min-h-[44px] text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200/60 ${
+        isSelected ? "border-brand-100/50 bg-brand-300/25 text-white" : "border-[#ffc4ab]/18 bg-[#4a3b35]/55 text-white/85 hover:bg-[#56453f]"
       } ${className}`}
       {...props}
     >
@@ -79,7 +79,7 @@ export function ToggleButton({ selected, pressed, children, className = "", ...p
 
 export function StatusPill({ children, className = "" }) {
   return (
-    <span className={`inline-flex items-center justify-center rounded-full border border-brand-100/25 bg-brand-300/15 px-3 py-1 text-xs text-white ${className}`}>
+    <span className={`inline-flex min-h-[32px] items-center justify-center rounded-full border border-brand-100/25 bg-brand-300/15 px-3 py-1 text-xs text-white ${className}`}>
       {children}
     </span>
   );
@@ -91,7 +91,7 @@ export function TextField({ label, id, className = "", as: Component = "input", 
       <span>{label}</span>
       <Component
         id={id}
-        className={`w-full rounded-xl border border-cream-200/10 bg-surface-300/80 p-3 text-white outline-none transition placeholder:text-white/35 focus:border-brand-200 focus:ring-2 focus:ring-brand-200/30 ${className}`}
+        className={`w-full min-h-[44px] rounded-[16px] border border-[#ffc4ab]/16 bg-[#4b3b35]/70 p-3 text-white outline-none transition placeholder:text-white/40 focus:border-brand-200 focus:ring-2 focus:ring-brand-200/30 ${className}`}
         {...props}
       />
     </label>

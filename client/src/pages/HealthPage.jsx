@@ -16,6 +16,11 @@ export default function HealthPage() {
   const [healthKitStatus, setHealthKitStatus] = useState("");
   const [healthKitBusy, setHealthKitBusy] = useState(false);
   const [healthKitSummary, setHealthKitSummary] = useState(null);
+  const [habits, setHabits] = useState({
+    water: false,
+    sleep: false,
+    walk: false,
+  });
   const nativeIos = isNativeIos();
 
   useEffect(() => {
@@ -57,25 +62,28 @@ export default function HealthPage() {
   function jumpTo(id) {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+  function toggleHabit(key) {
+    setHabits((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
 
   return (
     <main className="p-4 md:p-6">
       <div className="max-w-6xl mx-auto space-y-4">
-        <div className="glass rounded-2xl p-3">
-          <p className="text-[11px] uppercase tracking-wider text-white/65">Jump to section</p>
+        <details className="glass rounded-2xl p-3">
+          <summary className="cursor-pointer text-[11px] uppercase tracking-wider text-white/65">Jump to section</summary>
           <div className="mt-2 flex flex-wrap gap-2">
             {sections.map((section) => (
               <button
                 key={section.id}
                 type="button"
                 onClick={() => jumpTo(section.id)}
-                className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs hover:bg-white/10"
+                className="rounded-full border border-white/10 bg-white/5 px-3 py-2 min-h-[44px] text-xs hover:bg-white/10"
               >
                 {section.label}
               </button>
             ))}
           </div>
-        </div>
+        </details>
         <div id="health-overview" className="glass rounded-2xl p-5">
           <p className="text-brand-100 text-xs uppercase tracking-wider">Body Check</p>
           <h2 className="text-3xl font-semibold mt-1">Your daily health view</h2>
@@ -128,19 +136,22 @@ export default function HealthPage() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
-          {loading ? (
-            Array.from({ length: 5 }).map((_, index) => <MetricSkeleton key={index} />)
-          ) : (
-            <>
-              <Metric label="Average steps (month)" value={data?.averages?.monthly?.steps ?? "--"} />
-              <Metric label="Average sleep (month)" value={data?.averages?.monthly?.sleepHours ?? "--"} />
-              <Metric label="Average screen time (h)" value={data?.averages?.monthly?.screenTimeHours ?? "--"} />
-              <Metric label="Average calories" value={data?.averages?.monthly?.calories ?? "--"} />
-              <Metric label="Health streak" value={data?.streakDays ? `${data.streakDays} days` : "--"} />
-            </>
-          )}
-        </div>
+        <details className="glass rounded-2xl p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-white">More health stats</summary>
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
+            {loading ? (
+              Array.from({ length: 5 }).map((_, index) => <MetricSkeleton key={index} />)
+            ) : (
+              <>
+                <Metric label="Average steps (month)" value={data?.averages?.monthly?.steps ?? "--"} />
+                <Metric label="Average sleep (month)" value={data?.averages?.monthly?.sleepHours ?? "--"} />
+                <Metric label="Average screen time (h)" value={data?.averages?.monthly?.screenTimeHours ?? "--"} />
+                <Metric label="Average calories" value={data?.averages?.monthly?.calories ?? "--"} />
+                <Metric label="Health streak" value={data?.streakDays ? `${data.streakDays} days` : "--"} />
+              </>
+            )}
+          </div>
+        </details>
 
         <div id="health-trend" className="glass rounded-2xl p-4">
           <h3 className="font-medium">Weekly chart</h3>
@@ -192,6 +203,49 @@ export default function HealthPage() {
             {data?.averages?.weekly?.sleepHours ?? "--"}h
           </p>
         </div>
+
+        <div className="glass rounded-2xl p-4 text-center">
+          <p className="text-brand-100 text-xs uppercase tracking-wider">Breathing Reset</p>
+          <p className="text-xs text-white/65 mt-1">Follow the circle for 20 seconds.</p>
+          <div className="mt-4 flex justify-center">
+            <div className="breath-circle">
+              <span>Breathe</span>
+            </div>
+          </div>
+        </div>
+
+        <details className="glass rounded-2xl p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-white">Habit check</summary>
+          <div className="mt-3 grid sm:grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => toggleHabit("water")}
+              className={`rounded-xl border min-h-[44px] px-3 py-2 text-sm ${
+                habits.water ? "bg-brand-300/30 border-brand-100/50" : "bg-white/5 border-white/10"
+              }`}
+            >
+              Drank enough water
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleHabit("sleep")}
+              className={`rounded-xl border min-h-[44px] px-3 py-2 text-sm ${
+                habits.sleep ? "bg-brand-300/30 border-brand-100/50" : "bg-white/5 border-white/10"
+              }`}
+            >
+              Slept well
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleHabit("walk")}
+              className={`rounded-xl border min-h-[44px] px-3 py-2 text-sm ${
+                habits.walk ? "bg-brand-300/30 border-brand-100/50" : "bg-white/5 border-white/10"
+              }`}
+            >
+              Took a walk
+            </button>
+          </div>
+        </details>
       </div>
     </main>
   );

@@ -122,21 +122,21 @@ export default function JournalPage() {
   return (
     <main className={`p-4 md:p-6 ${moodClass}`}>
       <div className="max-w-6xl mx-auto space-y-4">
-        <div className="glass rounded-2xl p-3">
-          <p className="text-[11px] uppercase tracking-wider text-white/65">Jump to section</p>
+        <details className="glass rounded-2xl p-3">
+          <summary className="cursor-pointer text-[11px] uppercase tracking-wider text-white/65">Jump to section</summary>
           <div className="mt-2 flex flex-wrap gap-2">
             {sections.map((section) => (
               <button
                 key={section.id}
                 type="button"
                 onClick={() => jumpTo(section.id)}
-                className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs hover:bg-white/10"
+                className="rounded-full border border-white/10 bg-white/5 px-3 py-2 min-h-[44px] text-xs hover:bg-white/10"
               >
                 {section.label}
               </button>
             ))}
           </div>
-        </div>
+        </details>
         <PageHeader
           eyebrow="New journal entry"
           title="Turn today into a memory"
@@ -215,15 +215,20 @@ export default function JournalPage() {
 
         <aside id="journal-help" className="glass rounded-2xl p-4 space-y-3 h-fit">
           <h3 className="font-medium">Help while writing</h3>
-          <Card title="Current prompt">
-            <p className="text-sm text-white/80">{prompts[promptIndex]}</p>
-          </Card>
-          <Card title="Easy structure">
-            <p className="text-sm text-white/80">Use 3 lines: what happened, how you felt, what you need next.</p>
-          </Card>
-          <Card title="Next step">
-            <p className="text-sm text-white/80">After saving, open chat to unpack the pattern.</p>
-          </Card>
+          <details className="rounded-xl border border-white/10 bg-white/5 p-2">
+            <summary className="cursor-pointer text-xs text-white/75 px-1">Writing helpers</summary>
+            <div className="mt-2 space-y-2">
+              <Card title="Current prompt">
+                <p className="text-sm text-white/80">{prompts[promptIndex]}</p>
+              </Card>
+              <Card title="Easy structure">
+                <p className="text-sm text-white/80">Use 3 lines: what happened, how you felt, what you need next.</p>
+              </Card>
+              <Card title="Next step">
+                <p className="text-sm text-white/80">After saving, open chat to unpack the pattern.</p>
+              </Card>
+            </div>
+          </details>
           <Card id="journal-history" title="Past entries">
             {loadingEntries ? <p className="text-sm text-white/60">Loading your journal history...</p> : null}
             {!loadingEntries && entries.length === 0 ? (

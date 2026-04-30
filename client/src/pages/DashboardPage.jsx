@@ -26,6 +26,8 @@ export default function DashboardPage() {
   const [data, setData] = useState(null);
   const [range, setRange] = useState("week");
   const [entryLimit, setEntryLimit] = useState(8);
+  const [quickMood, setQuickMood] = useState("");
+  const [quickMoodStatus, setQuickMoodStatus] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -57,21 +59,52 @@ export default function DashboardPage() {
     ? data.todaysMood
     : "reflective";
   const moodClass = `mood-${toneMood}`;
+  const moodCheckOptions = [
+    { id: "sad", label: "😔", text: "Low" },
+    { id: "stressed", label: "😟", text: "Stressed" },
+    { id: "reflective", label: "🙂", text: "Reflective" },
+    { id: "calm", label: "😌", text: "Calm" },
+    { id: "happy", label: "😊", text: "Good" },
+  ];
   const sections = [
     { id: "home-overview", label: "Overview" },
     { id: "home-mood", label: "Mood" },
     { id: "home-insight", label: "Insight" },
     { id: "home-journal", label: "Journal" },
   ];
+  const dailyQuotes = [
+    "Small steps still count as progress.",
+    "Your feelings are valid, even when they are mixed.",
+    "Breathe slowly. You are doing better than you think.",
+    "You can pause without giving up.",
+  ];
+  const dailyQuote = dailyQuotes[new Date().getDate() % dailyQuotes.length];
   function jumpTo(id) {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  async function saveQuickMood(mood) {
+    setQuickMood(mood);
+    setQuickMoodStatus("Saving...");
+    try {
+      await apiFetch("/api/journal/quick-entry", {
+        method: "POST",
+        body: JSON.stringify({
+          content: `Quick mood check-in: ${mood}`,
+          mood,
+        }),
+      });
+      setQuickMoodStatus("Saved");
+    } catch {
+      setQuickMoodStatus("Could not save");
+    }
   }
 
   return (
     <main className={`p-4 md:p-6 living-bg ${moodClass}`}>
       <div className="max-w-6xl mx-auto space-y-4">
-        <div className="glass rounded-2xl p-3">
-          <p className="text-[11px] uppercase tracking-wider text-white/65">Jump to section</p>
+        <details className="glass rounded-2xl p-3">
+          <summary className="cursor-pointer text-[11px] uppercase tracking-wider text-white/65">Jump to section</summary>
           <div className="mt-2 flex flex-wrap gap-2">
             {sections.map((section) => (
               <button
@@ -90,7 +123,7 @@ export default function DashboardPage() {
               Open Look Back
             </Link>
           </div>
-        </div>
+        </details>
         <PageHeader
           eyebrow={data?.greeting || "Welcome back"}
           title="How are you feeling today?"
@@ -103,31 +136,68 @@ export default function DashboardPage() {
           }
         />
 
-        <div className="glass rounded-2xl p-4 flex flex-wrap gap-2">
-          {ranges.map((item) => (
-            <button
-              key={item}
-              type="button"
-              aria-pressed={item === range}
-              onClick={() => setRange(item)}
-              className={`px-4 py-2.5 rounded-lg text-sm capitalize border ${
-                item === range ? "bg-brand-300/25 border-brand-100/50" : "bg-white/5 border-white/10"
-              }`}
-            >
-              {item === "week" ? "This week" : item === "month" ? "This month" : "Today"}
-            </button>
-          ))}
-        </div>
+        <Card>
+          <p className="text-xs text-brand-100 uppercase tracking-wider">Quick Mood Check-In</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {moodCheckOptions.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => saveQuickMood(item.id)}
+                className={`rounded-full border px-3 py-2 min-h-[44px] text-sm ${
+                  quickMood === item.id
+                    ? "bg-brand-300/30 border-brand-100/50"
+                    : "bg-white/5 border-white/10 hover:bg-white/10"
+                }`}
+              >
+                <span className="mr-1" aria-hidden="true">{item.label}</span>
+                {item.text}
+              </button>
+            ))}
+          </div>
+          {quickMoodStatus ? <p className="mt-2 text-xs text-white/65">{quickMoodStatus}</p> : null}
+        </Card>
+
+        <details className="glass rounded-2xl p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-white">
+            View options ({range === "week" ? "This week" : range === "month" ? "This month" : "Today"})
+          </summary>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {ranges.map((item) => (
+              <button
+                key={item}
+                type="button"
+                aria-pressed={item === range}
+                onClick={() => setRange(item)}
+                className={`px-4 py-2.5 min-h-[44px] rounded-lg text-sm capitalize border ${
+                  item === range ? "bg-brand-300/25 border-brand-100/50" : "bg-white/5 border-white/10"
+                }`}
+              >
+                {item === "week" ? "This week" : item === "month" ? "This month" : "Today"}
+              </button>
+            ))}
+          </div>
+        </details>
 
         {error ? <PageState title="Dashboard could not load" message={error} /> : null}
 
-        <div id="home-overview" className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+        <div id="home-overview" className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 gap-3">
           {loading
-            ? [0, 1, 2, 3].map((item) => <MetricSkeleton key={item} />)
+            ? [0, 1].map((item) => <MetricSkeleton key={item} />)
             : (
               <>
                 <StatCard label="Today's wellness score" value={data?.dailyWellnessScore ?? "--"} icon={HeartPulse} />
                 <StatCard label="Journaling streak" value={data?.journalingStreak ?? "--"} icon={Flame} highlight />
+              </>
+            )}
+        </div>
+        <details className="glass rounded-2xl p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-white">More overview stats</summary>
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 gap-3">
+            {loading ? (
+              [0, 1].map((item) => <MetricSkeleton key={`extra-${item}`} />)
+            ) : (
+              <>
                 <StatCard
                   label={range === "today" ? "Entries today" : range === "week" ? "Entries this week" : "Entries this month"}
                   value={data?.entriesInRange ?? "--"}
@@ -136,11 +206,11 @@ export default function DashboardPage() {
                 <StatCard label="How you feel now" value={data?.todaysMood ?? "--"} icon={Sparkles} />
               </>
             )}
-        </div>
+          </div>
+        </details>
 
-        <Card id="home-mood">
-          <p className="text-xs text-brand-100 uppercase tracking-wider">How You've Been Feeling</p>
-          <p className="text-sm text-white/75 mt-2">Recent mood snapshot.</p>
+        <details id="home-mood" className="glass rounded-2xl p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-white">How you've been feeling</summary>
           <div className="mt-3 flex flex-wrap gap-2">
             {emotionMeta.map((emotion) => {
               const count = data?.emotionDistribution?.[emotion.key] ?? 0;
@@ -156,12 +226,26 @@ export default function DashboardPage() {
               );
             })}
           </div>
-        </Card>
+        </details>
 
-        <Card id="home-insight">
-          <p className="text-xs text-brand-200 uppercase tracking-wider">Simple Takeaway</p>
-          <p className="text-sm text-white/85 mt-2">{data?.cumulativeInsight || "Building your insight..."}</p>
-        </Card>
+        <details id="home-insight" className="glass rounded-2xl p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-white">Simple takeaway</summary>
+          <p className="text-sm text-white/85 mt-3">{data?.cumulativeInsight || "Building your insight..."}</p>
+        </details>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          <Card>
+            <p className="text-xs text-brand-200 uppercase tracking-wider">Daily Quote</p>
+            <p className="text-sm text-white/85 mt-2">{dailyQuote}</p>
+          </Card>
+          <Card>
+            <p className="text-xs text-brand-200 uppercase tracking-wider">One Action</p>
+            <p className="text-sm text-white/85 mt-2">Take one slow 20-second breathing break now.</p>
+            <ButtonLink to="/health" className="mt-3 w-full sm:w-auto">
+              Start breathing reset
+            </ButtonLink>
+          </Card>
+        </div>
 
         {(data?.recentEntries || []).length === 0 && !loading ? (
           <Card>
@@ -175,9 +259,10 @@ export default function DashboardPage() {
         ) : null}
 
         <div id="home-journal" className="grid gap-4">
-          <Card>
-            <div className="flex items-center justify-between">
-              <h3 className="font-medium">Your recent moments</h3>
+          <details className="glass rounded-2xl p-4" open>
+            <summary className="cursor-pointer text-sm font-semibold text-white">Your recent moments</summary>
+            <div className="mt-3 flex items-center justify-between">
+              <p className="text-xs text-white/65">Recent journal entries</p>
               <Link to="/journal/new" className="text-xs text-brand-100 hover:text-brand-50">
                 Add new
               </Link>
@@ -215,7 +300,7 @@ export default function DashboardPage() {
                 ))}
               </div>
             )}
-          </Card>
+          </details>
         </div>
       </div>
     </main>
