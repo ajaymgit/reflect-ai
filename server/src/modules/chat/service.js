@@ -303,7 +303,8 @@ export function normalizeChatSettings(raw = {}) {
     ? Math.max(0, Math.min(100, Number(raw.responseStyle)))
     : 50;
   const useMemory = raw.useMemory !== false;
-  return { mode, responseStyle, useMemory };
+  const allowOpenAIFallback = raw.allowOpenAIFallback === true;
+  return { mode, responseStyle, useMemory, allowOpenAIFallback };
 }
 
 function humanizeQuestion(question = "", focus = "general_reflection") {
@@ -828,6 +829,7 @@ ${userMessage}
   let lastError = null;
   let geminiRateLimited = false;
   const aiTemperature = 0.55;
+  const openaiAllowedForTurn = openaiClient && (openaiFallbackMode === "auto" || context.settings?.allowOpenAIFallback === true);
 
   const parseModelOutput = (text) => {
     const parsed = parseJsonSafe(text);
@@ -882,14 +884,14 @@ ${userMessage}
         }
       }
 
-      if (openaiClient && openaiFallbackMode === "auto") {
+      if (openaiAllowedForTurn) {
         const payload = await runProvider("openai");
         if (payload) {
           return {
             payload,
             source: "openai",
             notice: geminiRateLimited
-              ? "Gemini limit reached. Switched to OpenAI backup. To reduce paid usage, pause or retry later."
+              ? "Gemini limit reached. Switched to OpenAI backup for this turn."
               : "",
           };
         }
@@ -906,10 +908,10 @@ ${userMessage}
       429,
     );
   }
-  if (geminiRateLimited && openaiFallbackMode !== "auto") {
+  if (geminiRateLimited && !openaiAllowedForTurn) {
     throw new AppError(
       "AI_RATE_LIMITED",
-      "Gemini limit reached. Stopped here to avoid paid OpenAI usage. Enable OpenAI fallback only when you want to continue.",
+      "Gemini limit reached. Stopped here to avoid paid OpenAI usage. Turn on OpenAI fallback to continue this turn.",
       429,
     );
   }

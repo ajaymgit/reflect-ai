@@ -8,6 +8,7 @@ export const chatMessageSchema = z.object({
         mode: z.enum(["quick", "deep", "analysis"]).optional(),
         responseStyle: z.number().min(0).max(100).optional(),
         useMemory: z.boolean().optional(),
+        allowOpenAIFallback: z.boolean().optional(),
       })
       .optional(),
   }),

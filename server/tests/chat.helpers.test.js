@@ -27,6 +27,7 @@ describe("chat helper behavior", () => {
       mode: "analysis",
       responseStyle: 100,
       useMemory: false,
+      allowOpenAIFallback: false,
     });
   });
 

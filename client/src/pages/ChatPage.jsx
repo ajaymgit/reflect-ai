@@ -45,6 +45,7 @@ export default function ChatPage() {
   const [chatMode, setChatMode] = useState("quick");
   const [responseStyle, setResponseStyle] = useState(50);
   const [useMemory, setUseMemory] = useState(true);
+  const [allowOpenAIFallback, setAllowOpenAIFallback] = useState(false);
   const [statusText, setStatusText] = useState("");
   const [chatSearch, setChatSearch] = useState("");
   const [providerAlert, setProviderAlert] = useState("");
@@ -121,6 +122,7 @@ export default function ChatPage() {
             mode: chatMode,
             responseStyle,
             useMemory,
+            allowOpenAIFallback,
           },
         }),
       });
@@ -314,15 +316,26 @@ export default function ChatPage() {
                 ))}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-3 items-center">
-                <label className="text-xs text-white/70 flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={useMemory}
-                    onChange={(e) => setUseMemory(e.target.checked)}
-                    className="accent-brand-300"
-                  />
-                  Use past journal notes
-                </label>
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="text-xs text-white/70 flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={useMemory}
+                      onChange={(e) => setUseMemory(e.target.checked)}
+                      className="accent-brand-300"
+                    />
+                    Use past journal notes
+                  </label>
+                  <label className="text-xs text-white/70 flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={allowOpenAIFallback}
+                      onChange={(e) => setAllowOpenAIFallback(e.target.checked)}
+                      className="accent-brand-300"
+                    />
+                    Enable OpenAI backup (paid)
+                  </label>
+                </div>
                 <label className="text-xs text-white/70 flex items-center gap-2">
                   <span className="shrink-0">Reply style</span>
                   <input
@@ -435,6 +448,9 @@ export default function ChatPage() {
                 <StatusPill>Style: {responseStyle < 35 ? "gentle" : responseStyle < 70 ? "balanced" : "analytical"}</StatusPill>
                 <StatusPill>{useMemory ? "Past notes on" : "Past notes off"}</StatusPill>
               </div>
+              <p className="text-[11px] text-white/55">
+                OpenAI backup is {allowOpenAIFallback ? "enabled for this session" : "off"}.
+              </p>
               <div className="flex flex-wrap gap-2">
                 {quickPrompts.map((prompt) => (
                   <button
