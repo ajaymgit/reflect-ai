@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CalendarRange, Flame, HeartPulse, Sparkles } from "lucide-react";
+import { AlertTriangle, Brain, CalendarRange, Flame, Frown, HeartPulse, Leaf, Smile, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { apiFetch } from "../api";
 import { ButtonLink, Card, MetricSkeleton, PageHeader, PageState } from "../ui";
@@ -60,17 +60,11 @@ export default function DashboardPage() {
     : "reflective";
   const moodClass = `mood-${toneMood}`;
   const moodCheckOptions = [
-    { id: "sad", label: "😔", text: "Low" },
-    { id: "stressed", label: "😟", text: "Stressed" },
-    { id: "reflective", label: "🙂", text: "Reflective" },
-    { id: "calm", label: "😌", text: "Calm" },
-    { id: "happy", label: "😊", text: "Good" },
-  ];
-  const sections = [
-    { id: "home-overview", label: "Overview" },
-    { id: "home-mood", label: "Mood" },
-    { id: "home-insight", label: "Insight" },
-    { id: "home-journal", label: "Journal" },
+    { id: "sad", icon: Frown, text: "Low" },
+    { id: "stressed", icon: AlertTriangle, text: "Stressed" },
+    { id: "reflective", icon: Brain, text: "Reflective" },
+    { id: "calm", icon: Leaf, text: "Calm" },
+    { id: "happy", icon: Smile, text: "Good" },
   ];
   const dailyQuotes = [
     "Small steps still count as progress.",
@@ -79,10 +73,6 @@ export default function DashboardPage() {
     "You can pause without giving up.",
   ];
   const dailyQuote = dailyQuotes[new Date().getDate() % dailyQuotes.length];
-  function jumpTo(id) {
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
   async function saveQuickMood(mood) {
     setQuickMood(mood);
     setQuickMoodStatus("Saving...");
@@ -103,27 +93,6 @@ export default function DashboardPage() {
   return (
     <main className={`p-4 md:p-6 living-bg ${moodClass}`}>
       <div className="max-w-6xl mx-auto space-y-4">
-        <details className="glass rounded-2xl p-3">
-          <summary className="cursor-pointer text-[11px] uppercase tracking-wider text-white/65">Jump to section</summary>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {sections.map((section) => (
-              <button
-                key={section.id}
-                type="button"
-                onClick={() => jumpTo(section.id)}
-                className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs hover:bg-white/10"
-              >
-                {section.label}
-              </button>
-            ))}
-            <Link
-              to="/retrospect"
-              className="rounded-full border border-white/10 bg-brand-300/20 px-3 py-1.5 text-xs hover:bg-brand-300/30"
-            >
-              Open Look Back
-            </Link>
-          </div>
-        </details>
         <PageHeader
           eyebrow={data?.greeting || "Welcome back"}
           title="How are you feeling today?"
@@ -144,13 +113,13 @@ export default function DashboardPage() {
                 key={item.id}
                 type="button"
                 onClick={() => saveQuickMood(item.id)}
-                className={`rounded-full border px-3 py-2 min-h-[44px] text-sm ${
+                className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 min-h-[44px] text-sm ${
                   quickMood === item.id
                     ? "bg-brand-300/30 border-brand-100/50"
                     : "bg-white/5 border-white/10 hover:bg-white/10"
                 }`}
               >
-                <span className="mr-1" aria-hidden="true">{item.label}</span>
+                <item.icon size={14} aria-hidden="true" />
                 {item.text}
               </button>
             ))}
@@ -267,17 +236,6 @@ export default function DashboardPage() {
                 Add new
               </Link>
             </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {emotionMeta.map((emotion) => (
-                <span
-                  key={emotion.key}
-                  className="inline-flex items-center gap-2 rounded-full bg-white/5 border border-white/10 px-2.5 py-1 text-xs text-white/80"
-                >
-                  <span className={`h-2 w-2 rounded-full ${emotion.color}`} />
-                  {emotion.label}
-                </span>
-              ))}
-            </div>
             {(data?.recentEntries || []).length === 0 && !loading ? (
               <PageState
                 title="No journal moments yet"
@@ -289,12 +247,12 @@ export default function DashboardPage() {
                 }
               />
             ) : (
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
                 {(data?.recentEntries || []).slice(0, entryLimit).map((entry) => (
-                  <div key={entry.id} className="rounded-xl bg-white/5 border border-white/10 p-3 relative overflow-hidden">
+                  <div key={entry.id} className="rounded-xl bg-white/5 border border-white/10 p-3 relative overflow-hidden min-h-[120px]">
                     <span className={`absolute left-0 top-0 bottom-0 w-1 ${moodColors[entry.mood] || "bg-brand-300"}`} />
                     <p className="text-xs text-white/60 pl-2">{new Date(entry.createdAt).toDateString()}</p>
-                    <p className="text-sm text-white/85 mt-1 pl-2">{entry.title}</p>
+                    <p className="text-sm text-white/85 mt-1 pl-2 break-words">{entry.title}</p>
                     <p className="text-[11px] text-brand-100 mt-2 capitalize pl-2">{entry.mood}</p>
                   </div>
                 ))}

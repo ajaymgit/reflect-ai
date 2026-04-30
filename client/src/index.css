@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 body {
-  background: #2b2220;
-  color: #fff7f2;
+  background: #fdfbf7;
+  color: #4a3a31;
   font-family: "Nunito", "Quicksand", "Inter", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   margin: 0;
   letter-spacing: 0.01em;
@@ -16,9 +16,9 @@ body {
 }
 
 .glass {
-  background: linear-gradient(160deg, rgba(64, 48, 43, 0.9), rgba(44, 34, 30, 0.88));
-  border: 1px solid rgba(255, 186, 154, 0.22);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.14);
+  background: linear-gradient(160deg, rgba(246, 238, 229, 0.95), rgba(237, 223, 208, 0.92));
+  border: 1px solid rgba(188, 154, 132, 0.24);
+  box-shadow: 0 4px 12px rgba(124, 97, 80, 0.12);
   backdrop-filter: blur(8px);
 }
 
@@ -28,9 +28,9 @@ body {
 
 .page-gradient {
   background:
-    radial-gradient(900px 360px at 0% -10%, rgba(255, 160, 122, 0.18), transparent 62%),
-    radial-gradient(980px 420px at 70% -10%, rgba(161, 173, 163, 0.2), transparent 70%),
-    linear-gradient(180deg, #3a2d28 0%, #2b2220 52%, #241c1a 100%);
+    radial-gradient(900px 360px at 0% -10%, rgba(255, 157, 108, 0.2), transparent 62%),
+    radial-gradient(980px 420px at 70% -10%, rgba(159, 215, 183, 0.18), transparent 70%),
+    linear-gradient(180deg, #fff9f2 0%, #fdfbf7 52%, #f6eee5 100%);
 }
 
 body[data-theme-mode="midnight"] {
@@ -120,7 +120,7 @@ body[data-theme-mode="midnight"] .page-gradient {
 }
 
 .scroll-area::-webkit-scrollbar-thumb {
-  background: rgba(190, 206, 165, 0.28);
+  background: rgba(156, 128, 110, 0.32);
   border-radius: 999px;
 }
 
@@ -151,7 +151,7 @@ details > summary::after {
   content: "▾";
   margin-left: 8px;
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.65);
+  color: rgba(74, 58, 49, 0.65);
 }
 
 @media (prefers-reduced-motion: reduce) {
