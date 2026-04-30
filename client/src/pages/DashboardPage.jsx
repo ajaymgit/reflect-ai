@@ -94,7 +94,7 @@ export default function DashboardPage() {
         <PageHeader
           eyebrow={data?.greeting || "Welcome back"}
           title="How are you feeling today?"
-          description="Start with a quick note. Keep it short or write in detail. Over time, this helps you understand your feelings better."
+          description="Write a quick note or continue your reflection."
           action={
             <>
               <ButtonLink to="/journal/new">Write journal</ButtonLink>
@@ -140,9 +140,7 @@ export default function DashboardPage() {
 
         <Card id="home-mood">
           <p className="text-xs text-brand-100 uppercase tracking-wider">How You've Been Feeling</p>
-          <p className="text-sm text-white/75 mt-2">
-            A simple mood snapshot from your recent journals.
-          </p>
+          <p className="text-sm text-white/75 mt-2">Recent mood snapshot.</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {emotionMeta.map((emotion) => {
               const count = data?.emotionDistribution?.[emotion.key] ?? 0;
@@ -169,9 +167,9 @@ export default function DashboardPage() {
           <Card>
             <p className="text-xs text-brand-100 uppercase tracking-wider">Start Here</p>
             <div className="mt-2 space-y-2 text-sm text-white/80">
-              <p>1) Write your first journal note in your own words.</p>
-              <p>2) Open Ask ReflectAI and talk naturally like a normal chat.</p>
-              <p>3) Check Look Back to see repeating patterns over time.</p>
+              <p>1) Write your first journal note.</p>
+              <p>2) Open chat and continue reflection.</p>
+              <p>3) Use Look Back to spot patterns.</p>
             </div>
           </Card>
         ) : null}

@@ -140,7 +140,7 @@ export default function JournalPage() {
         <PageHeader
           eyebrow="New journal entry"
           title="Turn today into a memory"
-          description="Write what happened, choose how you felt, then continue in chat when you are ready."
+          description="Write, save, and continue in chat."
           action={
             <div className="flex items-center gap-2">
               <button
@@ -219,10 +219,10 @@ export default function JournalPage() {
             <p className="text-sm text-white/80">{prompts[promptIndex]}</p>
           </Card>
           <Card title="Easy structure">
-            <p className="text-sm text-white/80">Try three lines: what happened, what you felt, and what you need next.</p>
+            <p className="text-sm text-white/80">Use 3 lines: what happened, how you felt, what you need next.</p>
           </Card>
           <Card title="Next step">
-            <p className="text-sm text-white/80">After saving, open chat and ask ReflectAI to help unpack the pattern.</p>
+            <p className="text-sm text-white/80">After saving, open chat to unpack the pattern.</p>
           </Card>
           <Card id="journal-history" title="Past entries">
             {loadingEntries ? <p className="text-sm text-white/60">Loading your journal history...</p> : null}

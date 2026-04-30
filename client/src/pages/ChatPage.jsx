@@ -357,7 +357,7 @@ export default function ChatPage() {
                       onChange={(e) => setAllowOpenAIFallback(e.target.checked)}
                       className="accent-brand-300"
                     />
-                    Enable OpenAI backup (paid)
+                    OpenAI backup (paid)
                   </label>
                 </div>
                 <label className="text-xs text-white/70 flex items-center gap-2">
@@ -507,7 +507,7 @@ export default function ChatPage() {
                 </Button>
               </form>
               <p className="text-xs text-white/60">
-                ReflectAI is for self-reflection and support. It is not medical care.
+                ReflectAI supports self-reflection. It is not medical care.
               </p>
             </div>
           </section>

@@ -101,7 +101,7 @@ export default function HealthPage() {
             <p className="text-xs text-white/65">
               {nativeIos
                 ? "On iPhone, this asks Health permissions and reads recent trends."
-                : "This website cannot access Apple Health. Use the iPhone app build to connect HealthKit."}
+                : "Apple Health works only in the iPhone app build."}
             </p>
           </div>
           {healthKitStatus ? <p className="mt-2 text-xs text-brand-100">{healthKitStatus}</p> : null}
@@ -144,9 +144,7 @@ export default function HealthPage() {
 
         <div id="health-trend" className="glass rounded-2xl p-4">
           <h3 className="font-medium">Weekly chart</h3>
-          <p className="mt-1 text-xs text-white/60">
-            This chart helps you compare steps, sleep, and stress for the week.
-          </p>
+          <p className="mt-1 text-xs text-white/60">Compare steps, sleep, and stress.</p>
           <div className="h-56 sm:h-64 mt-3">
             {hasWeeklyData ? (
               <ResponsiveContainer width="100%" height="100%">

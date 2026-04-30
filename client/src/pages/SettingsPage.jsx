@@ -62,35 +62,35 @@ export default function SettingsPage() {
           <ToggleOption
             id="settings-motion"
             title="Smoother motion"
-            detail="Reduce moving effects if you prefer a calmer screen."
+            detail="Reduce animations for a calmer screen."
             checked={settings.reducedMotion}
             onChange={() => setSettings((prev) => ({ ...prev, reducedMotion: !prev.reducedMotion }))}
           />
           <ToggleOption
             id="settings-alerts"
             title="Notification sounds"
-            detail="Play soft sounds when entries save and chat replies arrive."
+            detail="Play sounds for saves and replies."
             checked={settings.notificationSounds}
             onChange={() => setSettings((prev) => ({ ...prev, notificationSounds: !prev.notificationSounds }))}
           />
           <SelectOption
             id="settings-theme"
             title="Theme mode"
-            detail="Choose a bright or dark look."
+            detail="Choose light or dark."
             value={settings.themeMode}
             onChange={(value) => setSettings((prev) => ({ ...prev, themeMode: value }))}
           />
           <ToggleOption
             id="settings-privacy"
             title="Private previews"
-            detail="Hide journal preview text on timeline cards."
+            detail="Hide journal text in previews."
             checked={settings.privacyMode}
             onChange={() => setSettings((prev) => ({ ...prev, privacyMode: !prev.privacyMode }))}
           />
           <ToggleOption
             id="settings-focus"
             title="Focus mode"
-            detail="Show a cleaner writing screen with fewer distractions."
+            detail="Use a cleaner writing screen."
             checked={settings.focusMode}
             onChange={() => setSettings((prev) => ({ ...prev, focusMode: !prev.focusMode }))}
           />
