@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import OpenAI from "openai";
+import dns from "node:dns";
 import User from "./models/User.js";
 import { env, policyConfig } from "./shared/config/env.js";
 import { logInfo } from "./shared/utils/logger.js";
@@ -11,6 +12,11 @@ export async function runStartupChecks() {
 
   if (!policyConfig.minConfidence || !policyConfig.minHealthDays) {
     throw new Error("Policy configuration missing.");
+  }
+
+  if (env.MONGO_URI.startsWith("mongodb+srv://")) {
+    // Some networks expose only local DNS resolvers that fail Atlas SRV lookups.
+    dns.setServers(["8.8.8.8", "1.1.1.1"]);
   }
 
   logInfo("Connecting to MongoDB");

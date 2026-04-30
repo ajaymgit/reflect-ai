@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
+import dns from "node:dns";
 import AuditLog from "./models/AuditLog.js";
 import ChatSession from "./models/ChatSession.js";
 import HealthData from "./models/HealthData.js";
@@ -42,6 +43,11 @@ const emotionalSeedEntries = [
 ];
 
 async function seed() {
+  if (env.MONGO_URI.startsWith("mongodb+srv://")) {
+    // Force public resolvers to avoid SRV lookup failures on restrictive local DNS.
+    dns.setServers(["8.8.8.8", "1.1.1.1"]);
+  }
+
   await mongoose.connect(env.MONGO_URI);
 
   await Promise.all([
