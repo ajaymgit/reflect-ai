@@ -48,11 +48,35 @@ export default function HealthPage() {
   }
 
   const hasWeeklyData = (data?.weekly || []).length > 0;
+  const sections = [
+    { id: "health-overview", label: "Overview" },
+    { id: "health-latest", label: "Latest" },
+    { id: "health-trend", label: "Weekly trend" },
+    { id: "health-insight", label: "Insight" },
+  ];
+  function jumpTo(id) {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   return (
     <main className="p-4 md:p-6">
       <div className="max-w-6xl mx-auto space-y-4">
-        <div className="glass rounded-2xl p-5">
+        <div className="glass rounded-2xl p-3">
+          <p className="text-[11px] uppercase tracking-wider text-white/65">Jump to section</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {sections.map((section) => (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => jumpTo(section.id)}
+                className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs hover:bg-white/10"
+              >
+                {section.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div id="health-overview" className="glass rounded-2xl p-5">
           <p className="text-brand-100 text-xs uppercase tracking-wider">Body Check</p>
           <h2 className="text-3xl font-semibold mt-1">Your daily health view</h2>
           <p className="text-base text-white/75 mt-2">
@@ -91,7 +115,7 @@ export default function HealthPage() {
 
         {error ? <PageState title="Health data unavailable" message={error} /> : null}
 
-        <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+        <div id="health-latest" className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
           {loading ? (
             Array.from({ length: 4 }).map((_, index) => <MetricSkeleton key={index} />)
           ) : (
@@ -118,7 +142,7 @@ export default function HealthPage() {
           )}
         </div>
 
-        <div className="glass rounded-2xl p-4">
+        <div id="health-trend" className="glass rounded-2xl p-4">
           <h3 className="font-medium">Weekly chart</h3>
           <p className="mt-1 text-xs text-white/60">
             This chart helps you compare steps, sleep, and stress for the week.
@@ -162,7 +186,7 @@ export default function HealthPage() {
           </div>
         </div>
 
-        <div className="glass rounded-2xl p-4">
+        <div id="health-insight" className="glass rounded-2xl p-4">
           <p className="text-brand-100 text-xs uppercase tracking-wider">What this means</p>
           <p className="text-sm text-white/80 mt-2">{data?.insight || "No health insight available yet."}</p>
           <p className="text-xs text-white/60 mt-2">

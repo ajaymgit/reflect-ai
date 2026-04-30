@@ -27,38 +27,68 @@ export default function SettingsPage() {
     document.body.setAttribute("data-theme-mode", settings.themeMode);
     document.body.setAttribute("data-reduced-motion", settings.reducedMotion ? "true" : "false");
   }, [settings]);
+  const sections = [
+    { id: "settings-theme", label: "Appearance" },
+    { id: "settings-privacy", label: "Privacy" },
+    { id: "settings-focus", label: "Focus" },
+    { id: "settings-alerts", label: "Alerts" },
+  ];
+  function jumpTo(id) {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   return (
     <main className="p-4 md:p-6">
-      <div className="max-w-4xl mx-auto glass rounded-2xl p-5">
+      <div className="max-w-4xl mx-auto space-y-4">
+        <div className="glass rounded-2xl p-3">
+          <p className="text-[11px] uppercase tracking-wider text-white/65">Jump to section</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {sections.map((section) => (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => jumpTo(section.id)}
+                className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs hover:bg-white/10"
+              >
+                {section.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="glass rounded-2xl p-5">
         <p className="text-brand-100 text-xs uppercase tracking-wider">Settings</p>
         <h2 className="text-2xl font-semibold mt-1">App Preferences</h2>
         <div className="mt-4 grid md:grid-cols-2 gap-3">
           <ToggleOption
+            id="settings-motion"
             title="Smoother motion"
             detail="Reduce moving effects if you prefer a calmer screen."
             checked={settings.reducedMotion}
             onChange={() => setSettings((prev) => ({ ...prev, reducedMotion: !prev.reducedMotion }))}
           />
           <ToggleOption
+            id="settings-alerts"
             title="Notification sounds"
             detail="Play soft sounds when entries save and chat replies arrive."
             checked={settings.notificationSounds}
             onChange={() => setSettings((prev) => ({ ...prev, notificationSounds: !prev.notificationSounds }))}
           />
           <SelectOption
+            id="settings-theme"
             title="Theme mode"
             detail="Choose a bright or dark look."
             value={settings.themeMode}
             onChange={(value) => setSettings((prev) => ({ ...prev, themeMode: value }))}
           />
           <ToggleOption
+            id="settings-privacy"
             title="Private previews"
             detail="Hide journal preview text on timeline cards."
             checked={settings.privacyMode}
             onChange={() => setSettings((prev) => ({ ...prev, privacyMode: !prev.privacyMode }))}
           />
           <ToggleOption
+            id="settings-focus"
             title="Focus mode"
             detail="Show a cleaner writing screen with fewer distractions."
             checked={settings.focusMode}
@@ -66,13 +96,14 @@ export default function SettingsPage() {
           />
         </div>
       </div>
+      </div>
     </main>
   );
 }
 
-function ToggleOption({ title, detail, checked, onChange }) {
+function ToggleOption({ id, title, detail, checked, onChange }) {
   return (
-    <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+    <div id={id} className="rounded-xl bg-white/5 border border-white/10 p-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-medium">{title}</p>
         <button
@@ -90,9 +121,9 @@ function ToggleOption({ title, detail, checked, onChange }) {
   );
 }
 
-function SelectOption({ title, detail, value, onChange }) {
+function SelectOption({ id, title, detail, value, onChange }) {
   return (
-    <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+    <div id={id} className="rounded-xl bg-white/5 border border-white/10 p-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-medium">{title}</p>
         <select

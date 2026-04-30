@@ -6,7 +6,6 @@ import { useAuth } from "../context/AuthContext";
 const pageTitles = {
   "/dashboard": "Home",
   "/journal/new": "Write Journal",
-  "/retrospect": "Look Back",
   "/chat": "Chat",
   "/health": "Body Check",
   "/settings": "Settings",

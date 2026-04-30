@@ -57,10 +57,40 @@ export default function DashboardPage() {
     ? data.todaysMood
     : "reflective";
   const moodClass = `mood-${toneMood}`;
+  const sections = [
+    { id: "home-overview", label: "Overview" },
+    { id: "home-mood", label: "Mood" },
+    { id: "home-insight", label: "Insight" },
+    { id: "home-journal", label: "Journal" },
+  ];
+  function jumpTo(id) {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   return (
     <main className={`p-4 md:p-6 living-bg ${moodClass}`}>
       <div className="max-w-6xl mx-auto space-y-4">
+        <div className="glass rounded-2xl p-3">
+          <p className="text-[11px] uppercase tracking-wider text-white/65">Jump to section</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {sections.map((section) => (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => jumpTo(section.id)}
+                className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs hover:bg-white/10"
+              >
+                {section.label}
+              </button>
+            ))}
+            <Link
+              to="/retrospect"
+              className="rounded-full border border-white/10 bg-brand-300/20 px-3 py-1.5 text-xs hover:bg-brand-300/30"
+            >
+              Open Look Back
+            </Link>
+          </div>
+        </div>
         <PageHeader
           eyebrow={data?.greeting || "Welcome back"}
           title="How are you feeling today?"
@@ -91,7 +121,7 @@ export default function DashboardPage() {
 
         {error ? <PageState title="Dashboard could not load" message={error} /> : null}
 
-        <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+        <div id="home-overview" className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
           {loading
             ? [0, 1, 2, 3].map((item) => <MetricSkeleton key={item} />)
             : (
@@ -108,7 +138,7 @@ export default function DashboardPage() {
             )}
         </div>
 
-        <Card>
+        <Card id="home-mood">
           <p className="text-xs text-brand-100 uppercase tracking-wider">How You've Been Feeling</p>
           <p className="text-sm text-white/75 mt-2">
             A simple mood snapshot from your recent journals.
@@ -130,7 +160,7 @@ export default function DashboardPage() {
           </div>
         </Card>
 
-        <Card>
+        <Card id="home-insight">
           <p className="text-xs text-brand-200 uppercase tracking-wider">Simple Takeaway</p>
           <p className="text-sm text-white/85 mt-2">{data?.cumulativeInsight || "Building your insight..."}</p>
         </Card>
@@ -146,7 +176,7 @@ export default function DashboardPage() {
           </Card>
         ) : null}
 
-        <div className="grid gap-4">
+        <div id="home-journal" className="grid gap-4">
           <Card>
             <div className="flex items-center justify-between">
               <h3 className="font-medium">Your recent moments</h3>

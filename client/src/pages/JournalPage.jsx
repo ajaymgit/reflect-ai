@@ -27,6 +27,15 @@ export default function JournalPage() {
   const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
   const readingTime = Math.max(1, Math.ceil(wordCount / 180));
   const canEdit = Boolean(activeEntryId);
+  const sections = [
+    { id: "journal-writing", label: "Writing" },
+    { id: "journal-help", label: "Help" },
+    { id: "journal-history", label: "Past entries" },
+    { id: "journal-selected", label: "Selected entry" },
+  ];
+  function jumpTo(id) {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   useEffect(() => {
     async function loadEntries() {
@@ -113,6 +122,21 @@ export default function JournalPage() {
   return (
     <main className={`p-4 md:p-6 ${moodClass}`}>
       <div className="max-w-6xl mx-auto space-y-4">
+        <div className="glass rounded-2xl p-3">
+          <p className="text-[11px] uppercase tracking-wider text-white/65">Jump to section</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {sections.map((section) => (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => jumpTo(section.id)}
+                className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs hover:bg-white/10"
+              >
+                {section.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <PageHeader
           eyebrow="New journal entry"
           title="Turn today into a memory"
@@ -133,7 +157,7 @@ export default function JournalPage() {
           }
         />
         <div className="grid xl:grid-cols-[1fr_320px] gap-4">
-          <section className="glass rounded-2xl p-4 md:p-5 space-y-3">
+          <section id="journal-writing" className="glass rounded-2xl p-4 md:p-5 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-brand-100 text-xs uppercase tracking-wider">Writing canvas</p>
             <p className="text-xs text-white/55">{wordCount} words · {readingTime} min read</p>
@@ -189,7 +213,7 @@ export default function JournalPage() {
           </div>
         </section>
 
-        <aside className="glass rounded-2xl p-4 space-y-3 h-fit">
+        <aside id="journal-help" className="glass rounded-2xl p-4 space-y-3 h-fit">
           <h3 className="font-medium">Help while writing</h3>
           <Card title="Current prompt">
             <p className="text-sm text-white/80">{prompts[promptIndex]}</p>
@@ -200,7 +224,7 @@ export default function JournalPage() {
           <Card title="Next step">
             <p className="text-sm text-white/80">After saving, open chat and ask ReflectAI to help unpack the pattern.</p>
           </Card>
-          <Card title="Past entries">
+          <Card id="journal-history" title="Past entries">
             {loadingEntries ? <p className="text-sm text-white/60">Loading your journal history...</p> : null}
             {!loadingEntries && entries.length === 0 ? (
               <p className="text-sm text-white/60">No saved entries yet.</p>
@@ -227,7 +251,7 @@ export default function JournalPage() {
             )}
           </Card>
           {activeEntryId ? (
-            <Card title="Full selected entry">
+            <Card id="journal-selected" title="Full selected entry">
               <div className="max-h-64 overflow-y-auto scroll-area rounded-xl bg-white/5 border border-white/10 p-3">
                 <p className="text-sm text-white/85 whitespace-pre-line">{activeEntryPreview}</p>
               </div>

@@ -251,6 +251,15 @@ export default function ChatPage() {
           ),
     [searchText, turns],
   );
+  const sections = [
+    { id: "chat-controls", label: "Controls" },
+    { id: "chat-conversation", label: "Conversation" },
+    { id: "chat-compose", label: "Compose" },
+    { id: "chat-quick-journal", label: "Quick journal" },
+  ];
+  function jumpTo(id) {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   return (
     <div
@@ -261,6 +270,21 @@ export default function ChatPage() {
       <main className="p-3 md:p-6">
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-4 h-full">
           <section className={`glass rounded-3xl flex flex-col min-h-[70vh] ${toneClass}`}>
+            <div className="px-4 md:px-5 pt-3 pb-1">
+              <p className="text-[11px] uppercase tracking-wider text-white/65">Jump to section</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {sections.map((section) => (
+                  <button
+                    key={section.id}
+                    type="button"
+                    onClick={() => jumpTo(section.id)}
+                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs hover:bg-white/10"
+                  >
+                    {section.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="p-4 md:p-5 border-b border-white/10 flex items-center justify-between gap-3">
               <PageHeader eyebrow={`${heroGreeting}, ${user?.name || "there"}`} title="Ask ReflectAI" description={smartPrompt} />
               <div className="flex items-center gap-2 shrink-0">
@@ -270,7 +294,7 @@ export default function ChatPage() {
                 </Link>
               </div>
             </div>
-            <div className="px-4 md:px-5 py-3 border-b border-white/10 space-y-3">
+            <div id="chat-controls" className="px-4 md:px-5 py-3 border-b border-white/10 space-y-3">
               {providerAlert ? (
                 <div
                   role="status"
@@ -381,7 +405,7 @@ export default function ChatPage() {
               </div>
             )}
 
-            <div ref={listRef} className="flex-1 overflow-y-auto scroll-area p-4 md:p-6 space-y-4" role="log" aria-live="polite">
+            <div id="chat-conversation" ref={listRef} className="flex-1 overflow-y-auto scroll-area p-4 md:p-6 space-y-4" role="log" aria-live="polite">
               {loadError && (
                 <PageState
                   title="Chat history could not load"
@@ -442,7 +466,7 @@ export default function ChatPage() {
               <div ref={endRef} />
             </div>
 
-            <div className="border-t border-white/10 p-4 md:p-5 space-y-3">
+            <div id="chat-compose" className="border-t border-white/10 p-4 md:p-5 space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <StatusPill>Chat mode: {chatMode}</StatusPill>
                 <StatusPill>Style: {responseStyle < 35 ? "gentle" : responseStyle < 70 ? "balanced" : "analytical"}</StatusPill>
@@ -488,7 +512,7 @@ export default function ChatPage() {
             </div>
           </section>
 
-          <aside className="glass rounded-3xl p-4 md:p-5 h-fit self-start lg:sticky lg:top-24 space-y-4">
+          <aside id="chat-quick-journal" className="glass rounded-3xl p-4 md:p-5 h-fit self-start lg:sticky lg:top-24 space-y-4">
             <div>
               <p className="text-brand-100 text-xs uppercase tracking-wider">Quick Journal Note</p>
               <p className="text-sm text-white/70 mt-1">Write a short note here without leaving chat.</p>
