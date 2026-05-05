@@ -451,7 +451,7 @@ export default function ChatPage() {
                   animate={settings.reducedMotion ? undefined : { opacity: 1, y: 0 }}
                   className="space-y-2"
                 >
-                  <div className="rounded-[20px] p-3 max-w-2xl ml-auto bg-[#ffbfa4]/20 border border-[#ffd8c7]/35 shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
+                  <div className="rounded-[20px] p-3 max-w-2xl ml-auto bg-[#c8aa89]/28 border border-[#8f6f56]/35 shadow-[0_4px_12px_rgba(89,62,42,0.12)]">
                     <p className="text-[11px] text-brand-100 mb-1">You</p>
                     <p className="text-sm leading-6 whitespace-pre-line">{turn.userMessage}</p>
                   </div>

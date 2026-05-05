@@ -68,7 +68,7 @@ export default function LoginPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          {error && <p className="text-mood-coral text-sm" role="alert">{error}</p>}
+          {error && <p className="text-[#9f693f] text-sm" role="alert">{error}</p>}
           <button
             type="button"
             onClick={() => {
