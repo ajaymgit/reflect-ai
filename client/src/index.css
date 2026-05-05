@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 body {
-  background: #f7f1e8;
+  background: #efe3d2;
   color: #4a3a31;
   font-family: "Nunito", "Quicksand", "Inter", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   margin: 0;
@@ -16,9 +16,9 @@ body {
 }
 
 .glass {
-  background: linear-gradient(160deg, rgba(246, 238, 229, 0.95), rgba(237, 223, 208, 0.92));
-  border: 1px solid rgba(188, 154, 132, 0.24);
-  box-shadow: 0 4px 12px rgba(124, 97, 80, 0.12);
+  background: linear-gradient(160deg, rgba(240, 226, 208, 0.95), rgba(230, 209, 188, 0.92));
+  border: 1px solid rgba(164, 123, 96, 0.28);
+  box-shadow: 0 6px 16px rgba(118, 84, 60, 0.16);
   backdrop-filter: blur(8px);
 }
 
@@ -28,9 +28,9 @@ body {
 
 .page-gradient {
   background:
-    radial-gradient(900px 360px at 0% -10%, rgba(255, 157, 108, 0.22), transparent 62%),
-    radial-gradient(980px 420px at 70% -10%, rgba(159, 215, 183, 0.18), transparent 70%),
-    linear-gradient(180deg, #f9efe3 0%, #f7f1e8 52%, #efdfcc 100%);
+    radial-gradient(900px 360px at 0% -10%, rgba(245, 138, 86, 0.26), transparent 62%),
+    radial-gradient(980px 420px at 70% -10%, rgba(136, 185, 156, 0.2), transparent 70%),
+    linear-gradient(180deg, #f2ddc4 0%, #efe3d2 52%, #e4cdb3 100%);
 }
 
 .mood-happy {
