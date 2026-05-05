@@ -26,8 +26,7 @@ export default function AppShell() {
     try {
       const raw = localStorage.getItem("equoria-settings");
       const settings = raw ? JSON.parse(raw) : null;
-      const themeMode = settings?.themeMode === "midnight" ? "midnight" : "daylight";
-      document.body.setAttribute("data-theme-mode", themeMode);
+      document.body.setAttribute("data-theme-mode", "daylight");
       document.body.setAttribute("data-reduced-motion", settings?.reducedMotion ? "true" : "false");
     } catch {
       document.body.setAttribute("data-theme-mode", "daylight");

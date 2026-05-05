@@ -5,7 +5,6 @@ import { useAuth } from "../context/AuthContext";
 const defaultSettings = {
   reducedMotion: false,
   notificationSounds: true,
-  themeMode: "daylight",
   privacyMode: false,
   focusMode: true,
 };
@@ -29,7 +28,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     localStorage.setItem("equoria-settings", JSON.stringify(settings));
-    document.body.setAttribute("data-theme-mode", settings.themeMode);
+    document.body.setAttribute("data-theme-mode", "daylight");
     document.body.setAttribute("data-reduced-motion", settings.reducedMotion ? "true" : "false");
   }, [settings]);
   const sections = [
@@ -83,13 +82,6 @@ export default function SettingsPage() {
             detail="Play sounds for saves and replies."
             checked={settings.notificationSounds}
             onChange={() => setSettings((prev) => ({ ...prev, notificationSounds: !prev.notificationSounds }))}
-          />
-          <SelectOption
-            id="settings-theme"
-            title="Theme mode"
-            detail="Choose light or dark."
-            value={settings.themeMode}
-            onChange={(value) => setSettings((prev) => ({ ...prev, themeMode: value }))}
           />
           <ToggleOption
             id="settings-privacy"
@@ -167,21 +159,3 @@ function ToggleOption({ id, title, detail, checked, onChange }) {
   );
 }
 
-function SelectOption({ id, title, detail, value, onChange }) {
-  return (
-    <div id={id} className="rounded-xl bg-white/5 border border-white/10 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-medium">{title}</p>
-        <select
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="rounded-lg bg-surface-950 border border-white/15 px-2 py-1 text-xs"
-        >
-          <option value="midnight">Midnight</option>
-          <option value="daylight">Daylight</option>
-        </select>
-      </div>
-      <p className="text-xs text-white/70 mt-2">{detail}</p>
-    </div>
-  );
-}

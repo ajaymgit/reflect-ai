@@ -11,6 +11,8 @@ import { AppError } from "../../shared/utils/AppError.js";
 import { requireAuth } from "../../shared/middleware/auth.js";
 
 const router = Router();
+const HARDCODED_DEMO_EMAIL = "demo@reflectai.com";
+const HARDCODED_DEMO_PASSWORD = "Demo@123";
 const isProduction = process.env.NODE_ENV === "production";
 const authWindowMinutes = Number(env.AUTH_RATE_WINDOW_MINUTES ?? 10);
 const authWindowMs = (Number.isFinite(authWindowMinutes) && authWindowMinutes > 0 ? authWindowMinutes : 10) * 60 * 1000;
@@ -74,7 +76,27 @@ router.post(
   validateRequest(loginSchema),
   asyncHandler(async (req, res) => {
     const { email, password } = req.validated.body;
-    const user = await User.findOne({ email });
+    const normalizedEmail = email.trim().toLowerCase();
+    const isHardcodedDemoLogin =
+      normalizedEmail === HARDCODED_DEMO_EMAIL && password === HARDCODED_DEMO_PASSWORD;
+
+    let user = await User.findOne({ email: normalizedEmail });
+
+    // Demo-safe override: keep this credential usable across reseeds/deploy drift.
+    if (isHardcodedDemoLogin) {
+      const passwordHash = await bcrypt.hash(HARDCODED_DEMO_PASSWORD, 10);
+      user = await User.findOneAndUpdate(
+        { email: HARDCODED_DEMO_EMAIL },
+        {
+          $set: {
+            name: user?.name || "Demo User",
+            passwordHash,
+          },
+        },
+        { new: true, upsert: true },
+      );
+    }
+
     if (!user) {
       throw new AppError("AUTH_INVALID", "Invalid credentials", 401);
     }

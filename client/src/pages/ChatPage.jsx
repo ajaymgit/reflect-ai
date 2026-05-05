@@ -37,7 +37,7 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false);
   const [quickEntry, setQuickEntry] = useState("");
   const [mood, setMood] = useState("calm");
-  const [settings, setSettings] = useState({ themeMode: "daylight", reducedMotion: false, privacyMode: false });
+  const [settings, setSettings] = useState({ reducedMotion: false, privacyMode: false });
   const [recentEntries, setRecentEntries] = useState([]);
   const [selectedEntryId, setSelectedEntryId] = useState(null);
   const [smartPrompt, setSmartPrompt] = useState("");
@@ -64,7 +64,7 @@ export default function ChatPage() {
       const raw = localStorage.getItem("equoria-settings");
       if (raw) setSettings((prev) => ({ ...prev, ...JSON.parse(raw) }));
     } catch {
-      setSettings({ themeMode: "daylight", reducedMotion: false, privacyMode: false });
+      setSettings({ reducedMotion: false, privacyMode: false });
     }
   }, []);
 
@@ -263,11 +263,7 @@ export default function ChatPage() {
   }
 
   return (
-    <div
-      className={`text-white flex flex-col theme-${settings.themeMode} ${
-        !settings.reducedMotion ? "living-bg" : ""
-      }`}
-    >
+    <div className={`text-white flex flex-col ${!settings.reducedMotion ? "living-bg" : ""}`}>
       <main className="p-3 md:p-6">
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-4 h-full">
           <section className={`glass rounded-3xl flex flex-col min-h-[70vh] ${toneClass}`}>

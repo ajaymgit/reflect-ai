@@ -16,9 +16,10 @@ export default function RegisterPage() {
     e.preventDefault();
     setError("");
     try {
+      const normalizedEmail = email.trim().toLowerCase();
       const data = await apiFetch("/api/auth/register", {
         method: "POST",
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name: name.trim(), email: normalizedEmail, password }),
       });
       setToken(data.token);
       setUser(data.user);
@@ -29,24 +30,24 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen page-gradient text-white flex items-center justify-center p-4">
+    <div className="min-h-screen page-gradient text-[#4a3a31] flex items-center justify-center p-4 sm:p-5">
       <div className="w-full max-w-5xl grid md:grid-cols-2 gap-4">
         <section className="glass rounded-3xl p-8 hidden md:flex flex-col justify-between">
           <div>
             <p className="text-brand-100 text-sm">ReflectAI</p>
             <h1 className="text-3xl font-semibold mt-3">Create your reflective space</h1>
-            <p className="text-white/70 mt-3 text-sm leading-6">
+            <p className="text-[#7e6454] mt-3 text-sm leading-6">
               Build a private journaling routine and chat with ReflectAI for contextual self-reflection.
             </p>
           </div>
-          <ul className="text-sm text-white/70 space-y-2">
+          <ul className="text-sm text-[#7e6454] space-y-2">
             <li>• Memory-aware reflection</li>
             <li>• Evidence-linked prompts</li>
             <li>• Calm, focused chat experience</li>
           </ul>
         </section>
 
-        <form onSubmit={handleSubmit} className="glass rounded-3xl p-6 md:p-8 space-y-4">
+        <form onSubmit={handleSubmit} className="glass rounded-3xl p-5 sm:p-6 md:p-8 space-y-4">
           <div>
             <p className="text-brand-100 text-sm">Get started</p>
             <h2 className="text-2xl font-semibold mt-1">Create ReflectAI account</h2>
@@ -78,7 +79,7 @@ export default function RegisterPage() {
           <Button className="w-full">
             Register
           </Button>
-          <p className="text-sm text-white/70">
+          <p className="text-sm text-[#7e6454]">
             Already have an account?{" "}
             <Link className="text-brand-100 hover:text-brand-50" to="/login">
               Login
