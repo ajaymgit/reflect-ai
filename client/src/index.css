@@ -153,6 +153,11 @@ button {
   transition: 180ms ease;
 }
 
+/* Force legacy white utility text to earthy dark for readability. */
+[class*="text-white"] {
+  color: #2f2219 !important;
+}
+
 button:active {
   transform: translateY(1px);
 }
