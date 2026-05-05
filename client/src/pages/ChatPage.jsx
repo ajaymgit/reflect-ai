@@ -1,17 +1,19 @@
 import { motion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Search, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { apiFetch } from "../api";
 import { useAuth } from "../context/AuthContext";
+import { Button, Card, PageHeader, PageState, StatusPill, ToggleButton } from "../ui";
 
 const moodOptions = ["happy", "calm", "reflective", "sad", "stressed", "angry"];
 const moodMeta = {
-  happy: { icon: "☀️", label: "Happy" },
-  calm: { icon: "🍃", label: "Calm" },
-  reflective: { icon: "🌿", label: "Reflective" },
-  sad: { icon: "🌧️", label: "Sad" },
-  stressed: { icon: "🟠", label: "Stressed" },
-  angry: { icon: "🔴", label: "Angry" },
+  happy: { label: "Happy" },
+  calm: { label: "Calm" },
+  reflective: { label: "Reflective" },
+  sad: { label: "Sad" },
+  stressed: { label: "Stressed" },
+  angry: { label: "Angry" },
 };
 const quickPrompts = [
   "Quick emotional check-in",
@@ -20,12 +22,12 @@ const quickPrompts = [
   "I am feeling grateful",
 ];
 const moodColor = {
-  happy: "bg-[#e8ab5f]/80",
-  calm: "bg-[#8eb184]/80",
-  reflective: "bg-[#a7b899]/80",
-  sad: "bg-[#7f8b74]/80",
-  stressed: "bg-[#da8b5b]/80",
-  angry: "bg-red-400/70",
+  happy: "bg-mood-happy",
+  calm: "bg-mood-calm",
+  reflective: "bg-mood-reflective",
+  sad: "bg-mood-sad",
+  stressed: "bg-mood-stressed",
+  angry: "bg-mood-angry",
 };
 
 export default function ChatPage() {
@@ -35,9 +37,7 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false);
   const [quickEntry, setQuickEntry] = useState("");
   const [mood, setMood] = useState("calm");
-  const [themeMode] = useState("midnight");
-  const [writingMode] = useState("focus");
-  const [ambientOn] = useState(true);
+  const [settings, setSettings] = useState({ reducedMotion: false, privacyMode: false });
   const [recentEntries, setRecentEntries] = useState([]);
   const [selectedEntryId, setSelectedEntryId] = useState(null);
   const [smartPrompt, setSmartPrompt] = useState("");
@@ -45,7 +45,13 @@ export default function ChatPage() {
   const [chatMode, setChatMode] = useState("quick");
   const [responseStyle, setResponseStyle] = useState(50);
   const [useMemory, setUseMemory] = useState(true);
+  const [allowOpenAIFallback, setAllowOpenAIFallback] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [statusText, setStatusText] = useState("");
+  const [chatSearch, setChatSearch] = useState("");
+  const [providerAlert, setProviderAlert] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [quickEntryStatus, setQuickEntryStatus] = useState("");
   function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
@@ -54,21 +60,30 @@ export default function ChatPage() {
   const endRef = useRef(null);
 
   useEffect(() => {
+    try {
+      const raw = localStorage.getItem("equoria-settings");
+      if (raw) setSettings((prev) => ({ ...prev, ...JSON.parse(raw) }));
+    } catch {
+      setSettings({ reducedMotion: false, privacyMode: false });
+    }
+  }, []);
+
+  useEffect(() => {
     apiFetch("/api/chat/session")
       .then((data) => setTurns(data.turns || []))
-      .catch(() => {});
+      .catch((error) => setLoadError(error.message));
     apiFetch("/api/journal/recent")
       .then((data) => {
         const entries = data.entries || [];
         setRecentEntries(entries);
         setSelectedEntryId(entries[0]?._id || null);
       })
-      .catch(() => {});
+      .catch((error) => setLoadError(error.message));
   }, []);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [turns, loading]);
+    endRef.current?.scrollIntoView({ behavior: settings.reducedMotion ? "auto" : "smooth", block: "end" });
+  }, [turns, loading, settings.reducedMotion]);
 
   useEffect(() => {
     if (!recentEntries.length) {
@@ -108,6 +123,7 @@ export default function ChatPage() {
             mode: chatMode,
             responseStyle,
             useMemory,
+            allowOpenAIFallback,
           },
         }),
       });
@@ -119,13 +135,20 @@ export default function ChatPage() {
       }
       const next = {
         userMessage: userMsg,
-        aiResponse: data.payload.question,
+        aiResponse: [String(data.payload.insight || "").trim(), String(data.payload.question || "").trim()]
+          .filter(Boolean)
+          .join("\n\n"),
         evidence: data.payload.evidence,
         confidence: data.payload.confidence,
         fallback: data.payload.fallback,
         reasoning: data.payload.reasoning,
         focus: data.payload.currentFocus || "general_reflection",
       };
+      if (data.payload.providerAlert) {
+        setProviderAlert(data.payload.providerAlert);
+      } else {
+        setProviderAlert("");
+      }
       setTurns((prev) => [...prev, next]);
       setMeta({ readiness: data.readiness, confidence: data.payload.confidence });
     } catch (error) {
@@ -153,13 +176,19 @@ export default function ChatPage() {
 
   async function saveQuickEntry() {
     if (!quickEntry.trim()) return;
-    const saved = await apiFetch("/api/journal/quick-entry", {
-      method: "POST",
-      body: JSON.stringify({ content: quickEntry, mood }),
-    });
-    setRecentEntries((prev) => [saved, ...prev].slice(0, 30));
-    setSelectedEntryId(saved._id);
-    setQuickEntry("");
+    setQuickEntryStatus("Saving...");
+    try {
+      const saved = await apiFetch("/api/journal/quick-entry", {
+        method: "POST",
+        body: JSON.stringify({ content: quickEntry, mood }),
+      });
+      setRecentEntries((prev) => [saved, ...prev].slice(0, 30));
+      setSelectedEntryId(saved._id);
+      setQuickEntry("");
+      setQuickEntryStatus("Saved");
+    } catch (error) {
+      setQuickEntryStatus(error.message || "Save failed");
+    }
   }
 
   function useQuickPrompt(prompt) {
@@ -175,6 +204,28 @@ export default function ChatPage() {
     }
   }
 
+  function jumpToLatest() {
+    endRef.current?.scrollIntoView({ behavior: settings.reducedMotion ? "auto" : "smooth", block: "end" });
+  }
+
+  function exportChatHistory() {
+    if (!turns.length) return;
+    const lines = turns.flatMap((turn) => [
+      `You: ${String(turn.userMessage || "").trim()}`,
+      `ReflectAI: ${String(turn.aiResponse || "").trim()}`,
+      "",
+    ]);
+    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = `reflectai-chat-${new Date().toISOString().slice(0, 10)}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(href);
+  }
+
   const selectedEntry = recentEntries.find((e) => e._id === selectedEntryId) || null;
   const sparkline = recentEntries.slice(0, 14).reverse();
   const heroGreeting = new Date().getHours() < 16 ? "Good day" : "Good evening";
@@ -185,82 +236,170 @@ export default function ChatPage() {
     .find((t) => String(t.userMessage || "").trim().length > 10)?.userMessage;
   const toneClass =
     latestFocus === "emotional_safety"
-      ? "bg-[#1a3a44]/20"
+      ? "bg-surface-teal/20"
       : latestFocus === "positive_state"
-        ? "bg-[#3a4f3a]/20"
+        ? "bg-brand-500/15"
         : latestFocus === "relationships"
-          ? "bg-[#4a3550]/20"
-          : "bg-[#1f2a22]/20";
+          ? "bg-mood-reflective/10"
+          : "bg-surface-olive/35";
+  const searchText = chatSearch.trim().toLowerCase();
+  const displayedTurns = useMemo(
+    () =>
+      !searchText
+        ? turns
+        : turns.filter((turn) =>
+            `${turn.userMessage || ""} ${turn.aiResponse || ""}`.toLowerCase().includes(searchText),
+          ),
+    [searchText, turns],
+  );
+  const sections = [
+    { id: "chat-controls", label: "Controls" },
+    { id: "chat-conversation", label: "Conversation" },
+    { id: "chat-compose", label: "Compose" },
+    { id: "chat-quick-journal", label: "Quick journal" },
+  ];
+  function jumpTo(id) {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   return (
-    <div
-      className={`text-white flex flex-col theme-${themeMode} ${
-        ambientOn ? "living-bg" : ""
-      }`}
-    >
+    <div className={`text-white flex flex-col ${!settings.reducedMotion ? "living-bg" : ""}`}>
       <main className="p-3 md:p-6">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4 h-full">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-4 h-full">
           <section className={`glass rounded-3xl flex flex-col min-h-[70vh] ${toneClass}`}>
-            <div className="p-4 md:p-5 border-b border-white/10 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm text-white/80">{heroGreeting}, {user?.name}</p>
-                <p className="text-xs text-white/60 mt-1">{smartPrompt}</p>
+            <details className="px-4 md:px-5 pt-3 pb-1">
+              <summary className="cursor-pointer text-[11px] uppercase tracking-wider text-white/65">Jump to section</summary>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {sections.map((section) => (
+                  <button
+                    key={section.id}
+                    type="button"
+                    onClick={() => jumpTo(section.id)}
+                    className="rounded-full border border-white/10 bg-white/5 px-3 py-2 min-h-[44px] text-xs hover:bg-white/10"
+                  >
+                    {section.label}
+                  </button>
+                ))}
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs px-3 py-1 rounded-full bg-[#8fae73]/25 border border-[#c5d7a6]/35">
-                  Confidence {(meta.confidence * 100).toFixed(0)}%
-                </span>
-                <Link to="/dashboard" className="text-xs px-3 py-1 rounded-full bg-white/5 border border-white/10 hover:bg-white/10">
+            </details>
+            <div className="p-4 md:p-5 border-b border-white/10 flex items-center justify-between gap-2">
+              <PageHeader eyebrow={`${heroGreeting}, ${user?.name || "there"}`} title="Ask ReflectAI" description={smartPrompt} />
+              <div className="flex items-center gap-2 shrink-0">
+                <StatusPill className="hidden sm:inline-flex">How sure: {(meta.confidence * 100).toFixed(0)}%</StatusPill>
+                <Link to="/dashboard" className="text-xs px-2.5 py-1 rounded-full bg-white/5 border border-white/10 hover:bg-white/10">
                   Home
                 </Link>
               </div>
             </div>
-            <div className="px-4 md:px-5 py-3 border-b border-white/10 space-y-3">
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { id: "quick", label: "Quick chat" },
-                  { id: "deep", label: "Deep reflection" },
-                  { id: "analysis", label: "Pattern analysis" },
-                ].map((item) => (
+            <div id="chat-controls" className="px-4 md:px-5 py-3 border-b border-white/10 space-y-3">
+              {providerAlert ? (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="rounded-xl border border-orange-300/35 bg-orange-500/10 px-3 py-2 text-xs text-orange-100"
+                >
+                  {providerAlert}
+                </div>
+              ) : null}
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/50" />
+                <input
+                  type="text"
+                  value={chatSearch}
+                  onChange={(e) => setChatSearch(e.target.value)}
+                  placeholder="Search in this chat..."
+                  className="w-full rounded-xl bg-surface-field border border-white/10 pl-9 pr-9 py-2.5 text-sm outline-none focus:border-brand-200"
+                />
+                {chatSearch ? (
                   <button
-                    key={item.id}
                     type="button"
-                    onClick={() => setChatMode(item.id)}
-                    className={`text-xs px-3 py-2 rounded-full border ${
-                      chatMode === item.id
-                        ? "bg-[#8fae73]/30 border-[#c5d7a6]"
-                        : "bg-white/5 border-white/10 hover:bg-white/10"
-                    }`}
+                    onClick={() => setChatSearch("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1 text-white/60 hover:bg-white/10"
+                    aria-label="Clear search"
                   >
-                    {item.label}
+                    <X size={14} />
                   </button>
-                ))}
+                ) : null}
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-3 items-center">
-                <label className="text-xs text-white/70 flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={useMemory}
-                    onChange={(e) => setUseMemory(e.target.checked)}
-                    className="accent-[#8fae73]"
-                  />
-                  Use journal memory
-                </label>
-                <label className="text-xs text-white/70 flex items-center gap-2">
-                  <span className="shrink-0">Response style</span>
-                  <input
-                    className="w-full"
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={responseStyle}
-                    onChange={(e) => setResponseStyle(Number(e.target.value))}
-                  />
-                  <span className="text-[11px] text-white/55 shrink-0">
-                    {responseStyle < 35 ? "Very gentle" : responseStyle < 70 ? "Balanced" : "Analytical"}
-                  </span>
-                </label>
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowAdvanced((prev) => !prev)}
+                className="text-xs min-h-[44px] px-3 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-white/10"
+              >
+                {showAdvanced ? "Hide advanced controls" : "Show advanced controls"}
+              </button>
+              {showAdvanced ? (
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { id: "quick", label: "Quick reply" },
+                      { id: "deep", label: "Go deeper" },
+                      { id: "analysis", label: "Find patterns" },
+                    ].map((item) => (
+                      <ToggleButton
+                        key={item.id}
+                        selected={chatMode === item.id}
+                        onClick={() => setChatMode(item.id)}
+                      >
+                        {item.label}
+                      </ToggleButton>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-3 items-center">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <label className="text-xs text-white/70 flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={useMemory}
+                          onChange={(e) => setUseMemory(e.target.checked)}
+                          className="accent-brand-300"
+                        />
+                        Use past journal notes
+                      </label>
+                      <label className="text-xs text-white/70 flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={allowOpenAIFallback}
+                          onChange={(e) => setAllowOpenAIFallback(e.target.checked)}
+                          className="accent-brand-300"
+                        />
+                        OpenAI backup (paid)
+                      </label>
+                    </div>
+                    <label className="text-xs text-white/70 flex items-center gap-2">
+                      <span className="shrink-0">Reply style</span>
+                      <input
+                        className="w-full accent-brand-300"
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={responseStyle}
+                        onChange={(e) => setResponseStyle(Number(e.target.value))}
+                      />
+                      <span className="text-[11px] text-white/55 shrink-0">
+                        {responseStyle < 35 ? "Very gentle" : responseStyle < 70 ? "Balanced" : "More detailed"}
+                      </span>
+                    </label>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={jumpToLatest}
+                      className="text-xs px-3 py-2 min-h-[44px] rounded-full bg-white/5 border border-white/10 hover:bg-brand-300/20"
+                    >
+                      Jump to latest
+                    </button>
+                    <button
+                      type="button"
+                      onClick={exportChatHistory}
+                      disabled={!turns.length}
+                      className="text-xs px-3 py-2 min-h-[44px] rounded-full bg-white/5 border border-white/10 disabled:opacity-50 hover:bg-brand-300/20"
+                    >
+                      Export chat
+                    </button>
+                  </div>
+                </>
+              ) : null}
             </div>
             {lastUserThread && (
               <div className="px-4 md:px-5 pt-3">
@@ -269,98 +408,126 @@ export default function ChatPage() {
                   onClick={() => setMessage(lastUserThread)}
                   className="w-full text-left text-xs rounded-xl px-3 py-2 bg-white/5 border border-white/10 hover:bg-white/10"
                 >
-                  Continue thread: "{lastUserThread.slice(0, 90)}{lastUserThread.length > 90 ? "..." : ""}"
+                  Continue this topic: "{lastUserThread.slice(0, 90)}{lastUserThread.length > 90 ? "..." : ""}"
                 </button>
               </div>
             )}
 
-            <div ref={listRef} className="flex-1 overflow-y-auto scroll-area p-4 md:p-6 space-y-4">
-              {turns.length === 0 && (
-                <div className="text-sm text-white/75 glass rounded-2xl p-4 max-w-2xl">
-                  Start with anything. ReflectAI will respond like a normal chat and adapt as your topic changes.
-                </div>
+            <div id="chat-conversation" ref={listRef} className="flex-1 overflow-y-auto scroll-area p-4 md:p-6 space-y-4" role="log" aria-live="polite">
+              {loadError && (
+                <PageState
+                  title="Chat history could not load"
+                  message={loadError}
+                />
               )}
+              {turns.length === 0 && (
+                <PageState
+                  title="Start with anything"
+                  message="ReflectAI will respond like a normal chat and adapt as your topic changes."
+                  action={
+                    <div className="flex flex-wrap gap-2">
+                      {quickPrompts.slice(0, 2).map((prompt) => (
+                        <button
+                          key={prompt}
+                          type="button"
+                          onClick={() => useQuickPrompt(prompt)}
+                          className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/80 hover:bg-brand-300/20"
+                        >
+                          {prompt}
+                        </button>
+                      ))}
+                    </div>
+                  }
+                />
+              )}
+              {turns.length > 0 && displayedTurns.length === 0 ? (
+                <PageState title="No matching messages" message="Try another word to search your chat history." />
+              ) : null}
 
-              {turns.map((turn, idx) => (
-                <motion.div key={idx} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2">
-                  <div className="rounded-2xl p-3 max-w-2xl ml-auto bg-[#8fae73]/30 soft-border">
-                    <p className="text-[11px] text-[#d9d2b0] mb-1">You</p>
-                    <p className="text-sm leading-6">{turn.userMessage}</p>
+              {displayedTurns.map((turn, idx) => (
+                <motion.div
+                  key={`${turn.createdAt || idx}-${turn.userMessage}`}
+                  initial={settings.reducedMotion ? false : { opacity: 0, y: 4 }}
+                  animate={settings.reducedMotion ? undefined : { opacity: 1, y: 0 }}
+                  className="space-y-2"
+                >
+                  <div className="rounded-[20px] p-3 max-w-2xl ml-auto bg-[#c8aa89]/28 border border-[#8f6f56]/35 shadow-[0_4px_12px_rgba(89,62,42,0.12)]">
+                    <p className="text-[11px] text-brand-100 mb-1">You</p>
+                    <p className="text-sm leading-6 whitespace-pre-line">{turn.userMessage}</p>
                   </div>
-                  <div className="glass rounded-2xl p-4 max-w-2xl">
-                    <p className="text-[11px] text-[#d9d2b0] mb-1">ReflectAI</p>
-                    <p className="text-sm leading-6">{turn.aiResponse}</p>
-                    {turn.evidence?.length > 0 && (
-                      <details className="mt-3 rounded-lg bg-[#111827] p-2 border border-white/10 text-xs">
-                        <summary className="cursor-pointer text-[#d9d2b0]">Why this response</summary>
-                        <div className="mt-2 grid gap-2">
-                          {turn.evidence.map((ev, i) => (
-                            <div key={i} className="rounded-lg bg-white/5 p-2 border border-white/10">
-                              <p className="text-[#d9d2b0]">
-                                {ev.date ? new Date(ev.date).toDateString() : "Journal evidence"}
-                              </p>
-                              <p className="text-white/80">{ev.quote || "Related journal reference."}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </details>
-                    )}
-                  </div>
+                  <AssistantMessage turn={turn} />
                 </motion.div>
               ))}
               {loading && (
-                <div className="glass rounded-2xl p-3 max-w-2xl">
-                  <p className="text-[11px] text-[#d9d2b0] mb-1">ReflectAI</p>
-                  <p className="text-sm text-white/70">{statusText || "Thinking..."}</p>
+                <div className="glass rounded-2xl p-4 max-w-2xl" role="status" aria-live="polite">
+                  <p className="text-[11px] text-brand-100 mb-2">ReflectAI</p>
+                  <div className="flex items-center gap-3 text-sm text-white/70">
+                    <span className="flex gap-1" aria-hidden="true">
+                      <span className="h-2 w-2 rounded-full bg-brand-200 skeleton-pulse" />
+                      <span className="h-2 w-2 rounded-full bg-brand-200 skeleton-pulse [animation-delay:120ms]" />
+                      <span className="h-2 w-2 rounded-full bg-brand-200 skeleton-pulse [animation-delay:240ms]" />
+                    </span>
+                    {statusText || "Thinking..."}
+                  </div>
                 </div>
               )}
               <div ref={endRef} />
             </div>
 
-            <div className="border-t border-white/10 p-4 md:p-5 space-y-3">
-              <div className="flex flex-wrap gap-2">
-                {quickPrompts.map((prompt) => (
-                  <button
-                    key={prompt}
-                    type="button"
-                    onClick={() => useQuickPrompt(prompt)}
-                    className="text-xs px-3 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-[#8fae73]/20"
-                  >
-                    {prompt}
-                  </button>
-                ))}
+            <div id="chat-compose" className="border-t border-white/10 p-4 md:p-5 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <StatusPill>Chat mode: {chatMode}</StatusPill>
+                <StatusPill>Style: {responseStyle < 35 ? "gentle" : responseStyle < 70 ? "balanced" : "analytical"}</StatusPill>
+                <StatusPill>{useMemory ? "Past notes on" : "Past notes off"}</StatusPill>
               </div>
-              <form onSubmit={sendMessage} className="flex gap-2 items-end">
+              <p className="text-[11px] text-white/55">
+                OpenAI backup is {allowOpenAIFallback ? "enabled for this session" : "off"}.
+              </p>
+              <details className="rounded-xl border border-white/10 bg-white/5 p-2">
+                <summary className="cursor-pointer text-xs text-white/75 px-1">Prompt ideas</summary>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {quickPrompts.map((prompt) => (
+                    <button
+                      key={prompt}
+                      type="button"
+                      onClick={() => useQuickPrompt(prompt)}
+                      className="text-xs px-3 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-brand-300/20"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+              </details>
+              <form onSubmit={sendMessage} className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-end">
                 <textarea
+                  aria-label="Message ReflectAI"
                   rows={2}
-                  className={`flex-1 rounded-xl bg-[#1f2a22] p-3 border border-white/10 outline-none focus:border-[#8fae73] resize-none min-h-11 ${
-                    writingMode === "typewriter" ? "text-lg leading-8" : ""
+                  className={`flex-1 rounded-xl bg-surface-field p-3 border border-white/10 outline-none focus:border-brand-200 resize-none min-h-11 ${
+                    settings.focusMode === false ? "text-lg leading-8" : ""
                   }`}
                   placeholder="Message ReflectAI... (Enter to send, Shift+Enter for new line)"
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   onKeyDown={onComposerKeyDown}
                 />
-                <button
-                  className="rounded-xl px-5 bg-[#8fae73] hover:bg-[#9fbe83] text-slate-900 min-h-11 font-medium disabled:opacity-60"
-                  disabled={loading || !message.trim()}
-                >
+                <Button disabled={loading || !message.trim()} className="w-full sm:w-auto">
                   Send
-                </button>
+                </Button>
               </form>
               <p className="text-xs text-white/60">
-                ReflectAI supports self-reflection and is not a medical service.
+                ReflectAI supports self-reflection. It is not medical care.
               </p>
             </div>
           </section>
 
-          <aside className="glass rounded-3xl p-4 md:p-5 h-fit xl:sticky xl:top-6 space-y-4">
+          <aside id="chat-quick-journal" className="glass rounded-3xl p-4 md:p-5 h-fit self-start lg:sticky lg:top-24 space-y-4">
             <div>
-              <p className="text-[#d9d2b0] text-xs uppercase tracking-wider">Quick Journal</p>
-              <p className="text-sm text-white/70 mt-1">Capture your current state without leaving chat.</p>
+              <p className="text-brand-100 text-xs uppercase tracking-wider">Quick Journal Note</p>
+              <p className="text-sm text-white/70 mt-1">Write a short note here without leaving chat.</p>
             </div>
             <textarea
-              className="w-full rounded-xl bg-[#1f2a22] p-3 border border-white/10 min-h-28 outline-none focus:border-[#8fae73]"
+              aria-label="Quick journal entry"
+              className="w-full rounded-xl bg-surface-field p-3 border border-white/10 min-h-28 outline-none focus:border-brand-200"
               value={quickEntry}
               onChange={(e) => setQuickEntry(e.target.value)}
               placeholder="How are you feeling today?"
@@ -370,38 +537,45 @@ export default function ChatPage() {
                 <button
                   type="button"
                   key={m}
+                  aria-pressed={mood === m}
                   onClick={() => setMood(m)}
                   className={`px-3 py-2 min-h-11 rounded-xl border text-sm flex items-center justify-center gap-2 ${
-                    mood === m ? "bg-[#8fae73]/30 border-[#c5d7a6]" : "border-white/10"
+                    mood === m ? "bg-brand-300/30 border-brand-100" : "border-white/10"
                   }`}
                 >
-                  <span>{moodMeta[m]?.icon || "•"}</span>
+                  <span className={`h-2.5 w-2.5 rounded-full ${moodColor[m] || "bg-white/40"}`} aria-hidden="true" />
                   <span>{moodMeta[m]?.label || m}</span>
                 </button>
               ))}
             </div>
-            <button
+            <Button
               type="button"
-              className="w-full px-4 py-3 min-h-11 rounded-xl bg-[#8fae73] hover:bg-[#9fbe83] text-slate-900 font-medium"
+              className="w-full"
               onClick={saveQuickEntry}
             >
               Save Journal Entry
-            </button>
+            </Button>
+            {quickEntryStatus && <p className="text-xs text-white/65">{quickEntryStatus}</p>}
 
-            <div className="border-t border-white/10 pt-4 space-y-3">
-              <p className="text-[#d9d2b0] text-xs uppercase tracking-wider">Emotional Timeline</p>
-              <div className="flex items-end gap-1 h-8">
-                {sparkline.map((entry) => (
-                  <button
-                    key={entry._id}
-                    type="button"
-                    title={`${new Date(entry.createdAt).toDateString()} • ${entry.mood}`}
-                    onClick={() => setSelectedEntryId(entry._id)}
-                    className={`w-3 rounded-t ${moodColor[entry.mood] || "bg-white/40"} ${
-                      selectedEntryId === entry._id ? "h-8 ring-1 ring-white/80" : "h-5"
-                    }`}
-                  />
-                ))}
+            <details className="border-t border-white/10 pt-4 space-y-3">
+              <summary className="cursor-pointer text-brand-100 text-xs uppercase tracking-wider">Mood timeline</summary>
+              <div className="mt-3 flex items-end gap-1 h-8">
+                {sparkline.length ? (
+                  sparkline.map((entry) => (
+                    <button
+                      key={entry._id}
+                      type="button"
+                      aria-label={`Select ${entry.mood} entry from ${new Date(entry.createdAt).toDateString()}`}
+                      title={`${new Date(entry.createdAt).toDateString()} • ${entry.mood}`}
+                      onClick={() => setSelectedEntryId(entry._id)}
+                      className={`w-3 rounded-t ${moodColor[entry.mood] || "bg-white/40"} ${
+                        selectedEntryId === entry._id ? "h-8 ring-1 ring-white/80" : "h-5"
+                      }`}
+                    />
+                  ))
+                ) : (
+                  <p className="text-xs text-white/60">Your mood timeline appears after your first journal entry.</p>
+                )}
               </div>
               <div className="max-h-48 overflow-y-auto scroll-area space-y-2">
                 {recentEntries.map((entry) => (
@@ -418,23 +592,56 @@ export default function ChatPage() {
                     <p className="text-[11px] text-white/60">
                       {new Date(entry.createdAt).toDateString()} • {entry.mood}
                     </p>
-                    <p className="text-xs line-clamp-2 text-white/80">{entry.content}</p>
+                    <p className="text-xs line-clamp-2 text-white/80">
+                      {settings.privacyMode ? "Private preview hidden" : entry.content}
+                    </p>
                   </button>
                 ))}
               </div>
               {selectedEntry && (
-                <div className="rounded-xl p-3 bg-[#111827] border border-white/10">
-                  <p className="text-[11px] text-[#d9d2b0]">
+                <div className="rounded-xl p-3 bg-surface-field border border-white/10">
+                  <p className="text-[11px] text-brand-100">
                     {new Date(selectedEntry.createdAt).toDateString()} • {selectedEntry.mood}
                   </p>
-                  <p className="text-sm text-white/85 mt-1">{selectedEntry.content}</p>
+                  <p className="text-sm text-white/85 mt-1">
+                    {settings.privacyMode ? "Private preview hidden" : selectedEntry.content}
+                  </p>
                 </div>
               )}
-            </div>
+            </details>
           </aside>
         </div>
       </main>
     </div>
+  );
+}
+
+function AssistantMessage({ turn }) {
+  return (
+    <Card className="max-w-2xl">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] text-brand-100 mb-1">ReflectAI</p>
+          <p className="text-sm leading-6 whitespace-pre-line">{turn.aiResponse}</p>
+        </div>
+        <StatusPill>{Math.round((turn.confidence || 0) * 100)}%</StatusPill>
+      </div>
+      {turn.evidence?.length > 0 && (
+        <details className="mt-3 rounded-xl bg-slate-950/70 p-3 border border-white/10 text-xs">
+          <summary className="cursor-pointer text-brand-100">Evidence used</summary>
+          <div className="mt-3 grid gap-2">
+            {turn.evidence.map((ev, i) => (
+              <div key={`${ev.journalId || i}-${ev.date || ""}`} className="rounded-lg bg-white/5 p-3 border border-white/10">
+                <p className="text-brand-100">
+                  {ev.date ? new Date(ev.date).toDateString() : "Journal evidence"}
+                </p>
+                <p className="text-white/80 mt-1">{ev.quote || "Related journal reference."}</p>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </Card>
   );
 }
 

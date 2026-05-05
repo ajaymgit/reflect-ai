@@ -7,19 +7,25 @@ import RetrospectAnalysis from "../../models/RetrospectAnalysis.js";
 import { env, policyConfig } from "../../shared/config/env.js";
 import { AppError } from "../../shared/utils/AppError.js";
 
-const usingGeminiCompat = !env.OPENAI_API_KEY && !!env.GEMINI_API_KEY;
-const aiApiKey = env.OPENAI_API_KEY || env.GEMINI_API_KEY;
-const aiModel = env.AI_MODEL || (usingGeminiCompat ? "gemini-2.0-flash" : "gpt-4.1-mini");
-const aiTemperature = usingGeminiCompat ? 0.7 : 0.45;
+const geminiModel = env.GEMINI_MODEL || "gemini-2.0-flash";
+const openaiModel = env.OPENAI_MODEL || env.AI_MODEL || "gpt-4.1-mini";
+const openaiFallbackMode = String(env.OPENAI_FALLBACK_MODE || "manual").toLowerCase();
 const useOllama = String(env.USE_OLLAMA || "true").toLowerCase() !== "false";
 const ollamaBaseUrl = env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
 const ollamaModel = env.OLLAMA_MODEL || "llama3.2:3b";
-const openai = aiApiKey
+const geminiClient = env.GEMINI_API_KEY
   ? new OpenAI({
-      apiKey: aiApiKey,
+      apiKey: env.GEMINI_API_KEY,
       timeout: 12000,
       maxRetries: 1,
-      ...(usingGeminiCompat ? { baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/" } : {}),
+      baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+    })
+  : null;
+const openaiClient = env.OPENAI_API_KEY
+  ? new OpenAI({
+      apiKey: env.OPENAI_API_KEY,
+      timeout: 12000,
+      maxRetries: 1,
     })
   : null;
 const fallbackTemplates = [
@@ -33,6 +39,8 @@ const topicSwitchRegex =
   /\b(something else|different topic|change topic|not this|stop talking about|move on|new topic|talk about something else)\b/i;
 const greetingRegex = /\b(hi|hello|hey|yo|good morning|good evening)\b/i;
 const positiveRegex = /\b(happy|great|good|excited|grateful|better|awesome|nice)\b/i;
+const positiveOutcomeRegex =
+  /\b(passed|pass|did well|went well|succeeded|success|nailed|aced|completed|finished|cleared|won)\b/i;
 const openChatRegex =
   /\b(let'?s talk|let us talk|open chat|free talk|just chat|talk about anything|random talk)\b/i;
 const relationshipRegex = /\b(relationship|relationships|friend|friends|partner|family|dating)\b/i;
@@ -289,13 +297,14 @@ function textToPayload(text, context) {
   };
 }
 
-function normalizeChatSettings(raw = {}) {
+export function normalizeChatSettings(raw = {}) {
   const mode = ["quick", "deep", "analysis"].includes(raw.mode) ? raw.mode : "quick";
   const responseStyle = Number.isFinite(raw.responseStyle)
     ? Math.max(0, Math.min(100, Number(raw.responseStyle)))
     : 50;
   const useMemory = raw.useMemory !== false;
-  return { mode, responseStyle, useMemory };
+  const allowOpenAIFallback = raw.allowOpenAIFallback === true;
+  return { mode, responseStyle, useMemory, allowOpenAIFallback };
 }
 
 function humanizeQuestion(question = "", focus = "general_reflection") {
@@ -355,7 +364,7 @@ function detectTopicShift(userMessage) {
   return topicSwitchRegex.test(text);
 }
 
-function detectIntent(userMessage) {
+export function detectIntent(userMessage) {
   const text = normalizeText(userMessage);
   const simpleOpenChat = /^(chat|talk|open chat|lets chat)$/.test(text);
   if (detectTopicShift(text)) return "topic_switch";
@@ -369,6 +378,7 @@ function detectIntent(userMessage) {
   if (greetingRegex.test(text)) return "greeting";
   if (uncertainRegex.test(text)) return "uncertain";
   if (affirmativeRegex.test(text)) return "affirmative";
+  if (positiveOutcomeRegex.test(text)) return "positive_checkin";
   if (positiveRegex.test(text)) return "positive_checkin";
   return "reflection";
 }
@@ -453,7 +463,7 @@ function buildHeuristicPayload({ userMessage, candidates, themes, healthQuality,
   };
 }
 
-function buildIntentPayload({ intent, candidates }) {
+export function buildIntentPayload({ intent, candidates }) {
   const evidence = candidates.length ? [candidates[0]] : [];
   if (intent === "greeting") {
     return {
@@ -617,7 +627,7 @@ function avoidRepeatedQuestion(payload, recentTurns = []) {
   };
 }
 
-function buildContextFollowUp({ userMessage, sessionTurns = [] }) {
+export function buildContextFollowUp({ userMessage, sessionTurns = [] }) {
   if (!sessionTurns.length) return null;
   const text = normalizeText(userMessage);
   const lastTurn = sessionTurns[sessionTurns.length - 1];
@@ -685,6 +695,22 @@ function buildContextFollowUp({ userMessage, sessionTurns = [] }) {
     };
   }
 
+  if (
+    /because|passed|did well|went well|exam|cleared|won|success|succeeded/.test(text) &&
+    /made today feel better|positive shift|what do you think made today feel better/.test(lastAi)
+  ) {
+    return {
+      schemaVersion: "1.0",
+      insight: "That is a big win, and you earned it.",
+      question: "What do you think helped you perform well this time that you can reuse next time too?",
+      evidence: [],
+      confidence: 0.68,
+      reasoning: "Positive continuation follow-up to keep context on achievement thread.",
+      fallback: false,
+      currentFocus: "positive_state",
+    };
+  }
+
   return null;
 }
 
@@ -741,7 +767,7 @@ async function generateInsightWithOllama(prompt) {
 }
 
 async function generateInsight(context, userMessage) {
-  if (!openai && !useOllama) {
+  if (!geminiClient && !openaiClient && !useOllama) {
     throw new AppError("AI_PARSE_FAILED", "AI key missing; AI generation unavailable", 502);
   }
   const prompt = `
@@ -767,8 +793,7 @@ Rules:
 - Keep wording simple and conversational. Avoid corporate phrases and avoid repeating the same sentence patterns.
 - Start from empathy first, then one clear reflective question.
 - Never ask more than one main question per turn.
-- Keep question under 24 words.
-- Keep insight under 28 words.
+- Keep language concise but human. Prefer 2-4 short sentences total.
 - If user says only a short opener like "hi", respond with a friendly check-in question.
 - If user says "chat", "lets talk", or "open chat", do NOT force a theme; invite free conversation.
 - If user says "something else" or asks topic switch, acknowledge and ask what they want to discuss now.
@@ -785,9 +810,9 @@ Rules:
   - useMemory=false: do not reference old journals or prior sessions.
   - responseStyle in [0..100]: lower means softer friend-like, higher means more analytical but still humane.
 - Mode output guardrails (MUST):
-  - quick: one short friendly check-in question, no heavy analysis language.
-  - deep: include one emotionally validating sentence + one deeper pattern question.
-  - analysis: explicitly mention one observed pattern/trend before the question.
+  - quick: one warm short reflection + one simple follow-up question.
+  - deep: include emotional validation + one thought-provoking deeper question.
+  - analysis: mention one observed pattern/trend, then ask one probing question.
 - Use context.blueprint.depthLevel to adapt tone:
   - "light": casual chat tone, short and easy.
   - "reflective": warm reflective tone with one gentle question.
@@ -802,49 +827,93 @@ ${userMessage}
 `;
 
   let lastError = null;
+  let geminiRateLimited = false;
+  const aiTemperature = 0.55;
+  const openaiAllowedForTurn = openaiClient && (openaiFallbackMode === "auto" || context.settings?.allowOpenAIFallback === true);
+
+  const parseModelOutput = (text) => {
+    const parsed = parseJsonSafe(text);
+    if (validateAiPayload(parsed)) return parsed;
+    const coerced = coerceAiPayload(parsed);
+    if (coerced) return coerced;
+    return textToPayload(text, context);
+  };
+
+  const runProvider = async (provider) => {
+    const model = provider === "gemini" ? geminiModel : openaiModel;
+    const client = provider === "gemini" ? geminiClient : openaiClient;
+    if (!client) return null;
+    const mode = context.settings?.mode || "quick";
+    const style = Number(context.settings?.responseStyle ?? 50);
+    const tunedTemp =
+      mode === "analysis" ? 0.48 : mode === "deep" ? 0.64 : style < 40 ? 0.6 : aiTemperature;
+    const result = await client.chat.completions.create({
+      model,
+      temperature: tunedTemp,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const text = String(result.choices?.[0]?.message?.content || "").replace(/```json|```/g, "").trim();
+    const payload = parseModelOutput(text);
+    if (!payload) {
+      throw new AppError("AI_PARSE_FAILED", `${provider} response could not be parsed`, 502);
+    }
+    return payload;
+  };
+
   for (let attempt = 0; attempt < 3; attempt += 1) {
     if (useOllama) {
       try {
-        return await generateInsightWithOllama(prompt);
+        const payload = await generateInsightWithOllama(prompt);
+        return { payload, source: "ollama" };
       } catch {
         // Fall through to cloud LLM if configured.
       }
     }
 
-    if (!openai) continue;
-
     try {
-      let text = "";
-      if (usingGeminiCompat) {
-        const mode = context.settings?.mode || "quick";
-        const style = Number(context.settings?.responseStyle ?? 50);
-        const tunedTemp =
-          mode === "analysis" ? 0.45 : mode === "deep" ? 0.62 : style < 40 ? 0.58 : 0.5;
-        const result = await openai.chat.completions.create({
-          model: aiModel,
-          temperature: tunedTemp ?? aiTemperature,
-          messages: [{ role: "user", content: prompt }],
-        });
-        text = String(result.choices?.[0]?.message?.content || "").replace(/```json|```/g, "").trim();
-      } else {
-        const result = await openai.responses.create({
-          model: aiModel,
-          input: prompt,
-          temperature: aiTemperature,
-        });
-        text = String(result.output_text || "").replace(/```json|```/g, "").trim();
+      // Gemini first (cost-saving), then OpenAI fallback only if needed.
+      if (geminiClient) {
+        try {
+          const payload = await runProvider("gemini");
+          if (payload) return { payload, source: "gemini" };
+        } catch (error) {
+          lastError = error;
+          if (error?.status === 429 || /429|rate limit/i.test(String(error?.message || ""))) {
+            geminiRateLimited = true;
+          }
+        }
       }
-      const parsed = parseJsonSafe(text);
-      if (validateAiPayload(parsed)) return parsed;
-      const coerced = coerceAiPayload(parsed);
-      if (coerced) return coerced;
-      const textPayload = textToPayload(text, context);
-      if (textPayload) return textPayload;
+
+      if (openaiAllowedForTurn) {
+        const payload = await runProvider("openai");
+        if (payload) {
+          return {
+            payload,
+            source: "openai",
+            notice: geminiRateLimited
+              ? "Gemini limit reached. Switched to OpenAI backup for this turn."
+              : "",
+          };
+        }
+      }
     } catch (error) {
       lastError = error;
-      // Try the next attempt before failing hard.
       continue;
     }
+  }
+  if (geminiRateLimited && !openaiClient) {
+    throw new AppError(
+      "AI_RATE_LIMITED",
+      "Gemini limit reached. Stop chat execution for now and switch to OpenAI backup when needed.",
+      429,
+    );
+  }
+  if (geminiRateLimited && !openaiAllowedForTurn) {
+    throw new AppError(
+      "AI_RATE_LIMITED",
+      "Gemini limit reached. Stopped here to avoid paid OpenAI usage. Turn on OpenAI fallback to continue this turn.",
+      429,
+    );
   }
   if (lastError?.status === 429 || /429/.test(String(lastError?.message || ""))) {
     throw new AppError("AI_RATE_LIMITED", "AI provider rate limit reached", 429);
@@ -852,7 +921,7 @@ ${userMessage}
   throw new AppError("AI_PARSE_FAILED", "AI response could not be parsed", 502);
 }
 
-function verifyInsight({ payload, healthQuality }) {
+export function verifyInsight({ payload, healthQuality }) {
   const decisions = {
     evidencePresent: payload.fallback ? true : payload.evidence.length > 0,
     confidenceOk: payload.fallback ? true : payload.confidence >= policyConfig.minConfidence,
@@ -894,21 +963,43 @@ export async function buildChatContext(userId) {
 export async function processChatTurn({ userId, userMessage, chatSettings = {} }) {
   const normalizedSettings = normalizeChatSettings(chatSettings);
   const context = await buildChatContext(userId);
+  const recentTurns = context.session?.turns || [];
   const journalPool = normalizedSettings.useMemory ? context.journals : [];
-  const evidenceCandidates = buildEvidenceCandidates(journalPool, userMessage, "reflection");
+  const intent = detectIntent(userMessage);
+  const evidenceCandidates = buildEvidenceCandidates(journalPool, userMessage, intent);
   const blueprint = buildLongitudinalBlueprint({
     userMessage,
     journals: journalPool,
     themes: context.themes,
-    sessionTurns: context.session?.turns || [],
+    sessionTurns: recentTurns,
     mode: normalizedSettings.mode,
+  });
+  const contextFollowUp = buildContextFollowUp({ userMessage, sessionTurns: recentTurns });
+  const intentPayload = buildIntentPayload({ intent, candidates: evidenceCandidates });
+  const recentFocuses = recentTurns.slice(-3).map((t) => String(t.focus || "").toLowerCase());
+  const heuristicPayload = buildHeuristicPayload({
+    userMessage,
+    candidates: evidenceCandidates,
+    themes: context.themes,
+    healthQuality: context.healthQuality,
+    forceNewFocus: intent === "topic_switch",
+    recentFocuses,
   });
   let payload = null;
   let parseFailed = false;
   let responseSource = "fallback";
-  const aiAvailable = !!openai || useOllama;
+  const aiAvailable = !!geminiClient || !!openaiClient || useOllama;
 
-  if (aiAvailable) {
+  // Prefer deterministic conversational continuity for short follow-ups before model call.
+  if (contextFollowUp) {
+    payload = contextFollowUp;
+    responseSource = "continuity";
+  } else if (intentPayload && intent !== "reflection") {
+    payload = intentPayload;
+    responseSource = "intent";
+  }
+
+  if (!payload && aiAvailable) {
     try {
       const generated = await generateInsight(
         {
@@ -924,13 +1015,18 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
           healthQuality: context.healthQuality,
           blueprint,
           settings: normalizedSettings,
-          lastAssistantQuestion: String((context.session?.turns || []).slice(-1)[0]?.aiResponse || ""),
+          lastAssistantQuestion: String(recentTurns.slice(-1)[0]?.aiResponse || ""),
           normalizedUserMessage: normalizeText(userMessage),
+          inferredIntent: intent,
         },
         userMessage,
       );
-      payload = enrichPayload(generated, evidenceCandidates);
-      responseSource = usingGeminiCompat ? "gemini" : "openai";
+      payload = enrichPayload(generated.payload, evidenceCandidates);
+      payload = avoidRepeatedQuestion(payload, recentTurns);
+      responseSource = generated.source || "openai";
+      if (generated.notice) {
+        payload.providerAlert = generated.notice;
+      }
     } catch (error) {
       parseFailed = true;
       payload = null;
@@ -940,31 +1036,37 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
         error?.statusCode === 429 ||
         /rate limit|429/i.test(String(error?.message || ""));
       if (rateLimited) {
-        payload = fallbackPayload({
+        payload = heuristicPayload || fallbackPayload({
           question:
-            "I am still here with you. The AI is briefly overloaded right now - can we try again in about a minute?",
+            "Gemini limit was reached, so I paused here to avoid paid OpenAI usage. Retry later or enable OpenAI fallback.",
           insight: "",
           evidence: [],
           currentFocus: "user_selected",
           reasoning: "Minimal non-rule fallback due to upstream rate limiting.",
         });
+        if (payload && !payload.fallback) {
+          payload.reasoning = `${payload.reasoning} Used heuristic reflective continuity because upstream model was rate-limited.`;
+        }
+        payload.providerAlert =
+          "Gemini limit reached. Execution paused to reduce cost. OpenAI backup is currently manual-only.";
       }
     }
   }
 
   if (!payload) {
-    payload = fallbackPayload({
-      question: "I am here with you. I had a brief connection issue. Could you send that once more?",
-      insight: "",
-      evidence: [],
-      currentFocus: "user_selected",
-      reasoning: "Minimal non-rule fallback after model generation failure.",
-    });
+    payload =
+      heuristicPayload ||
+      fallbackPayload({
+        question: "I am here with you. I had a brief connection issue. Could you send that once more?",
+        insight: "",
+        evidence: [],
+        currentFocus: "user_selected",
+        reasoning: "Minimal non-rule fallback after model generation failure.",
+      });
+    if (payload && !payload.fallback) {
+      payload.reasoning = `${payload.reasoning} Used heuristic reflective continuity after model generation failure.`;
+    }
     responseSource = "fallback";
-  }
-
-  if (responseSource !== "fallback" && useOllama) {
-    responseSource = "ollama";
   }
 
   if (!context.healthQuality.eligible && !payload.fallback) {
@@ -976,13 +1078,16 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
   const finalPayload = accepted ? payload : fallbackPayload();
   finalPayload.source = accepted ? responseSource : "fallback";
   finalPayload.chatSettings = normalizedSettings;
+  const responseText = [String(finalPayload.insight || "").trim(), String(finalPayload.question || "").trim()]
+    .filter(Boolean)
+    .join("\n\n");
 
   const audit = await AuditLog.create({
     userId,
     triggerReason: "chat_turn",
     retrievedMemoryIds: context.journals.map((j) => j._id.toString()),
     detectedPatterns: context.themes,
-    evidenceIds: (payload.evidence || []).map((e) => String(e.journalId || "")),
+    evidenceIds: (finalPayload.evidence || []).map((e) => String(e.journalId || "")),
     generatedQuestion: finalPayload.question,
     confidence: finalPayload.confidence,
     policyDecisions: {
@@ -1007,7 +1112,7 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
       $push: {
         turns: {
           userMessage,
-          aiResponse: finalPayload.question,
+          aiResponse: responseText || finalPayload.question,
           evidence: finalPayload.evidence,
           confidence: finalPayload.confidence,
           fallback: finalPayload.fallback,

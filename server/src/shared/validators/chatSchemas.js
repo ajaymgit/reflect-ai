@@ -8,6 +8,7 @@ export const chatMessageSchema = z.object({
         mode: z.enum(["quick", "deep", "analysis"]).optional(),
         responseStyle: z.number().min(0).max(100).optional(),
         useMemory: z.boolean().optional(),
+        allowOpenAIFallback: z.boolean().optional(),
       })
       .optional(),
   }),
@@ -21,6 +22,25 @@ export const quickJournalSchema = z.object({
     mood: z.enum(["happy", "calm", "reflective", "sad", "stressed", "angry"]),
   }),
   params: z.object({}).optional(),
+  query: z.object({}).optional(),
+});
+
+export const journalEntryByIdSchema = z.object({
+  body: z.object({}).optional(),
+  params: z.object({
+    id: z.string().min(1),
+  }),
+  query: z.object({}).optional(),
+});
+
+export const updateJournalEntrySchema = z.object({
+  body: z.object({
+    content: z.string().min(1).max(10000),
+    mood: z.enum(["happy", "calm", "reflective", "sad", "stressed", "angry"]),
+  }),
+  params: z.object({
+    id: z.string().min(1),
+  }),
   query: z.object({}).optional(),
 });
 

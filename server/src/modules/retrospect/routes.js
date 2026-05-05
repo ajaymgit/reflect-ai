@@ -50,4 +50,28 @@ router.get(
   }),
 );
 
+// Backward-compatible alias used by older scripts/clients.
+router.get(
+  "/latest",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const [entries, latest] = await Promise.all([
+      JournalEntry.find({ userId: req.user._id }).sort({ createdAt: -1 }).limit(20),
+      RetrospectAnalysis.findOne({ userId: req.user._id }).sort({ createdAt: -1 }),
+    ]);
+    const moodCounts = entries.reduce((acc, entry) => {
+      acc[entry.mood] = (acc[entry.mood] || 0) + 1;
+      return acc;
+    }, {});
+    const topMood = Object.entries(moodCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "reflective";
+    res.json({
+      emotionalPatternSummary: `Most frequent emotional tone across recent entries: ${topMood}.`,
+      socraticQuestion:
+        latest?.socraticQuestion ||
+        "When this pattern appears, what is the first internal signal you notice?",
+      confidence: latest?.confidence || 0.74,
+    });
+  }),
+);
+
 export default router;
