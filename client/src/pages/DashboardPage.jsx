@@ -54,27 +54,27 @@ export default function DashboardPage() {
 
   return (
     <main className={`p-4 md:p-6 living-bg ${moodClass}`}>
-      <div className="max-w-6xl mx-auto space-y-4">
-        <div className="glass rounded-3xl p-6 md:p-7">
-          <p className="text-[#d9d2b0] text-sm">{data?.greeting || "Welcome back"}</p>
-          <h2 className="text-3xl md:text-4xl font-semibold mt-2">How are you feeling today?</h2>
+      <div className="max-w-6xl mx-auto space-y-5">
+        <div className="ui-card rounded-3xl p-6 md:p-7">
+          <p className="ui-kicker">{data?.greeting || "Welcome back"}</p>
+          <h2 className="ui-title mt-2">How are you feeling today?</h2>
           <p className="text-sm text-white/70 mt-3 max-w-2xl">
             Start with a quick entry. Keep it short or write deeply, your history and mood patterns will build over time.
           </p>
           <div className="mt-5 flex gap-2 flex-wrap">
             <Link
               to="/journal/new"
-              className="inline-flex rounded-xl px-4 py-2.5 bg-[#8fae73] hover:bg-[#9fbe83] text-sm font-medium text-slate-900"
+              className="inline-flex px-4 py-2.5 text-sm ui-button-primary"
             >
               Write journal
             </Link>
-            <Link to="/chat" className="inline-flex rounded-xl px-5 py-3 bg-white/10 border border-white/15 hover:bg-white/15 text-base">
+            <Link to="/chat" className="inline-flex px-5 py-3 text-base ui-button-ghost">
               Continue reflection
             </Link>
           </div>
         </div>
 
-        <div className="glass rounded-2xl p-4 flex flex-wrap gap-2">
+        <div className="ui-card rounded-2xl p-4 flex flex-wrap gap-2">
           {ranges.map((item) => (
             <button
               key={item}
@@ -100,7 +100,7 @@ export default function DashboardPage() {
           <StatCard label="Current emotional state" value={data?.todaysMood ?? "--"} icon={Sparkles} />
         </div>
 
-        <div className="glass rounded-2xl p-5">
+        <div className="ui-card rounded-2xl p-5">
           <p className="text-xs text-[#d9d2b0] uppercase tracking-wider">How You've Been Feeling</p>
           <p className="text-sm text-white/75 mt-2">
             A simple mood snapshot from your recent journals.
@@ -122,13 +122,13 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="glass rounded-2xl p-4">
+        <div className="ui-card rounded-2xl p-4">
           <p className="text-xs text-[#c5d7a6] uppercase tracking-wider">Cumulative Insight</p>
           <p className="text-sm text-white/85 mt-2">{data?.cumulativeInsight || "Building your insight..."}</p>
         </div>
 
         <div className="grid gap-4">
-          <div className="glass rounded-2xl p-4">
+          <div className="ui-card rounded-2xl p-4">
             <div className="flex items-center justify-between">
               <h3 className="font-medium">Your recent moments</h3>
               <Link to="/journal/new" className="text-xs text-[#d9d2b0] hover:text-[#e6dfbf]">
@@ -148,7 +148,7 @@ export default function DashboardPage() {
             </div>
             <div className="mt-3 grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
               {(data?.recentEntries || []).slice(0, entryLimit).map((entry) => (
-                <div key={entry.id} className="rounded-xl bg-white/5 border border-white/10 p-3 relative overflow-hidden">
+                <div key={entry.id} className="surface p-3 relative overflow-hidden">
                   <span className={`absolute left-0 top-0 bottom-0 w-1 ${moodColors[entry.mood] || "bg-cyan-400/70"}`} />
                   <p className="text-xs text-white/60 pl-2">{new Date(entry.createdAt).toDateString()}</p>
                   <p className="text-sm text-white/85 mt-1 pl-2">{entry.title}</p>
@@ -165,7 +165,7 @@ export default function DashboardPage() {
 
 function StatCard({ label, value, icon: Icon, highlight = false }) {
   return (
-    <div className={`glass rounded-2xl p-5 ${highlight ? "shadow-[0_0_24px_rgba(143,174,115,0.28)]" : ""}`}>
+    <div className={`ui-card rounded-2xl p-5 ${highlight ? "shadow-[0_0_24px_rgba(143,174,115,0.28)]" : ""}`}>
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm text-white/70">{label}</p>
         {Icon ? <Icon size={18} className="text-[#d9d2b0]" /> : null}

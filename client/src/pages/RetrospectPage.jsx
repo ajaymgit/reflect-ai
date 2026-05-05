@@ -17,16 +17,16 @@ export default function RetrospectPage() {
   }));
 
   return (
-    <main className="p-4 md:p-6">
+    <main className="ui-page">
       <div className="max-w-6xl mx-auto space-y-4">
-        <div className="glass rounded-2xl p-5">
-          <p className="text-cyan-300 text-xs uppercase tracking-wider">Retrospect Analysis</p>
-          <h2 className="text-2xl font-semibold mt-1">Pattern and behavior review</h2>
+        <div className="ui-card rounded-2xl p-5">
+          <p className="ui-kicker">Retrospect Analysis</p>
+          <h2 className="ui-title mt-1">Pattern and behavior review</h2>
           <p className="text-sm text-white/70 mt-2">{data?.emotionalPatternSummary || "Analyzing entries..."}</p>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-4">
-          <div className="glass rounded-2xl p-4 lg:col-span-2">
+          <div className="ui-card rounded-2xl p-4 lg:col-span-2">
             <h3 className="font-medium">Emotional timeline</h3>
             <p className="text-xs text-white/60 mt-1">
               Each bar shows the emotional intensity of that day (higher means more uplifting/steady tone).
@@ -47,10 +47,10 @@ export default function RetrospectPage() {
             </div>
           </div>
 
-          <div className="glass rounded-2xl p-4 space-y-3">
+          <div className="ui-card rounded-2xl p-4 space-y-3">
             <h3 className="font-medium">Recurring themes</h3>
             {(data?.recurringThemes || []).map((theme) => (
-              <div key={theme} className="rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm">
+              <div key={theme} className="surface px-3 py-2 text-sm">
                 {theme.replace(/_/g, " ")}
               </div>
             ))}
@@ -62,10 +62,10 @@ export default function RetrospectPage() {
           <Card title="Health correlation" body={data?.healthCorrelation || "No correlation data yet."} />
         </div>
 
-        <div className="glass rounded-2xl p-4">
-          <p className="text-cyan-300 text-xs uppercase tracking-wider">Socratic question</p>
+        <div className="ui-card rounded-2xl p-4">
+          <p className="ui-kicker">Socratic question</p>
           <p className="text-white/90 mt-2">{data?.socraticQuestion || "What pattern feels most meaningful to reflect on next?"}</p>
-          <button className="mt-4 rounded-xl px-4 py-2 bg-violet-500 hover:bg-violet-400">
+          <button className="mt-4 px-4 py-2 ui-button-primary">
             Continue Reflection
           </button>
         </div>
@@ -94,8 +94,8 @@ function scoreToLabel(score) {
 
 function Card({ title, body }) {
   return (
-    <div className="glass rounded-2xl p-4">
-      <p className="text-cyan-300 text-xs uppercase tracking-wider">{title}</p>
+    <div className="ui-card rounded-2xl p-4">
+      <p className="ui-kicker">{title}</p>
       <p className="text-sm text-white/80 mt-2">{body}</p>
     </div>
   );

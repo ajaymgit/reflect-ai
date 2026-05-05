@@ -28,10 +28,10 @@ export default function SettingsPage() {
   }, [settings]);
 
   return (
-    <main className="p-4 md:p-6">
-      <div className="max-w-4xl mx-auto glass rounded-2xl p-5">
-        <p className="text-cyan-300 text-xs uppercase tracking-wider">Settings</p>
-        <h2 className="text-2xl font-semibold mt-1">Preferences</h2>
+    <main className="ui-page">
+      <div className="max-w-4xl mx-auto ui-card rounded-2xl p-5">
+        <p className="ui-kicker">Settings</p>
+        <h2 className="ui-title mt-1">Preferences</h2>
         <div className="mt-4 grid md:grid-cols-2 gap-3">
           <ToggleOption
             title="Smoother motion"
@@ -71,14 +71,14 @@ export default function SettingsPage() {
 
 function ToggleOption({ title, detail, checked, onChange }) {
   return (
-    <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+    <div className="surface p-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-medium">{title}</p>
         <button
           type="button"
           onClick={onChange}
           className={`rounded-full px-3 py-1 text-xs border ${
-            checked ? "bg-cyan-500/25 border-cyan-300/40" : "bg-white/5 border-white/15"
+            checked ? "bg-[#8fae73]/30 border-[#c5d7a6]/50" : "bg-white/5 border-white/15"
           }`}
         >
           {checked ? "On" : "Off"}
@@ -91,7 +91,7 @@ function ToggleOption({ title, detail, checked, onChange }) {
 
 function SelectOption({ title, detail, value, onChange }) {
   return (
-    <div className="rounded-xl bg-white/5 border border-white/10 p-3">
+    <div className="surface p-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-medium">{title}</p>
         <select

@@ -30,30 +30,30 @@ export default function JournalPage() {
   }
 
   return (
-    <main className={`p-4 md:p-6 ${moodClass}`}>
+    <main className={`ui-page ${moodClass}`}>
       <div className="max-w-6xl mx-auto grid xl:grid-cols-[1fr_320px] gap-4">
-        <section className="glass rounded-2xl p-4 md:p-5 space-y-3">
-          <p className="text-cyan-300 text-xs uppercase tracking-wider">New journal entry</p>
+        <section className="ui-card rounded-2xl p-4 md:p-5 space-y-3">
+          <p className="ui-kicker">New journal entry</p>
           <input
-            className="w-full rounded-xl bg-[#111827] p-3 border border-white/10"
+            className="ui-input"
             placeholder="Entry title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
           <textarea
-            className="w-full rounded-xl bg-[#111827] p-3 border border-white/10 min-h-72"
+            className="ui-input min-h-72"
             placeholder="Write freely..."
             value={content}
             onChange={(e) => setContent(e.target.value)}
           />
           <div className="grid sm:grid-cols-[1fr_auto] gap-3">
             <input
-              className="rounded-xl bg-[#111827] p-3 border border-white/10"
+              className="ui-input"
               placeholder="tags (comma separated)"
               value={tags}
               onChange={(e) => setTags(e.target.value)}
             />
-            <button className="rounded-xl px-5 bg-violet-500 hover:bg-violet-400 min-h-11" onClick={save}>
+            <button className="px-5 min-h-11 ui-button-primary" onClick={save}>
               Save entry
             </button>
           </div>
@@ -74,7 +74,7 @@ export default function JournalPage() {
           </div>
         </section>
 
-        <aside className="glass rounded-2xl p-4 space-y-3 h-fit">
+        <aside className="ui-card rounded-2xl p-4 space-y-3 h-fit">
           <h3 className="font-medium">Writing support</h3>
           <Card title="Today's health stats" body="Sleep: 7.6h · Steps: 6,200 · Stress: 52" />
           <Card title="AI writing prompt" body="What changed in your energy between morning and evening today?" />
@@ -87,8 +87,8 @@ export default function JournalPage() {
 
 function Card({ title, body }) {
   return (
-    <div className="rounded-xl bg-white/5 border border-white/10 p-3">
-      <p className="text-xs text-cyan-300">{title}</p>
+    <div className="surface p-3">
+      <p className="ui-kicker">{title}</p>
       <p className="text-sm text-white/80 mt-1">{body}</p>
     </div>
   );

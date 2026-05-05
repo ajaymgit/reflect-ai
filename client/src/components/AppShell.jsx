@@ -15,6 +15,7 @@ export default function AppShell() {
   const location = useLocation();
   const title = pageTitles[location.pathname] || "Home";
   const navItems = [
+    { to: "/dashboard", label: "Home", Icon: HeartPulse },
     { to: "/journal/new", label: "Write", Icon: PenSquare },
     { to: "/chat", label: "Chat", Icon: MessageCircle },
     { to: "/health", label: "Health", Icon: HeartPulse },
@@ -34,18 +35,18 @@ export default function AppShell() {
 
   return (
     <div className="min-h-screen page-gradient text-white pb-20 md:pb-0">
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#1f293766] backdrop-blur px-4 md:px-6 py-4">
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#1f293766] backdrop-blur px-4 md:px-6 py-3">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
           <Link to="/dashboard" className="hover:opacity-90 transition">
             <p className="text-[#d9d2b0] text-xs uppercase tracking-wider">Equoria</p>
-            <h1 className="text-lg md:text-xl font-semibold">{title}</h1>
+            <h1 className="text-base md:text-xl font-semibold">{title}</h1>
           </Link>
           <div className="hidden md:flex items-center gap-2 flex-wrap justify-end">
             {navItems.map(({ to, label, Icon }) => (
               <Link
                 key={to}
                 to={to}
-                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 border text-base ${
+                className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 border text-sm ${
                   location.pathname === to
                     ? "border-[#c6d8a8]/70 bg-[#8fae73]/25 shadow-[0_0_22px_rgba(154,191,117,0.35)] text-white"
                     : "border-white/15 bg-white/5 hover:bg-white/10 text-white/90"
@@ -64,7 +65,7 @@ export default function AppShell() {
       </div>
 
       <nav className="md:hidden fixed bottom-0 inset-x-0 border-t border-white/10 bg-[#0b1020]/95 backdrop-blur z-30">
-        <div className="grid grid-cols-4 gap-1 px-2 py-2">
+        <div className="grid grid-cols-5 gap-1 px-2 py-2">
           {navItems.map(({ to, label, Icon }) => (
             <Link
               key={to}

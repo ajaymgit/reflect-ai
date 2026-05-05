@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { apiFetch } from "../api";
 
 export default function HealthPage() {
@@ -38,38 +38,32 @@ export default function HealthPage() {
         </div>
 
         <div className="glass rounded-2xl p-4">
-          <h3 className="font-medium">Weekly trend</h3>
-          <div className="h-64 mt-3">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data?.weekly || []}>
-                <XAxis
-                  dataKey="date"
-                  tickFormatter={(v) => new Date(v).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                  tick={{ fill: "#cbd5e1", fontSize: 12 }}
-                />
-                <YAxis tick={{ fill: "#cbd5e1", fontSize: 12 }} />
-                <Tooltip
-                  formatter={(value, key) => {
-                    if (key === "steps") return [`${value} steps`, "Daily movement"];
-                    if (key === "stress") return [`${value} / 100`, "Stress level"];
-                    if (key === "sleep") return [`${value} hours`, "Sleep"];
-                    return [value, key];
-                  }}
-                />
-                <Legend
-                  wrapperStyle={{ fontSize: 12 }}
-                  formatter={(value) => {
-                    if (value === "steps") return "Steps";
-                    if (value === "stress") return "Stress";
-                    if (value === "sleep") return "Sleep";
-                    return value;
-                  }}
-                />
-                <Line type="monotone" dataKey="steps" stroke="#e8ab5f" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="stress" stroke="#da8b5b" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="sleep" stroke="#8eb184" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
+          <h3 className="font-medium">Weekly trends</h3>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-3">
+            <TrendChart
+              title="Steps"
+              data={data?.weekly || []}
+              dataKey="steps"
+              stroke="#e8ab5f"
+              valueLabel="steps"
+              axisLabel="steps/day"
+            />
+            <TrendChart
+              title="Stress"
+              data={data?.weekly || []}
+              dataKey="stress"
+              stroke="#da8b5b"
+              valueLabel="/ 100"
+              axisLabel="score"
+            />
+            <TrendChart
+              title="Sleep"
+              data={data?.weekly || []}
+              dataKey="sleep"
+              stroke="#8eb184"
+              valueLabel="hours"
+              axisLabel="hours"
+            />
           </div>
         </div>
 
@@ -91,6 +85,38 @@ function Metric({ label, value }) {
     <div className="glass rounded-2xl p-5">
       <p className="text-sm text-white/70">{label}</p>
       <p className="text-3xl font-semibold mt-2">{value}</p>
+    </div>
+  );
+}
+
+function TrendChart({ title, data, dataKey, stroke, valueLabel, axisLabel }) {
+  return (
+    <div className="rounded-xl border border-white/10 p-3">
+      <p className="text-sm text-white/80">{title}</p>
+      <div className="h-48 mt-2">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data}>
+            <XAxis
+              dataKey="date"
+              tickFormatter={(v) => new Date(v).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+              tick={{ fill: "#cbd5e1", fontSize: 11 }}
+            />
+            <YAxis tick={{ fill: "#cbd5e1", fontSize: 11 }} tickCount={6} />
+            <Tooltip
+              formatter={(value) => [`${value} ${valueLabel}`, title]}
+              labelFormatter={(v) =>
+                new Date(v).toLocaleDateString(undefined, {
+                  weekday: "short",
+                  month: "short",
+                  day: "numeric",
+                })
+              }
+            />
+            <Line type="monotone" dataKey={dataKey} stroke={stroke} strokeWidth={2} dot={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+      <p className="text-[11px] text-white/50 mt-1 uppercase tracking-wide">{axisLabel}</p>
     </div>
   );
 }
