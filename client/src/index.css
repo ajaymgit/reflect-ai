@@ -3,9 +3,9 @@
 @tailwind utilities;
 
 body {
-  background: #e7d8c2;
-  color: #433226;
-  font-family: "Nunito", "Quicksand", "Inter", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  background: #dcc5a4;
+  color: #3b2b20;
+  font-family: "Nunito", "Inter", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   margin: 0;
   letter-spacing: 0.01em;
   text-rendering: optimizeLegibility;
@@ -16,9 +16,9 @@ body {
 }
 
 .glass {
-  background: linear-gradient(160deg, rgba(232, 216, 193, 0.95), rgba(216, 193, 165, 0.92));
-  border: 1px solid rgba(126, 90, 62, 0.3);
-  box-shadow: 0 8px 20px rgba(89, 62, 42, 0.2);
+  background: linear-gradient(160deg, rgba(218, 196, 164, 0.94), rgba(195, 165, 128, 0.92));
+  border: 1px solid rgba(99, 67, 44, 0.34);
+  box-shadow: 0 10px 24px rgba(72, 49, 34, 0.24);
   backdrop-filter: blur(8px);
 }
 
@@ -31,9 +31,9 @@ body {
   isolation: isolate;
   overflow: hidden;
   background:
-    radial-gradient(900px 360px at 0% -10%, rgba(184, 132, 84, 0.3), transparent 62%),
-    radial-gradient(980px 420px at 70% -10%, rgba(143, 174, 115, 0.24), transparent 70%),
-    linear-gradient(180deg, #ecdabd 0%, #e7d8c2 52%, #dcc3a2 100%);
+    radial-gradient(900px 360px at 0% -10%, rgba(150, 102, 62, 0.34), transparent 62%),
+    radial-gradient(980px 420px at 70% -10%, rgba(104, 136, 76, 0.28), transparent 70%),
+    linear-gradient(180deg, #d6bb95 0%, #cdaa7e 52%, #b98c61 100%);
 }
 
 .page-gradient::before,
@@ -46,30 +46,34 @@ body {
 
 .page-gradient::before {
   inset: 0 auto auto 0;
-  width: min(36vw, 360px);
-  height: min(48vh, 420px);
-  opacity: 0.22;
+  width: min(42vw, 420px);
+  height: min(58vh, 520px);
+  opacity: 0.28;
   background-image:
-    radial-gradient(ellipse at 20% 15%, rgba(111, 143, 85, 0.55) 0 7%, transparent 8%),
-    radial-gradient(ellipse at 30% 31%, rgba(111, 143, 85, 0.46) 0 6%, transparent 7%),
-    radial-gradient(ellipse at 38% 47%, rgba(111, 143, 85, 0.42) 0 5%, transparent 6%),
-    linear-gradient(120deg, transparent 0 34%, rgba(113, 84, 60, 0.45) 35% 37%, transparent 38%),
-    linear-gradient(115deg, transparent 0 48%, rgba(113, 84, 60, 0.38) 49% 50%, transparent 51%);
-  filter: blur(0.1px);
+    radial-gradient(ellipse at 20% 14%, rgba(93, 128, 68, 0.62) 0 7%, transparent 8%),
+    radial-gradient(ellipse at 31% 28%, rgba(93, 128, 68, 0.58) 0 6%, transparent 7%),
+    radial-gradient(ellipse at 40% 42%, rgba(93, 128, 68, 0.48) 0 5%, transparent 6%),
+    radial-gradient(ellipse at 49% 58%, rgba(93, 128, 68, 0.42) 0 4%, transparent 5%),
+    linear-gradient(120deg, transparent 0 31%, rgba(88, 58, 37, 0.58) 32% 34%, transparent 35%),
+    linear-gradient(116deg, transparent 0 44%, rgba(88, 58, 37, 0.5) 45% 46%, transparent 47%),
+    linear-gradient(112deg, transparent 0 58%, rgba(88, 58, 37, 0.4) 59% 60%, transparent 61%);
+  filter: blur(0.2px);
 }
 
 .page-gradient::after {
   right: 0;
   bottom: 0;
-  width: min(40vw, 420px);
-  height: min(45vh, 380px);
-  opacity: 0.2;
+  width: min(48vw, 500px);
+  height: min(52vh, 460px);
+  opacity: 0.26;
   background-image:
-    radial-gradient(ellipse at 74% 72%, rgba(111, 143, 85, 0.55) 0 7%, transparent 8%),
-    radial-gradient(ellipse at 62% 56%, rgba(111, 143, 85, 0.44) 0 6%, transparent 7%),
-    radial-gradient(ellipse at 54% 40%, rgba(111, 143, 85, 0.4) 0 5%, transparent 6%),
-    linear-gradient(302deg, transparent 0 42%, rgba(113, 84, 60, 0.42) 43% 45%, transparent 46%),
-    linear-gradient(300deg, transparent 0 57%, rgba(113, 84, 60, 0.35) 58% 59%, transparent 60%);
+    radial-gradient(ellipse at 77% 74%, rgba(93, 128, 68, 0.64) 0 7%, transparent 8%),
+    radial-gradient(ellipse at 66% 60%, rgba(93, 128, 68, 0.52) 0 6%, transparent 7%),
+    radial-gradient(ellipse at 56% 46%, rgba(93, 128, 68, 0.46) 0 5%, transparent 6%),
+    radial-gradient(ellipse at 49% 32%, rgba(93, 128, 68, 0.4) 0 4%, transparent 5%),
+    linear-gradient(302deg, transparent 0 40%, rgba(88, 58, 37, 0.52) 41% 43%, transparent 44%),
+    linear-gradient(300deg, transparent 0 54%, rgba(88, 58, 37, 0.46) 55% 56%, transparent 57%),
+    linear-gradient(297deg, transparent 0 65%, rgba(88, 58, 37, 0.36) 66% 67%, transparent 68%);
 }
 
 .mood-happy {
@@ -140,6 +144,7 @@ body {
 h1,
 h2,
 h3 {
+  font-family: "Quicksand", "Nunito", "Inter", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   letter-spacing: -0.01em;
 }
 
