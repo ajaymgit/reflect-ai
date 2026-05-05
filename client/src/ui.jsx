@@ -6,7 +6,7 @@ export function Button({ children, variant = "primary", className = "", ...props
       "bg-brand-300 text-[#4a3a31] shadow-[0_4px_12px_rgba(124,97,80,0.18)] hover:bg-brand-200 focus-visible:ring-brand-200 disabled:opacity-60 disabled:hover:bg-brand-300",
     secondary:
       "bg-surface-100 text-[#4a3a31] border border-[#dbc2b2] hover:bg-surface-200 focus-visible:ring-brand-200/40",
-    ghost: "bg-transparent text-[#7e6454] hover:bg-[#f3e7dc] focus-visible:ring-brand-200",
+    ghost: "bg-transparent text-[#5a3d2c] hover:bg-[#f3e7dc] focus-visible:ring-brand-200",
   };
 
   return (
@@ -23,7 +23,7 @@ export function ButtonLink({ children, to, variant = "primary", className = "", 
   const variants = {
     primary: "bg-brand-300 text-[#4a3a31] hover:bg-brand-200 shadow-[0_4px_12px_rgba(124,97,80,0.18)]",
     secondary: "bg-surface-100 text-[#4a3a31] border border-[#dbc2b2] hover:bg-surface-200",
-    ghost: "bg-transparent text-[#7e6454] hover:bg-[#f3e7dc]",
+    ghost: "bg-transparent text-[#5a3d2c] hover:bg-[#f3e7dc]",
   };
 
   return (
@@ -53,7 +53,7 @@ export function PageHeader({ eyebrow, title, description, action }) {
         <div>
           {eyebrow ? <p className="text-brand-100 text-xs uppercase tracking-wider">{eyebrow}</p> : null}
           <h2 className="mt-2 text-3xl font-semibold md:text-[2.45rem] md:leading-[1.06]">{title}</h2>
-          {description ? <p className="mt-3 max-w-2xl text-[15px] leading-7 text-[#7e6454]">{description}</p> : null}
+          {description ? <p className="mt-3 max-w-2xl text-[15px] leading-7 text-[#5a3d2c]">{description}</p> : null}
         </div>
         {action ? <div className="flex shrink-0 flex-wrap gap-2">{action}</div> : null}
       </div>
@@ -68,7 +68,7 @@ export function ToggleButton({ selected, pressed, children, className = "", ...p
       type="button"
       aria-pressed={isSelected}
       className={`rounded-[20px] border px-3 py-2 min-h-[44px] text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200/60 ${
-        isSelected ? "border-brand-200 bg-brand-100 text-[#4a3a31]" : "border-[#dbc2b2] bg-surface-100 text-[#7e6454] hover:bg-surface-200"
+        isSelected ? "border-brand-200 bg-brand-100 text-[#4a3a31]" : "border-[#dbc2b2] bg-surface-100 text-[#5a3d2c] hover:bg-surface-200"
       } ${className}`}
       {...props}
     >
@@ -87,11 +87,11 @@ export function StatusPill({ children, className = "" }) {
 
 export function TextField({ label, id, className = "", as: Component = "input", ...props }) {
   return (
-    <label className="block space-y-1.5 text-sm text-[#7e6454]" htmlFor={id}>
+    <label className="block space-y-1.5 text-sm text-[#5a3d2c]" htmlFor={id}>
       <span>{label}</span>
       <Component
         id={id}
-        className={`w-full min-h-[44px] rounded-[16px] border border-[#dbc2b2] bg-[#fff7ef] p-3 text-[#4a3a31] outline-none transition placeholder:text-[#9a8273] focus:border-brand-200 focus:ring-2 focus:ring-brand-200/30 ${className}`}
+        className={`w-full min-h-[44px] rounded-[16px] border border-[#dbc2b2] bg-[#fff7ef] p-3 text-[#4a3a31] outline-none transition placeholder:text-[#6f4c36] focus:border-brand-200 focus:ring-2 focus:ring-brand-200/30 ${className}`}
         {...props}
       />
     </label>
@@ -100,7 +100,7 @@ export function TextField({ label, id, className = "", as: Component = "input", 
 
 export function PageState({ title, message, action }) {
   return (
-    <div className="glass rounded-3xl p-6 text-sm text-[#7e6454]">
+    <div className="glass rounded-3xl p-6 text-sm text-[#5a3d2c]">
       <p className="text-lg font-semibold text-[#4a3a31]">{title}</p>
       {message ? <p className="mt-2 leading-6">{message}</p> : null}
       {action ? <div className="mt-4">{action}</div> : null}
@@ -110,7 +110,7 @@ export function PageState({ title, message, action }) {
 
 export function EmptyState({ eyebrow, title, message, action }) {
   return (
-    <div className="rounded-2xl border border-dashed border-[#d8c4b5] bg-surface-100 p-5 text-sm text-[#7e6454]">
+    <div className="rounded-2xl border border-dashed border-[#d8c4b5] bg-surface-100 p-5 text-sm text-[#5a3d2c]">
       {eyebrow ? <p className="text-brand-100 text-xs uppercase tracking-wider">{eyebrow}</p> : null}
       <p className="mt-1 text-lg font-medium text-[#4a3a31]">{title}</p>
       {message ? <p className="mt-2 leading-6">{message}</p> : null}

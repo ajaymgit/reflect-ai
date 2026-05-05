@@ -36,11 +36,11 @@ export default function RegisterPage() {
           <div>
             <p className="text-brand-100 text-sm">ReflectAI</p>
             <h1 className="text-3xl font-semibold mt-3">Create your reflective space</h1>
-            <p className="text-[#7e6454] mt-3 text-sm leading-6">
+            <p className="text-[#5a3d2c] mt-3 text-sm leading-6">
               Build a private journaling routine and chat with ReflectAI for contextual self-reflection.
             </p>
           </div>
-          <ul className="text-sm text-[#7e6454] space-y-2">
+          <ul className="text-sm text-[#5a3d2c] space-y-2">
             <li>• Memory-aware reflection</li>
             <li>• Evidence-linked prompts</li>
             <li>• Calm, focused chat experience</li>
@@ -79,7 +79,7 @@ export default function RegisterPage() {
           <Button className="w-full">
             Register
           </Button>
-          <p className="text-sm text-[#7e6454]">
+          <p className="text-sm text-[#5a3d2c]">
             Already have an account?{" "}
             <Link className="text-brand-100 hover:text-brand-50" to="/login">
               Login

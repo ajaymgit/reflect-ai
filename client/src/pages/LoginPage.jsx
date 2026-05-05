@@ -35,11 +35,11 @@ export default function LoginPage() {
           <div>
             <p className="text-brand-100 text-sm">ReflectAI</p>
             <h1 className="text-3xl font-semibold mt-3">ReflectAI Coach</h1>
-            <p className="text-[#7e6454] mt-3 text-sm leading-6">
+            <p className="text-[#5a3d2c] mt-3 text-sm leading-6">
               A calm journaling workspace with memory-aware reflective conversations and evidence-based prompts.
             </p>
           </div>
-          <div className="text-sm text-[#7e6454]">
+          <div className="text-sm text-[#5a3d2c]">
             Demo: <span className="text-[#4a3a31]">demo@reflectai.com / Demo@123</span>
           </div>
         </section>
@@ -48,7 +48,7 @@ export default function LoginPage() {
           <div>
             <p className="text-brand-100 text-sm">Welcome back</p>
             <h2 className="text-2xl font-semibold mt-1">Sign in to ReflectAI</h2>
-            <p className="mt-1 text-xs text-[#7e6454] md:hidden">Demo: demo@reflectai.com / Demo@123</p>
+            <p className="mt-1 text-xs text-[#5a3d2c] md:hidden">Demo: demo@reflectai.com / Demo@123</p>
           </div>
           <TextField
             id="login-email"
@@ -75,14 +75,14 @@ export default function LoginPage() {
               setEmail("demo@reflectai.com");
               setPassword("Demo@123");
             }}
-            className="w-full min-h-[44px] rounded-[18px] border border-[#dbc2b2] bg-surface-100 text-[#7e6454] text-sm hover:bg-surface-200"
+            className="w-full min-h-[44px] rounded-[18px] border border-[#dbc2b2] bg-surface-100 text-[#5a3d2c] text-sm hover:bg-surface-200"
           >
             Use demo login
           </button>
           <Button className="w-full">
             Login
           </Button>
-          <p className="text-sm text-[#7e6454]">
+          <p className="text-sm text-[#5a3d2c]">
             New here?{" "}
             <Link className="text-brand-100 hover:text-brand-50" to="/register">
               Create account
