@@ -1,17 +1,20 @@
 import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
-import { apiFetch } from "../api";
+import { Link, useLocation } from "react-router-dom";
+import { apiFetch, describeError } from "../api";
 import { useAuth } from "../context/AuthContext";
 
 const moodOptions = ["happy", "calm", "reflective", "sad", "stressed", "angry"];
+// Previously used emoji (☀️🍃🌿) here while Dashboard and Journal used
+// colored dots for the exact same six moods -- two different visual
+// languages for the same concept. Unified to the colored-dot style below.
 const moodMeta = {
-  happy: { icon: "☀️", label: "Happy" },
-  calm: { icon: "🍃", label: "Calm" },
-  reflective: { icon: "🌿", label: "Reflective" },
-  sad: { icon: "🌧️", label: "Sad" },
-  stressed: { icon: "🟠", label: "Stressed" },
-  angry: { icon: "🔴", label: "Angry" },
+  happy: { label: "Happy" },
+  calm: { label: "Calm" },
+  reflective: { label: "Reflective" },
+  sad: { label: "Sad" },
+  stressed: { label: "Stressed" },
+  angry: { label: "Angry" },
 };
 const quickPrompts = [
   "Quick emotional check-in",
@@ -19,21 +22,30 @@ const quickPrompts = [
   "Help me reflect on relationships",
   "I am feeling grateful",
 ];
+// Previously reflective/sad used different, muted olive-green hexes here
+// (#a7b899 / #7f8b74) that don't exist anywhere else in the app's mood
+// palette -- they rendered as grey-green dots instead of the purple tones
+// (#a989b2 / #84689d) used on Dashboard, the mood calendar, and the memory
+// globe for those exact two moods. Also unified angry's Tailwind named color
+// to the same #ef4444 hex used elsewhere, for one source of truth.
 const moodColor = {
   happy: "bg-[#e8ab5f]/80",
   calm: "bg-[#8eb184]/80",
-  reflective: "bg-[#a7b899]/80",
-  sad: "bg-[#7f8b74]/80",
+  reflective: "bg-[#a989b2]/80",
+  sad: "bg-[#84689d]/80",
   stressed: "bg-[#da8b5b]/80",
-  angry: "bg-red-400/70",
+  angry: "bg-[#ef4444]/80",
 };
 
 export default function ChatPage() {
   const { user } = useAuth();
-  const [message, setMessage] = useState("");
+  const location = useLocation();
+  const [message, setMessage] = useState(location.state?.prefill || "");
   const [turns, setTurns] = useState([]);
   const [loading, setLoading] = useState(false);
   const [quickEntry, setQuickEntry] = useState("");
+  const [quickEntryStatus, setQuickEntryStatus] = useState("");
+  const [savingQuickEntry, setSavingQuickEntry] = useState(false);
   const [mood, setMood] = useState("calm");
   const [themeMode] = useState("midnight");
   const [writingMode] = useState("focus");
@@ -152,14 +164,26 @@ export default function ChatPage() {
   }
 
   async function saveQuickEntry() {
-    if (!quickEntry.trim()) return;
-    const saved = await apiFetch("/api/journal/quick-entry", {
-      method: "POST",
-      body: JSON.stringify({ content: quickEntry, mood }),
-    });
-    setRecentEntries((prev) => [saved, ...prev].slice(0, 30));
-    setSelectedEntryId(saved._id);
-    setQuickEntry("");
+    if (!quickEntry.trim() || savingQuickEntry) return;
+    setSavingQuickEntry(true);
+    setQuickEntryStatus("");
+    try {
+      const saved = await apiFetch("/api/journal/quick-entry", {
+        method: "POST",
+        body: JSON.stringify({ content: quickEntry, mood }),
+      });
+      setRecentEntries((prev) => [saved, ...prev].slice(0, 30));
+      setSelectedEntryId(saved._id);
+      setQuickEntry("");
+      setQuickEntryStatus("Saved");
+    } catch (err) {
+      // Previously this had no try/catch at all: a failure here was a silent
+      // unhandled promise rejection -- no status shown, nothing cleared, the
+      // user could easily believe a note saved when it didn't.
+      setQuickEntryStatus(describeError(err));
+    } finally {
+      setSavingQuickEntry(false);
+    }
   }
 
   function useQuickPrompt(prompt) {
@@ -207,9 +231,16 @@ export default function ChatPage() {
                 <p className="text-xs text-white/60 mt-1">{smartPrompt}</p>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs px-3 py-1 rounded-full bg-[#8fae73]/25 border border-[#c5d7a6]/35">
-                  Confidence {(meta.confidence * 100).toFixed(0)}%
-                </span>
+                {/* Was a raw "Confidence 73%" badge -- reads like exposed
+                    model internals rather than something meant for a
+                    wellness app's end user, and it showed "Confidence 0%"
+                    before you'd even sent a message. Now a plain-language
+                    label, shown only once there's an actual response. */}
+                {turns.length > 0 && (
+                  <span className="text-xs px-3 py-1 rounded-full bg-[#8fae73]/25 border border-[#c5d7a6]/35">
+                    {confidenceLabel(meta.confidence)}
+                  </span>
+                )}
                 <Link to="/dashboard" className="text-xs px-3 py-1 rounded-full bg-white/5 border border-white/10 hover:bg-white/10">
                   Home
                 </Link>
@@ -226,6 +257,7 @@ export default function ChatPage() {
                     key={item.id}
                     type="button"
                     onClick={() => setChatMode(item.id)}
+                    aria-pressed={chatMode === item.id}
                     className={`text-xs px-3 py-2 rounded-full border ${
                       chatMode === item.id
                         ? "bg-[#8fae73]/30 border-[#c5d7a6]"
@@ -311,7 +343,17 @@ export default function ChatPage() {
               {loading && (
                 <div className="glass rounded-2xl p-3 max-w-2xl">
                   <p className="text-[11px] text-[#d9d2b0] mb-1">ReflectAI</p>
-                  <p className="text-sm text-white/70">{statusText || "Thinking..."}</p>
+                  {/* Was a static "Thinking..." line -- an animated indicator
+                      reads as more alive while an actual response is being
+                      generated. */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-white/70">{statusText || "Thinking"}</span>
+                    <span className="flex items-center gap-1">
+                      <span className="typing-dot h-1.5 w-1.5 rounded-full bg-[#c5d7a6]" />
+                      <span className="typing-dot h-1.5 w-1.5 rounded-full bg-[#c5d7a6]" />
+                      <span className="typing-dot h-1.5 w-1.5 rounded-full bg-[#c5d7a6]" />
+                    </span>
+                  </div>
                 </div>
               )}
               <div ref={endRef} />
@@ -371,22 +413,29 @@ export default function ChatPage() {
                   type="button"
                   key={m}
                   onClick={() => setMood(m)}
+                  aria-pressed={mood === m}
                   className={`px-3 py-2 min-h-11 rounded-xl border text-sm flex items-center justify-center gap-2 ${
                     mood === m ? "bg-[#8fae73]/30 border-[#c5d7a6]" : "border-white/10"
                   }`}
                 >
-                  <span>{moodMeta[m]?.icon || "•"}</span>
+                  <span className={`h-2.5 w-2.5 rounded-full ${moodColor[m] || "bg-white/40"}`} />
                   <span>{moodMeta[m]?.label || m}</span>
                 </button>
               ))}
             </div>
             <button
               type="button"
-              className="w-full px-4 py-3 min-h-11 rounded-xl bg-[#8fae73] hover:bg-[#9fbe83] text-slate-900 font-medium"
+              className="w-full px-4 py-3 min-h-11 rounded-xl bg-[#8fae73] hover:bg-[#9fbe83] text-slate-900 font-medium disabled:opacity-60"
               onClick={saveQuickEntry}
+              disabled={savingQuickEntry || !quickEntry.trim()}
             >
-              Save Journal Entry
+              {savingQuickEntry ? "Saving..." : "Save Journal Entry"}
             </button>
+            {quickEntryStatus && (
+              <p className={`text-xs ${quickEntryStatus === "Saved" ? "text-[#c5d7a6]" : "text-red-300"}`}>
+                {quickEntryStatus}
+              </p>
+            )}
 
             <div className="border-t border-white/10 pt-4 space-y-3">
               <p className="text-[#d9d2b0] text-xs uppercase tracking-wider">Emotional Timeline</p>
@@ -436,5 +485,11 @@ export default function ChatPage() {
       </main>
     </div>
   );
+}
+
+function confidenceLabel(confidence) {
+  if (confidence >= 0.7) return "Grounded in your entries";
+  if (confidence >= 0.4) return "Partially grounded";
+  return "General reflection";
 }
 

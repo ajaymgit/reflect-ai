@@ -19,6 +19,8 @@ export const quickJournalSchema = z.object({
   body: z.object({
     content: z.string().min(1).max(10000),
     mood: z.enum(["happy", "calm", "reflective", "sad", "stressed", "angry"]),
+    title: z.string().max(200).optional(),
+    tags: z.array(z.string().min(1).max(40)).max(20).optional(),
   }),
   params: z.object({}).optional(),
   query: z.object({}).optional(),

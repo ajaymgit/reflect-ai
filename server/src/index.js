@@ -14,6 +14,35 @@ import { runStartupChecks } from "./startup.js";
 
 const app = express();
 
+// See env.js for the full explanation -- every rate limiter in this app is
+// keyed by req.ip, which silently becomes wrong (the proxy's IP, shared by
+// every user) if this server ever runs behind a reverse proxy/load balancer
+// without Express being told to trust it. Parsed from TRUST_PROXY: "1" (or
+// any number) sets the proxy hop count, "true"/"false" pass through
+// directly, anything else (e.g. a specific IP/CIDR) is passed through as-is
+// for Express to interpret. Left unset, this matches Express's own default
+// (don't trust any proxy) -- correct for local/direct use.
+if (env.TRUST_PROXY) {
+  const raw = env.TRUST_PROXY;
+  const value = raw === "true" ? true : raw === "false" ? false : Number.isNaN(Number(raw)) ? raw : Number(raw);
+  app.set("trust proxy", value);
+}
+
+// Baseline security headers. Manual instead of a new dependency (e.g. helmet)
+// since this is a pure JSON API with no server-rendered HTML -- these are
+// still worth setting as defense-in-depth (some browsers/embeds still honor
+// them regardless of content type) without pulling in extra surface area.
+app.use((_req, res, next) => {
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+  );
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  next();
+});
+
 app.use(cors({ origin: env.CLIENT_URL, credentials: true }));
 app.use(express.json({ limit: "1mb" }));
 app.use(requestIdMiddleware);

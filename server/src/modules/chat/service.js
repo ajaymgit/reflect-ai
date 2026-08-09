@@ -7,6 +7,40 @@ import RetrospectAnalysis from "../../models/RetrospectAnalysis.js";
 import { env, policyConfig } from "../../shared/config/env.js";
 import { AppError } from "../../shared/utils/AppError.js";
 
+// Appends one turn to a user's chat session. Deliberately NOT
+// `ChatSession.findOneAndUpdate({...}, { $push: {...} }, { upsert: true })`
+// (the previous implementation) -- $push via a raw update operator has
+// inconsistent, version-dependent behavior around whether it runs a
+// subdocument schema's custom setters, and userMessage/aiResponse/reasoning/
+// evidence[].quote now depend on their setters running to get encrypted
+// (see models/ChatSession.js). `session.turns.push(obj)` on an already-
+// loaded Mongoose document is unambiguous, well-documented behavior: it
+// constructs a real subdocument (running every setter) before adding it.
+async function appendChatTurn(userId, turn) {
+  let session = await ChatSession.findOne({ userId });
+  if (!session) {
+    session = new ChatSession({ userId, turns: [] });
+  }
+  session.turns.push(turn);
+  try {
+    await session.save();
+  } catch (err) {
+    // ChatSession.userId is unique -- a duplicate-key error here means
+    // another request for the same user created the session between our
+    // findOne and save (a narrow race, since this only matters for the same
+    // user's near-simultaneous messages). Re-fetch the now-existing session
+    // and retry once rather than lose the turn or surface a raw 500.
+    if (err?.code === 11000) {
+      session = await ChatSession.findOne({ userId });
+      session.turns.push(turn);
+      await session.save();
+    } else {
+      throw err;
+    }
+  }
+  return session;
+}
+
 const usingGeminiCompat = !env.OPENAI_API_KEY && !!env.GEMINI_API_KEY;
 const aiApiKey = env.OPENAI_API_KEY || env.GEMINI_API_KEY;
 const aiModel = env.AI_MODEL || (usingGeminiCompat ? "gemini-2.0-flash" : "gpt-4.1-mini");
@@ -160,16 +194,28 @@ function buildEvidenceCandidates(journals, userMessage, intent) {
     .slice(0, 5)
     .map(({ j }) => ({
     journalId: String(j._id),
-    quote: j.content.slice(0, 220),
+    // Previously a hard 220-char cut with no ellipsis -- this evidence quote
+    // is shown verbatim in Chat's "journal reference" panel, so a mid-word
+    // cutoff there read as a rendering bug rather than an intentional
+    // excerpt.
+    quote: truncateAtWord(j.content, 220),
     date: j.createdAt,
     mood: j.mood,
   }));
 }
 
+function truncateAtWord(text, maxLen) {
+  if (text.length <= maxLen) return text;
+  const slice = text.slice(0, maxLen);
+  const lastSpace = slice.lastIndexOf(" ");
+  const clean = lastSpace > 0 ? slice.slice(0, lastSpace) : slice;
+  return `${clean}…`;
+}
+
 function normalizeEvidence(evidence, candidates) {
   if (!Array.isArray(evidence)) return [];
   const byId = new Map(candidates.map((c) => [c.journalId, c]));
-  return evidence
+  const result = evidence
     .map((ev) => {
       const matched = byId.get(String(ev.journalId || ""));
       if (matched) {
@@ -182,6 +228,7 @@ function normalizeEvidence(evidence, candidates) {
       return null;
     })
     .filter(Boolean);
+  return result;
 }
 
 function validateAiPayload(payload) {
@@ -309,6 +356,17 @@ function humanizeQuestion(question = "", focus = "general_reflection") {
     workload: ["That sounds draining.", "That is a lot to carry."],
     emotional_safety: ["I hear you.", "I am really glad you shared that."],
     positive_state: ["I love hearing that.", "That is beautiful to hear."],
+    // Previously unlisted, so every one of these focuses fell through to the
+    // same general_reflection pair ("I hear you." / "Thanks for sharing
+    // that.") -- fine on its own, but combined with the old "growth every
+    // time" default-focus bug, it meant a long run of unrelated messages
+    // could sound almost identical turn after turn.
+    growth: ["That makes sense.", "Good, let's dig into that."],
+    motivation: ["I get that.", "That's a real thing to sit with."],
+    self_worth: ["That's worth pausing on.", "I hear that."],
+    calm: ["Makes sense.", "Good to know."],
+    creativity: ["I like that.", "That's worth exploring."],
+    energy: ["That tracks.", "I hear you."],
     user_selected: ["Of course.", "No pressure."],
     general_reflection: ["I hear you.", "Thanks for sharing that."],
   };
@@ -332,18 +390,25 @@ function enrichPayload(payload, candidates) {
     currentFocus: payload.currentFocus || "general_reflection",
   };
 
-  if (!enriched.fallback && enriched.evidence.length === 0 && candidates.length > 0) {
-    enriched.evidence = [candidates[0]];
-    enriched.reasoning = `${enriched.reasoning} Added nearest evidence candidate from recent memory.`.trim();
-  }
+  // Deliberately no evidence auto-fill here. Previously, whenever the model
+  // returned an empty evidence array, this function substituted the user's
+  // most recent journal entry as "evidence" regardless of whether it had
+  // anything to do with the model's claim -- which meant the evidence-required
+  // safety check below could never actually catch an unsupported claim for
+  // any user who had written at least one journal entry. If the model made a
+  // claim with no evidence, the honest outcome is a fallback, not a claim
+  // dressed up with an unrelated citation.
 
   if (!enriched.question) {
     enriched.question = "When this pattern appears, what thought usually shows up first for you?";
   }
 
-  if (!enriched.fallback && enriched.confidence < policyConfig.minConfidence && enriched.evidence.length > 0) {
-    enriched.confidence = Math.max(policyConfig.minConfidence, 0.68);
-  }
+  // Deliberately no confidence floor-boost here either. Previously, any
+  // evidence at all (including the auto-filled evidence removed above) would
+  // silently raise a low-confidence model response to at least 0.68 before
+  // the confidenceOk check ran, which misrepresented the model's own
+  // uncertainty to the user. A genuinely low-confidence response should now
+  // correctly fail verifyInsight's confidenceOk check and fall back.
 
   enriched.question = humanizeQuestion(enriched.question, enriched.currentFocus);
 
@@ -403,12 +468,32 @@ function inferFocus(userMessage, themes = [], blocked = []) {
   const inferredFromTheme = themes.map(themeToFocus).find((f) => f && !blocked.includes(f));
   if (inferredFromTheme) return inferredFromTheme;
 
+  // Previously always returned "growth" (the first entry) whenever nothing
+  // matched a keyword or theme -- since buildHeuristicResponse always calls
+  // this with an empty blocked list, that first-match logic was actually
+  // deterministic every single time, not just a fallback: any message with
+  // no recognizable topic word ("which is", "going for a run", etc) landed
+  // on the exact same "growth" focus/question no matter what was said.
+  // Picking randomly among whatever isn't blocked gives real variety for
+  // genuinely topic-less messages, while a real keyword/theme match above
+  // still always wins first.
   const defaultFocuses = ["growth", "relationships", "motivation", "calm", "creativity"];
-  return defaultFocuses.find((f) => !blocked.includes(f)) || "growth";
+  const available = defaultFocuses.filter((f) => !blocked.includes(f));
+  const pool = available.length ? available : defaultFocuses;
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 function buildHeuristicPayload({ userMessage, candidates, themes, healthQuality, forceNewFocus, recentFocuses }) {
-  if (!candidates.length) return null;
+  // Previously bailed out to null here whenever there were zero journal
+  // entries to cite as evidence -- which meant any brand-new account (or
+  // anyone who cleared their journal history) got a real reply only for the
+  // handful of exact-match intents in buildIntentPayload (greeting,
+  // gratitude, etc), and the single hardcoded "brief connection issue" apology
+  // for literally everything else, forever, regardless of what was typed.
+  // inferFocus() already works fine with zero journal history (it reads the
+  // message itself first, themes second), so there's no real reason a
+  // focus-aware, varied reflective question needs journal evidence to exist.
+  const hasEvidence = candidates.length > 0;
   const blocked = forceNewFocus ? recentFocuses : [];
   const focus = inferFocus(userMessage, themes, blocked);
   const top = candidates[0];
@@ -436,19 +521,21 @@ function buildHeuristicPayload({ userMessage, candidates, themes, healthQuality,
     "I am with you on this.",
   ];
   const opener = supportiveOpeners[Math.floor(Math.random() * supportiveOpeners.length)];
-  const friendlyInsight = isProblemSignal
+  const friendlyInsight = isProblemSignal && hasEvidence
     ? `${opener} There may be a pattern around ${patternPhrase}.${healthHint}`
-    : `${opener} We can keep this simple and talk through what matters most today.`;
+    : isProblemSignal
+      ? `${opener} I don't have journal history to spot a pattern yet, but I'm listening.`
+      : `${opener} We can keep this simple and talk through what matters most today.`;
   return {
     schemaVersion: "1.0",
     insight: friendlyInsight,
     question:
       questionByFocus[focus] ||
       "What feels most important to explore right now so this conversation is useful for you?",
-    evidence: [top, second].slice(0, 2),
-    confidence: 0.67,
-    reasoning: `Heuristic reflective synthesis generated from recurring themes and recent journal evidence for: "${userMessage}".`,
-    fallback: false,
+    evidence: hasEvidence ? [top, second].slice(0, 2) : [],
+    confidence: hasEvidence ? 0.67 : 0.6,
+    reasoning: `Heuristic reflective synthesis generated ${hasEvidence ? "from recurring themes and recent journal evidence" : "without journal evidence (none written yet)"} for: "${userMessage}".`,
+    fallback: !hasEvidence,
     currentFocus: focus,
   };
 }
@@ -577,12 +664,20 @@ function avoidRepeatedQuestion(payload, recentTurns = []) {
   ) {
     return payload;
   }
-  const recentQuestions = recentTurns
+  const recentResponses = recentTurns
     .slice(-5)
     .map((t) => String(t.aiResponse || "").toLowerCase().trim())
     .filter(Boolean);
   const current = String(payload.question || "").toLowerCase().trim();
-  if (!current || !recentQuestions.includes(current)) return payload;
+  // A final reply is always `${randomLead} ${question}` (see humanizeQuestion)
+  // -- comparing the bare candidate question against full past replies with
+  // .includes() (substring), not ===, catches "same question, different
+  // random lead" repeats. The previous exact-match check almost never fired,
+  // since the odds of the *same* random lead getting picked twice in a row
+  // are low, so the same core question could resurface a couple of turns
+  // later wearing a different opener and sail right past this guard.
+  const isRepeat = current && recentResponses.some((r) => r.includes(current));
+  if (!isRepeat) return payload;
 
   const byFocus = {
     relationships: [
@@ -601,6 +696,35 @@ function avoidRepeatedQuestion(payload, recentTurns = []) {
       "What do you want to repeat tomorrow from what worked today?",
       "What contributed most to this positive shift for you?",
     ],
+    // Previously unlisted -- growth/motivation/self_worth/calm/creativity/
+    // energy all fell straight to the same 4-item generic pool below, so any
+    // two of those focuses hitting the repetition guard converged on
+    // near-identical follow-ups regardless of how different their actual
+    // topics were.
+    growth: [
+      "What's one small step that would move this forward?",
+      "What's actually getting in the way of progress right now?",
+    ],
+    motivation: [
+      "What usually pulls your motivation back once it dips?",
+      "Is this more about willpower, or about the goal itself?",
+    ],
+    self_worth: [
+      "Where do you think that inner voice originally came from?",
+      "What would you say to a friend who felt this way about themselves?",
+    ],
+    calm: [
+      "What does calm actually feel like in your body?",
+      "What's one thing that reliably resets you when things feel like a lot?",
+    ],
+    creativity: [
+      "What's stopping you from starting on that idea today?",
+      "What would you make if it didn't have to be good?",
+    ],
+    energy: [
+      "Is this more physical tiredness, or mental fatigue?",
+      "What's the earliest sign your energy is about to drop?",
+    ],
   };
   const generic = [
     "What feels most important for us to unpack right now?",
@@ -609,7 +733,8 @@ function avoidRepeatedQuestion(payload, recentTurns = []) {
     "What would make this conversation most useful for you today?",
   ];
   const alternatives = [...(byFocus[payload.currentFocus] || []), ...generic];
-  const nextQuestion = alternatives.find((q) => !recentQuestions.includes(q.toLowerCase())) || alternatives[0];
+  const nextQuestion =
+    alternatives.find((q) => !recentResponses.some((r) => r.includes(q.toLowerCase()))) || alternatives[0];
   return {
     ...payload,
     question: humanizeQuestion(nextQuestion, payload.currentFocus),
@@ -688,10 +813,24 @@ function buildContextFollowUp({ userMessage, sessionTurns = [] }) {
   return null;
 }
 
+// Note: deliberately not matching the bare word "rest" (too common in
+// non-health sentences, e.g. "the rest of my day") -- only the more
+// specific health-adjacent phrasings.
+//
+// Kept as a source string, not a shared RegExp instance: this pattern is
+// used both with .replace() (scrub, below) and .test() (verifyInsight).
+// A single RegExp object with the "g" flag is stateful across calls
+// (lastIndex persists on the object between .test() invocations), which
+// would risk verifyInsight silently missing a match depending on what the
+// same object's previous .replace()/.test() call happened to leave behind.
+// Building a fresh RegExp per call sidesteps that entirely.
+const HEALTH_KEYWORD_SOURCE =
+  "\\b(sleep|stress|heart rate|heart|steps|activity|recovery|rest pattern|resting|screen time|movement pattern|energy level|sedentary)\\b";
+
 function scrubHealthReferences(payload) {
   const scrub = (text) =>
     String(text || "")
-      .replace(/\b(sleep|stress|heart rate|heart|steps|activity|recovery)\b/gi, "energy pattern")
+      .replace(new RegExp(HEALTH_KEYWORD_SOURCE, "gi"), "energy pattern")
       .replace(/\s+/g, " ")
       .trim();
 
@@ -852,16 +991,22 @@ ${userMessage}
   throw new AppError("AI_PARSE_FAILED", "AI response could not be parsed", 502);
 }
 
-function verifyInsight({ payload, healthQuality }) {
+function verifyInsight({ payload, rawText, healthQuality }) {
   const decisions = {
     evidencePresent: payload.fallback ? true : payload.evidence.length > 0,
     confidenceOk: payload.fallback ? true : payload.confidence >= policyConfig.minConfidence,
     healthClaimsEligible: true,
   };
 
-  const usesHealth = /sleep|stress|heart|steps|activity|recovery/i.test(
-    `${payload.insight} ${payload.question}`,
-  );
+  // Checked against rawText (the model's ORIGINAL, pre-scrub wording), not
+  // payload.insight/question. Previously this checked the already-scrubbed
+  // text using nearly the same keyword list scrubHealthReferences had just
+  // applied -- so every word this check looked for had already been
+  // replaced with "energy pattern" before it ran, meaning
+  // healthClaimsEligible could never actually be set to false. Checking the
+  // raw text closes that gap: an ineligible health claim now fails this
+  // check regardless of how scrub subsequently rewrote it.
+  const usesHealth = new RegExp(HEALTH_KEYWORD_SOURCE, "i").test(rawText || "");
   if (usesHealth && !healthQuality.eligible) decisions.healthClaimsEligible = false;
 
   const accepted = decisions.evidencePresent && decisions.confidenceOk && decisions.healthClaimsEligible;
@@ -889,6 +1034,31 @@ export async function buildChatContext(userId) {
     healthQuality,
     readiness,
   };
+}
+
+// Rule-based responder used both when no AI provider is configured at all,
+// and as a graceful degrade when a configured provider's call fails for any
+// non-rate-limit reason. Was already fully written (detectIntent /
+// buildContextFollowUp / buildIntentPayload / buildHeuristicPayload /
+// avoidRepeatedQuestion) but only ever wired into the "no provider" branch --
+// giving real, varied, on-brand responses in both cases instead of the one
+// hardcoded apology line every AI-call failure used to fall back to.
+function buildHeuristicResponse({ userMessage, context, evidenceCandidates }) {
+  const recentTurns = context.session?.turns || [];
+  const intent = detectIntent(userMessage);
+  let payload =
+    buildContextFollowUp({ userMessage, sessionTurns: recentTurns }) ||
+    buildIntentPayload({ intent, candidates: evidenceCandidates }) ||
+    buildHeuristicPayload({
+      userMessage,
+      candidates: evidenceCandidates,
+      themes: context.themes,
+      healthQuality: context.healthQuality,
+      forceNewFocus: false,
+      recentFocuses: [],
+    });
+  if (payload) payload = avoidRepeatedQuestion(payload, recentTurns);
+  return payload;
 }
 
 export async function processChatTurn({ userId, userMessage, chatSettings = {} }) {
@@ -948,8 +1118,23 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
           currentFocus: "user_selected",
           reasoning: "Minimal non-rule fallback due to upstream rate limiting.",
         });
+      } else {
+        // Previously any non-rate-limit failure here (invalid/placeholder API
+        // key, expired key, provider outage, network error) left `payload`
+        // null, which always fell through to the single hardcoded "I had a
+        // brief connection issue" line below -- every turn, regardless of
+        // what was typed, forever, since a bad key never becomes a good key
+        // on retry. The same rule-based responder used below for "no AI
+        // configured at all" degrades this the same way: a real, varied,
+        // on-brand reply instead of an infinite loop of one apology.
+        payload = buildHeuristicResponse({ userMessage, context, evidenceCandidates });
+        if (payload) responseSource = "heuristic";
       }
     }
+  } else {
+    // No AI provider configured at all (no OpenAI/Gemini key, USE_OLLAMA=false).
+    payload = buildHeuristicResponse({ userMessage, context, evidenceCandidates });
+    if (payload) responseSource = "heuristic";
   }
 
   if (!payload) {
@@ -967,11 +1152,18 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
     responseSource = "ollama";
   }
 
+  // Captured BEFORE scrub runs, so verifyInsight's health-eligibility check
+  // below inspects what the model actually said, not text that scrub may
+  // have already sanitized. Checking the post-scrub text would let every
+  // ineligible health claim pass, since scrub replaces the exact words the
+  // check looks for.
+  const rawText = `${payload.insight || ""} ${payload.question || ""}`;
+
   if (!context.healthQuality.eligible && !payload.fallback) {
     payload = scrubHealthReferences(payload);
   }
 
-  const verification = verifyInsight({ payload, healthQuality: context.healthQuality });
+  const verification = verifyInsight({ payload, rawText, healthQuality: context.healthQuality });
   const accepted = verification.accepted;
   const finalPayload = accepted ? payload : fallbackPayload();
   finalPayload.source = accepted ? responseSource : "fallback";
@@ -1000,25 +1192,16 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
     throw new AppError("AUDIT_WRITE_FAILED", "Audit write failed", 500);
   }
 
-  const session = await ChatSession.findOneAndUpdate(
-    { userId },
-    {
-      $setOnInsert: { userId },
-      $push: {
-        turns: {
-          userMessage,
-          aiResponse: finalPayload.question,
-          evidence: finalPayload.evidence,
-          confidence: finalPayload.confidence,
-          fallback: finalPayload.fallback,
-          reasoning: finalPayload.reasoning,
-          focus: finalPayload.currentFocus || "general_reflection",
-          createdAt: new Date(),
-        },
-      },
-    },
-    { upsert: true, new: true },
-  );
+  const session = await appendChatTurn(userId, {
+    userMessage,
+    aiResponse: finalPayload.question,
+    evidence: finalPayload.evidence,
+    confidence: finalPayload.confidence,
+    fallback: finalPayload.fallback,
+    reasoning: finalPayload.reasoning,
+    focus: finalPayload.currentFocus || "general_reflection",
+    createdAt: new Date(),
+  });
 
   return {
     payload: finalPayload,

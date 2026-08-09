@@ -7,3 +7,9 @@ dist/
 build/
 .DS_Store
 Thumbs.db
+
+# Xcode (ios-companion) -- user-specific/generated, not project source
+xcuserdata/
+*.xcuserstate
+DerivedData/
+.swiftpm/

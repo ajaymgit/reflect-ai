@@ -20,7 +20,14 @@ router.get(
       return acc;
     }, {});
 
-    const topMood = Object.entries(moodCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "reflective";
+    // Previously topMood defaulted to the literal string "reflective" when
+    // moodCounts was empty, and that fallback was then presented as if it
+    // were an observed fact ("Most frequent emotional tone... reflective.")
+    // for accounts with zero journal entries. emotionalPatternSummary now
+    // says so honestly instead. No client change needed: RetrospectPage.jsx's
+    // `data?.emotionalPatternSummary || "Analyzing entries..."` still renders
+    // this normally since it's a non-empty string, not null/undefined.
+    const topMood = Object.entries(moodCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
     const recurringThemes = Array.from(
       new Set(entries.flatMap((e) => (Array.isArray(e.themes) ? e.themes : [])).filter(Boolean)),
     ).slice(0, 6);
@@ -30,7 +37,9 @@ router.get(
         from: entries[entries.length - 1]?.createdAt || null,
         to: entries[0]?.createdAt || null,
       },
-      emotionalPatternSummary: `Most frequent emotional tone across recent entries: ${topMood}.`,
+      emotionalPatternSummary: topMood
+        ? `Most frequent emotional tone across recent entries: ${topMood}.`
+        : "Not enough journal entries yet to identify a recurring emotional tone.",
       recurringThemes,
       behavioralLoops: [
         "High workload -> reduced breaks -> elevated stress",

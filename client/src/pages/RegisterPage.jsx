@@ -1,34 +1,41 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { apiFetch } from "../api";
+import { apiFetch, describeError } from "../api";
 import { useAuth } from "../context/AuthContext";
+import PasswordInput from "../components/PasswordInput";
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const { setToken, setUser } = useAuth();
   const navigate = useNavigate();
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
+    // Previously had no loading/disabled state at all -- unlike every other
+    // form in the app, a double-click here fired two register requests.
+    setSubmitting(true);
     try {
       const data = await apiFetch("/api/auth/register", {
         method: "POST",
         body: JSON.stringify({ name, email, password }),
       });
-      setToken(data.token);
+      setToken(data.token, data.refreshToken);
       setUser(data.user);
       navigate("/chat");
     } catch (err) {
-      setError(err.message);
+      setError(describeError(err));
+    } finally {
+      setSubmitting(false);
     }
   }
 
   return (
-    <div className="min-h-screen page-gradient text-white flex items-center justify-center p-4">
+    <div className="min-h-screen page-gradient living-bg mood-calm text-white flex items-center justify-center p-4">
       <div className="w-full max-w-5xl grid md:grid-cols-2 gap-4">
         <section className="ui-card rounded-3xl p-8 hidden md:flex flex-col justify-between">
           <div>
@@ -58,20 +65,19 @@ export default function RegisterPage() {
           />
           <input
             className="ui-input"
+            type="email"
             placeholder="Email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
-          <input
-            type="password"
-            className="ui-input"
+          <PasswordInput
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
           {error && <p className="text-red-300 text-sm">{error}</p>}
-          <button className="w-full p-3 ui-button-primary">
-            Register
+          <button className="w-full p-3 ui-button-primary" disabled={submitting}>
+            {submitting ? "Creating account..." : "Register"}
           </button>
           <p className="text-sm text-white/70">
             Already have an account?{" "}

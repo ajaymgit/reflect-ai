@@ -69,7 +69,13 @@ async function seed() {
     createdAt: new Date(now - (emotionalSeedEntries.length - i) * 24 * 60 * 60 * 1000),
     updatedAt: new Date(now - (emotionalSeedEntries.length - i) * 24 * 60 * 60 * 1000),
   }));
-  await JournalEntry.insertMany(journals);
+  // .create() with an array (not .insertMany()) -- insertMany's handling of
+  // custom setters isn't reliably documented across Mongoose versions, and
+  // content/tags/themes now depend on their setters running to get
+  // encrypted before hitting the DB (see models/JournalEntry.js). .create()
+  // is unambiguous: it constructs a real document (running every setter)
+  // per entry.
+  await JournalEntry.create(journals);
 
   const health = Array.from({ length: 14 }).map((_, i) => ({
     userId: demo._id,
@@ -82,9 +88,14 @@ async function seed() {
     confidence: 0.86,
     source: "seed",
   }));
-  await HealthData.insertMany(health);
+  // Same reasoning as JournalEntry.create() above -- these fields are now
+  // encrypted via setters that only .create() is guaranteed to run.
+  await HealthData.create(health);
 
-  await RetrospectAnalysis.insertMany([
+  // .create() (not .insertMany()) -- same reasoning as JournalEntry/HealthData
+  // above: summary/detectedPatterns/socraticQuestion are now encrypted via
+  // setters that only .create() is guaranteed to run.
+  await RetrospectAnalysis.create([
     {
       userId: demo._id,
       summary: "Recurring fatigue appears linked to weekday stress and cognitive overload.",

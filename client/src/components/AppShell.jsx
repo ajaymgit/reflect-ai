@@ -1,4 +1,4 @@
-import { MessageCircle, PenSquare, Settings, HeartPulse } from "lucide-react";
+import { Home, MessageCircle, PenSquare, Settings, HeartPulse, LineChart } from "lucide-react";
 import { useEffect } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 
@@ -15,9 +15,13 @@ export default function AppShell() {
   const location = useLocation();
   const title = pageTitles[location.pathname] || "Home";
   const navItems = [
-    { to: "/dashboard", label: "Home", Icon: HeartPulse },
+    { to: "/dashboard", label: "Home", Icon: Home },
     { to: "/journal/new", label: "Write", Icon: PenSquare },
     { to: "/chat", label: "Chat", Icon: MessageCircle },
+    // Was previously missing from nav entirely -- the /retrospect route
+    // existed but had no link anywhere in the app, so it was unreachable
+    // without typing the URL directly.
+    { to: "/retrospect", label: "Retrospect", Icon: LineChart },
     { to: "/health", label: "Health", Icon: HeartPulse },
     { to: "/settings", label: "Settings", Icon: Settings },
   ];
@@ -42,20 +46,36 @@ export default function AppShell() {
             <h1 className="text-base md:text-xl font-semibold">{title}</h1>
           </Link>
           <div className="hidden md:flex items-center gap-2 flex-wrap justify-end">
-            {navItems.map(({ to, label, Icon }) => (
-              <Link
-                key={to}
-                to={to}
-                className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 border text-sm ${
-                  location.pathname === to
-                    ? "border-[#c6d8a8]/70 bg-[#8fae73]/25 shadow-[0_0_22px_rgba(154,191,117,0.35)] text-white"
-                    : "border-white/15 bg-white/5 hover:bg-white/10 text-white/90"
-                }`}
-              >
-                <Icon size={14} />
-                {label}
-              </Link>
-            ))}
+            {navItems.map(({ to, label, Icon }) => {
+              const isActive = location.pathname === to;
+              return (
+                <Link
+                  key={to}
+                  to={to}
+                  className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 border text-sm ${
+                    isActive ? "text-white" : "border-white/15 bg-white/5 hover:bg-white/10 text-white/90"
+                  }`}
+                  // The active nav pill is on screen on every page at all
+                  // times, so it's tied directly to the "Light color" slider
+                  // (Settings -> Appearance) via CSS var -- moving that
+                  // slider now has an immediately visible effect no matter
+                  // which page you're looking at, instead of only affecting
+                  // buttons/glows that are easy to never actually see.
+                  style={
+                    isActive
+                      ? {
+                          borderColor: "color-mix(in srgb, var(--user-light, #c6d8a8) 70%, transparent)",
+                          background: "color-mix(in srgb, var(--user-light, #8fae73) 25%, transparent)",
+                          boxShadow: "0 0 22px color-mix(in srgb, var(--user-light, #9abf75) 35%, transparent)",
+                        }
+                      : undefined
+                  }
+                >
+                  <Icon size={14} />
+                  {label}
+                </Link>
+              );
+            })}
           </div>
         </div>
       </header>
@@ -65,21 +85,28 @@ export default function AppShell() {
       </div>
 
       <nav className="md:hidden fixed bottom-0 inset-x-0 border-t border-white/10 bg-[#0b1020]/95 backdrop-blur z-30">
-        <div className="grid grid-cols-5 gap-1 px-2 py-2">
-          {navItems.map(({ to, label, Icon }) => (
-            <Link
-              key={to}
-              to={to}
-              className={`rounded-lg p-2.5 text-center text-xs ${
-                location.pathname === to
-                  ? "bg-[#8fae73]/30 shadow-[0_0_18px_rgba(154,191,117,0.3)] text-white"
-                  : "text-white/80"
-              }`}
-            >
-              <Icon size={15} className="mx-auto mb-1" />
-              {label}
-            </Link>
-          ))}
+        <div className="grid grid-cols-6 gap-1 px-2 py-2 overflow-x-auto">
+          {navItems.map(({ to, label, Icon }) => {
+            const isActive = location.pathname === to;
+            return (
+              <Link
+                key={to}
+                to={to}
+                className={`rounded-lg p-2 text-center text-[10px] ${isActive ? "text-white" : "text-white/80"}`}
+                style={
+                  isActive
+                    ? {
+                        background: "color-mix(in srgb, var(--user-light, #8fae73) 30%, transparent)",
+                        boxShadow: "0 0 18px color-mix(in srgb, var(--user-light, #9abf75) 30%, transparent)",
+                      }
+                    : undefined
+                }
+              >
+                <Icon size={14} className="mx-auto mb-1" />
+                {label}
+              </Link>
+            );
+          })}
         </div>
       </nav>
     </div>

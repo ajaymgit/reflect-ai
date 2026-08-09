@@ -8,8 +8,14 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Access tokens are short-lived now (15 minutes); a missing/expired
+    // access token with a still-valid refresh token is a normal state (e.g.
+    // returning after the tab was closed for a while), not a logged-out one.
+    // apiFetch itself transparently refreshes on a 401, so it's enough to
+    // just skip the call entirely when NEITHER token exists at all.
     const token = localStorage.getItem("reflectai_token");
-    if (!token) {
+    const refreshToken = localStorage.getItem("reflectai_refresh_token");
+    if (!token && !refreshToken) {
       setLoading(false);
       return;
     }
@@ -17,6 +23,7 @@ export function AuthProvider({ children }) {
       .then((data) => setUser(data))
       .catch(() => {
         localStorage.removeItem("reflectai_token");
+        localStorage.removeItem("reflectai_refresh_token");
         setUser(null);
       })
       .finally(() => setLoading(false));
@@ -27,9 +34,13 @@ export function AuthProvider({ children }) {
       user,
       loading,
       setUser,
-      setToken: (token) => localStorage.setItem("reflectai_token", token),
+      setToken: (token, refreshToken) => {
+        localStorage.setItem("reflectai_token", token);
+        if (refreshToken) localStorage.setItem("reflectai_refresh_token", refreshToken);
+      },
       logout: () => {
         localStorage.removeItem("reflectai_token");
+        localStorage.removeItem("reflectai_refresh_token");
         setUser(null);
       },
     }),

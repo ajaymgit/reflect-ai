@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { CalendarRange, Flame, HeartPulse, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { apiFetch } from "../api";
+import AnimatedNumber from "../components/AnimatedNumber";
+import MoodCalendar from "../components/MoodCalendar";
 
 const ranges = ["today", "week", "month"];
 const moodColors = {
@@ -74,52 +76,57 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="ui-card rounded-2xl p-4 flex flex-wrap gap-2">
-          {ranges.map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => setRange(item)}
-              className={`px-4 py-2.5 rounded-lg text-sm capitalize border ${
-                item === range ? "bg-[#8fae73]/25 border-[#d9d2b0]/50" : "bg-white/5 border-white/10"
-              }`}
-            >
-              {item === "week" ? "This week" : item === "month" ? "This month" : "Today"}
-            </button>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-          <StatCard label="Daily wellness" value={data?.dailyWellnessScore ?? "--"} icon={HeartPulse} />
-          <StatCard label="Journaling streak" value={data?.journalingStreak ?? "--"} icon={Flame} highlight />
-          <StatCard
-            label={range === "today" ? "Entries today" : range === "week" ? "Entries this week" : "Entries this month"}
-            value={data?.entriesInRange ?? "--"}
-            icon={CalendarRange}
-          />
-          <StatCard label="Current emotional state" value={data?.todaysMood ?? "--"} icon={Sparkles} />
-        </div>
-
+        {/* Previously the Today/This week/This month toggle was its own
+            full-width card holding nothing else -- mostly empty space next to
+            three small buttons. Now it's the header of the one block it
+            actually controls (all four stats below react to it), instead of
+            floating disconnected above four separate cards. */}
         <div className="ui-card rounded-2xl p-5">
-          <p className="text-xs text-[#d9d2b0] uppercase tracking-wider">How You've Been Feeling</p>
-          <p className="text-sm text-white/75 mt-2">
-            A simple mood snapshot from your recent journals.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {emotionMeta.map((emotion) => {
-              const count = data?.emotionDistribution?.[emotion.key] ?? 0;
-              return (
-                <div
-                  key={emotion.key}
-                  className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5"
-                >
-                  <span className={`h-2.5 w-2.5 rounded-full ${emotion.color}`} />
-                  <span className="text-sm text-white/90">{emotion.label}</span>
-                  <span className="text-xs text-white/60">{count}</span>
-                </div>
-              );
-            })}
+          <div className="inline-flex gap-1 rounded-lg bg-black/15 p-1">
+            {ranges.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setRange(item)}
+                aria-pressed={item === range}
+                className={`px-3 py-1.5 rounded-md text-xs capitalize transition ${
+                  item === range ? "bg-[#8fae73]/30 text-white" : "text-white/60 hover:text-white/85"
+                }`}
+              >
+                {item === "week" ? "This week" : item === "month" ? "This month" : "Today"}
+              </button>
+            ))}
           </div>
+          <div className="mt-4 grid grid-cols-2 xl:grid-cols-4 gap-3">
+            <StatCard label="Daily wellness" value={data?.dailyWellnessScore ?? "--"} icon={HeartPulse} />
+            <StatCard
+              label="Journaling streak"
+              value={data?.journalingStreak ?? "--"}
+              icon={Flame}
+              streakDays={data?.journalingStreak ?? 0}
+              // Streak counts *consecutive* days ending today -- sitting at 0
+              // right next to "Entries this week: 6" reads as a contradiction
+              // (or a bug) at a glance unless it's clear today just hasn't
+              // been journaled yet.
+              hint={data?.journalingStreak === 0 && data?.entriesInRange > 0 ? "No entry today yet" : null}
+            />
+            <StatCard
+              label={range === "today" ? "Entries today" : range === "week" ? "Entries this week" : "Entries this month"}
+              value={data?.entriesInRange ?? "--"}
+              icon={CalendarRange}
+            />
+            <StatCard label="Current emotional state" value={data?.todaysMood ?? "--"} icon={Sparkles} />
+          </div>
+        </div>
+
+        {/* The calendar is a fixed ~300px widget, so it used to leave a wide
+            empty strip next to it inside a full-width card. "How You've Been
+            Feeling" now lives inside MoodCalendar itself, scoped to whichever
+            month the calendar is currently showing (previously this block
+            read data?.emotionDistribution, a fixed last-60-entries window
+            with no relation to month navigation). */}
+        <div className="ui-card rounded-2xl p-5">
+          <MoodCalendar />
         </div>
 
         <div className="ui-card rounded-2xl p-4">
@@ -163,14 +170,32 @@ export default function DashboardPage() {
   );
 }
 
-function StatCard({ label, value, icon: Icon, highlight = false }) {
+function streakGlowClass(streakDays) {
+  // Previously a single fixed glow regardless of whether the streak was 1
+  // day or 60 -- now it actually grows warmer/stronger with a real streak,
+  // instead of being a flat decoration.
+  if (streakDays >= 14) return "streak-glow-3";
+  if (streakDays >= 3) return "streak-glow-2";
+  if (streakDays >= 1) return "streak-glow-1";
+  return "";
+}
+
+function StatCard({ label, value, icon: Icon, streakDays, hint }) {
+  const glowClass = streakDays !== undefined ? streakGlowClass(streakDays) : "";
+  // Was `ui-card` (same heavy bordered/blurred treatment as the block
+  // wrapping it) -- reads as four cards nested inside a card. `surface` is
+  // the lighter cell style already used elsewhere for items inside a card
+  // (e.g. Journal's sidebar), so these read as one block's cells instead.
   return (
-    <div className={`ui-card rounded-2xl p-5 ${highlight ? "shadow-[0_0_24px_rgba(143,174,115,0.28)]" : ""}`}>
+    <div className={`surface rounded-2xl p-5 ${glowClass}`}>
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm text-white/70">{label}</p>
         {Icon ? <Icon size={18} className="text-[#d9d2b0]" /> : null}
       </div>
-      <p className="text-3xl font-semibold mt-2 capitalize">{value}</p>
+      <p className="text-3xl font-semibold mt-2 capitalize">
+        <AnimatedNumber value={value} />
+      </p>
+      {hint && <p className="text-[11px] text-white/50 mt-1">{hint}</p>}
     </div>
   );
 }

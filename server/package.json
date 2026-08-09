@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
-    "seed": "node src/seed.js"
+    "seed": "node src/seed.js",
+    "flush-non-demo": "node src/scripts/flushNonDemoUsers.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

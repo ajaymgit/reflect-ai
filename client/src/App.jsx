@@ -6,6 +6,8 @@ import ProtectedRoute from "./components/ProtectedRoute";
 
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
+const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
+const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const JournalPage = lazy(() => import("./pages/JournalPage"));
 const RetrospectPage = lazy(() => import("./pages/RetrospectPage"));
@@ -40,6 +42,26 @@ export default function App() {
               <RegisterPage />
             </Suspense>
           </AuthRedirect>
+        }
+      />
+      {/* Deliberately NOT wrapped in AuthRedirect, unlike /login and
+          /register: someone can be logged in on this browser (or another
+          device) and still need to reset a forgotten password -- gating
+          this behind "not already authenticated" would strand them. */}
+      <Route
+        path="/forgot-password"
+        element={
+          <Suspense fallback={routeFallback}>
+            <ForgotPasswordPage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/reset-password"
+        element={
+          <Suspense fallback={routeFallback}>
+            <ResetPasswordPage />
+          </Suspense>
         }
       />
       <Route

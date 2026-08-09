@@ -1,9 +1,14 @@
 import { useEffect, useState } from "react";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useNavigate } from "react-router-dom";
 import { apiFetch } from "../api";
+import { isoDay } from "../utils/date";
+import DayEntryPreview from "../components/DayEntryPreview";
 
 export default function RetrospectPage() {
   const [data, setData] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     apiFetch("/api/retrospect/analysis")
@@ -13,6 +18,7 @@ export default function RetrospectPage() {
 
   const moodSeries = (data?.timeline || []).map((item) => ({
     date: new Date(item.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+    rawDate: isoDay(new Date(item.date)),
     score: moodToScore(item.mood),
   }));
 
@@ -29,7 +35,8 @@ export default function RetrospectPage() {
           <div className="ui-card rounded-2xl p-4 lg:col-span-2">
             <h3 className="font-medium">Emotional timeline</h3>
             <p className="text-xs text-white/60 mt-1">
-              Each bar shows the emotional intensity of that day (higher means more uplifting/steady tone).
+              Each bar shows the emotional intensity of that day (higher means more uplifting/steady tone). Click a bar
+              to see what you wrote that day.
             </p>
             <div className="h-64 mt-3">
               <ResponsiveContainer width="100%" height="100%">
@@ -39,12 +46,26 @@ export default function RetrospectPage() {
                     tick={{ fill: "#cbd5e1", fontSize: 12 }}
                     domain={[0, 5]}
                     tickFormatter={(v) => scoreToLabel(v)}
+                    width={72}
                   />
                   <Tooltip formatter={(value) => scoreToLabel(value)} />
-                  <Bar dataKey="score" fill="#8b5cf6" radius={[8, 8, 0, 0]} />
+                  {/* Was a bright purple (#8b5cf6) that didn't appear
+                      anywhere else in the app's palette -- every other chart
+                      (Health page) and every accent color (buttons, active
+                      nav state) uses this same warm olive-green. Now also
+                      clickable -- there was no way to go from "this day
+                      looked rough" to actually reading that day's entry. */}
+                  <Bar
+                    dataKey="score"
+                    fill="#8fae73"
+                    radius={[8, 8, 0, 0]}
+                    cursor="pointer"
+                    onClick={(point) => setSelectedDate(point?.payload?.rawDate || point?.rawDate || null)}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
+            <DayEntryPreview date={selectedDate} />
           </div>
 
           <div className="ui-card rounded-2xl p-4 space-y-3">
@@ -65,7 +86,11 @@ export default function RetrospectPage() {
         <div className="ui-card rounded-2xl p-4">
           <p className="ui-kicker">Socratic question</p>
           <p className="text-white/90 mt-2">{data?.socraticQuestion || "What pattern feels most meaningful to reflect on next?"}</p>
-          <button className="mt-4 px-4 py-2 ui-button-primary">
+          <button
+            type="button"
+            className="mt-4 px-4 py-2 ui-button-primary"
+            onClick={() => navigate("/chat", { state: { prefill: data?.socraticQuestion } })}
+          >
             Continue Reflection
           </button>
         </div>
@@ -81,9 +106,14 @@ function moodToScore(mood) {
 
 function scoreToLabel(score) {
   const rounded = Math.round(Number(score));
+  // "Calm/Positive" (no space around the slash) was the one label recharts'
+  // default Y-axis tick couldn't word-wrap onto two lines the way it does
+  // for the others -- it rendered as one long line, overflowed the axis's
+  // default width, and got clipped down to "n/Positive". A space either
+  // side gives it the same wrap point as "Very Positive"/"Low Mood".
   const label = {
     5: "Very Positive",
-    4: "Calm/Positive",
+    4: "Calm / Positive",
     3: "Reflective",
     2: "Low Mood",
     1: "Stressed",
