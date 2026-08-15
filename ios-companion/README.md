@@ -92,3 +92,34 @@ enabled for each data type, so iOS wakes the app when new Health data shows
 up and it syncs automatically -- no need to keep the app open. How promptly
 that happens is controlled by iOS, not by this app (typically within the
 hour, sometimes faster).
+
+## Sleep tracking without an Apple Watch
+
+Real sleep *stage* data (light/deep/REM) genuinely requires a Watch -- there's
+no way around that, it needs continuous heart rate. But total time asleep can
+be estimated from the iPhone alone using actigraphy (inferring sleep/wake
+from movement), the same underlying technique phone-only sleep apps like
+Sleep Cycle use. The `equohealth` build of this app (`equohealth/MyApp/`, not
+the source-only `ReflectHealthSync/` reference copy above) includes this as
+`SleepSessionRecorder.swift`:
+
+- Tap **Start Sleep Tracking** before bed. It plays a silent audio loop --
+  inaudible, but it's what legitimately keeps the app alive in the
+  background overnight (the `audio` `UIBackgroundMode`, already set in this
+  project's build settings) -- while `CMMotionManager` samples the
+  accelerometer every 30 seconds.
+- Tap **Stop & Save** when you wake (or it auto-stops after 12h as a safety
+  net). It splits the session into 5-minute windows, calls a window "still"
+  if movement variance stays under a small threshold, and sums the still
+  windows into a `sleepHours` number -- the exact same field HealthKit's own
+  sleep analysis produces, so it flows through the rest of this app (Health
+  page, wellness score, correlations) identically either way.
+- The recorded still-periods are written back into HealthKit's own Sleep
+  Analysis category (needs one more permission grant, `NSHealthUpdateUsageDescription`,
+  already added to the project), so the data isn't trapped only inside this
+  app -- it shows up in Apple's own Health app too.
+
+This is an approximate heuristic, not a medical measurement -- the same
+honest caveat as `estimateStressScore` on the server side. It's meant to
+replace an empty wellness score with a real one, not to compete with actual
+sleep-stage tracking.

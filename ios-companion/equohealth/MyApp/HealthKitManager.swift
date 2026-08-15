@@ -20,7 +20,11 @@ final class HealthKitManager {
         guard HKHealthStore.isHealthDataAvailable() else {
             throw HealthError.unavailable
         }
-        try await store.requestAuthorization(toShare: [], read: readTypes)
+        // Write access to sleepAnalysis is new -- SleepSessionRecorder saves
+        // its own self-recorded (no-Watch) sleep sessions back into
+        // HealthKit, so someone without a Watch still gets real sleep data
+        // in Health, not just inside this app.
+        try await store.requestAuthorization(toShare: [HKCategoryType(.sleepAnalysis)], read: readTypes)
         UserDefaults.standard.set(true, forKey: Self.connectedKey)
         setupObservers()
     }

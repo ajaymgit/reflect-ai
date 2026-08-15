@@ -1,8 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Bell, Download, HeartPulse, LogOut, Palette, ShieldCheck, UserRound } from "lucide-react";
 import { apiFetch, describeError } from "../api";
 import { useAuth } from "../context/AuthContext";
 import PasswordInput from "../components/PasswordInput";
+
+// One icon-led card per section instead of a single vertical stack of
+// visually identical bordered boxes -- previously every section (Appearance,
+// Account, Reminders, Security, Integrations, Data) looked the same weight
+// regardless of what it actually did, which made a genuinely capable
+// settings page (real 2FA, real data export, per-account reminders, a live
+// theme customizer) read as flatter/less finished than the rest of the app.
+function SectionCard({ icon: Icon, title, children }) {
+  return (
+    <div className="ui-card rounded-2xl p-5">
+      <div className="flex items-center gap-2 mb-3">
+        <Icon size={15} className="text-white/50" />
+        <p className="ui-kicker">{title}</p>
+      </div>
+      {children}
+    </div>
+  );
+}
 
 // Hue (0-360) for each slider's default position -- chosen to match this
 // app's actual existing dark-green background (~150) and light-green accent
@@ -127,100 +146,301 @@ export default function SettingsPage() {
 
   return (
     <main className="ui-page">
-      <div className="max-w-4xl mx-auto ui-card rounded-2xl p-5">
-        <p className="ui-kicker">Settings</p>
-        <h2 className="ui-title mt-1">Preferences</h2>
-        {/* Previously had 5 toggles here; 4 of them (reduced motion,
-            notification sounds, privacy mode, focus mode) saved to
-            localStorage but nothing else in the app ever read them -- they
-            looked functional but did nothing. Removed rather than left as
-            misleading UI; theme mode is the only one that actually works. */}
-        <div className="mt-4 grid md:grid-cols-2 gap-3">
-          <SelectOption
-            title="Theme mode"
-            detail="Switch instantly between bright and deep background modes."
-            value={settings.themeMode}
-            onChange={(value) => setSettings((prev) => ({ ...prev, themeMode: value }))}
-          />
+      <div className="max-w-5xl mx-auto space-y-4">
+        <div className="ui-card rounded-2xl p-5">
+          <p className="ui-kicker">Settings</p>
+          <h2 className="ui-title mt-1">Preferences</h2>
         </div>
 
-        <div className="mt-6 pt-5 border-t border-white/10">
-          <p className="ui-kicker">Appearance</p>
-          <div className="mt-3 grid sm:grid-cols-2 gap-3">
-            <HueSlider
-              label="Dark color"
-              detail="The app's main background."
-              hue={settings.darkHue}
-              saturation={18}
-              lightness={13}
-              defaultHue={DEFAULT_DARK_HUE}
-              onChange={(hue) => setSettings((prev) => ({ ...prev, darkHue: hue }))}
-            />
-            <HueSlider
-              label="Light color"
-              detail="Buttons and highlight accents."
-              hue={settings.lightHue}
-              saturation={30}
-              lightness={58}
-              defaultHue={DEFAULT_LIGHT_HUE}
-              onChange={(hue) => setSettings((prev) => ({ ...prev, lightHue: hue }))}
-            />
-          </div>
-          <p className="text-xs text-white/50 mt-2">Applies instantly across the whole app.</p>
-        </div>
-
-        {/* Previously this page ended right after the theme selector --
-            everything below it (Security) was in one thin card near the top
-            with a large empty page beneath, the sparsest-looking screen in
-            the app by a wide margin. Real account info (already available
-            from the logged-in session, nothing new fetched) instead of
-            padding with decorative or non-functional toggles. */}
-        <div className="mt-6 pt-5 border-t border-white/10">
-          <p className="ui-kicker">Account</p>
-          <div className="mt-3 surface p-3 grid sm:grid-cols-2 gap-3">
-            <div>
-              <p className="text-xs text-white/50 uppercase tracking-wide">Name</p>
-              <p className="text-sm mt-1">{user?.name || "--"}</p>
-            </div>
-            <div>
-              <p className="text-xs text-white/50 uppercase tracking-wide">Email</p>
-              <p className="text-sm mt-1">{user?.email || "--"}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-6 pt-5 border-t border-white/10">
-          <p className="ui-kicker">Security</p>
-          <div className="mt-3 surface p-3">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div>
-                <p className="text-sm font-medium">Log out everywhere</p>
-                <p className="text-xs text-white/70 mt-1 max-w-md">
-                  Signs you out on every device and browser, including this one. Use this if you
-                  think someone else may have access to your account.
-                </p>
+        {/* Two columns on desktop instead of one long vertical stack --
+            matching the card-grid pattern Dashboard already uses for its
+            Health/Retrospect preview row, so each section reads as its own
+            card rather than one more box in an undifferentiated list. */}
+        <div className="grid md:grid-cols-2 gap-4 items-start">
+          <div className="space-y-4">
+            {/* Theme mode + the two hue sliders used to be two separate,
+                visually unrelated boxes even though they're the same
+                "how the app looks" concern -- one card now, plus a live
+                preview swatch so the effect of dragging a slider is visible
+                without leaving the page. */}
+            <SectionCard icon={Palette} title="Appearance">
+              <SelectOption
+                title="Theme mode"
+                detail="Switch instantly between bright and deep background modes."
+                value={settings.themeMode}
+                onChange={(value) => setSettings((prev) => ({ ...prev, themeMode: value }))}
+              />
+              <div className="mt-3 grid sm:grid-cols-2 gap-3">
+                <HueSlider
+                  label="Dark color"
+                  detail="The app's main background."
+                  hue={settings.darkHue}
+                  saturation={18}
+                  lightness={13}
+                  defaultHue={DEFAULT_DARK_HUE}
+                  onChange={(hue) => setSettings((prev) => ({ ...prev, darkHue: hue }))}
+                />
+                <HueSlider
+                  label="Light color"
+                  detail="Buttons and highlight accents."
+                  hue={settings.lightHue}
+                  saturation={30}
+                  lightness={58}
+                  defaultHue={DEFAULT_LIGHT_HUE}
+                  onChange={(hue) => setSettings((prev) => ({ ...prev, lightHue: hue }))}
+                />
               </div>
-              <button
-                type="button"
-                onClick={handleLogoutEverywhere}
-                disabled={loggingOut}
-                className="px-4 py-2.5 min-h-11 rounded-xl border border-red-400/40 bg-red-500/10 hover:bg-red-500/20 text-red-200 text-sm font-medium disabled:opacity-60"
-              >
-                {loggingOut ? "Logging out..." : "Log out everywhere"}
-              </button>
-            </div>
-            {logoutStatus && <p className="text-xs text-red-300 mt-2">{logoutStatus}</p>}
+              <AppearancePreview darkHue={settings.darkHue} lightHue={settings.lightHue} />
+              <p className="text-xs text-white/50 mt-2">Applies instantly across the whole app.</p>
+            </SectionCard>
+
+            <SectionCard icon={UserRound} title="Account">
+              {/* No inner .surface box here -- previously this single info
+                  block sat in its own bordered box nested inside the
+                  SectionCard's own border, a card-in-a-card for content that
+                  never needed the extra separation. */}
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-white/50 uppercase tracking-wide">Name</p>
+                  <p className="text-sm mt-1">{user?.name || "--"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-white/50 uppercase tracking-wide">Email</p>
+                  <p className="text-sm mt-1">{user?.email || "--"}</p>
+                </div>
+              </div>
+            </SectionCard>
+
+            <SectionCard icon={Bell} title="Reminders">
+              <ReminderSection user={user} setUser={setUser} />
+            </SectionCard>
           </div>
 
-          <TwoFactorSection user={user} setUser={setUser} />
-        </div>
+          <div className="space-y-4">
+            <SectionCard icon={LogOut} title="Security">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <p className="text-sm font-medium">Log out everywhere</p>
+                  <p className="text-xs text-white/70 mt-1 max-w-md">
+                    Signs you out on every device and browser, including this one. Use this if you
+                    think someone else may have access to your account.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleLogoutEverywhere}
+                  disabled={loggingOut}
+                  className="ui-button-danger px-4 py-2.5 min-h-11 text-sm disabled:opacity-60"
+                >
+                  {loggingOut ? "Logging out..." : "Log out everywhere"}
+                </button>
+              </div>
+              {logoutStatus && <p className="text-xs text-red-300 mt-2">{logoutStatus}</p>}
+            </SectionCard>
 
-        <div className="mt-6 pt-5 border-t border-white/10">
-          <p className="ui-kicker">Integrations</p>
-          <AppleHealthSection />
+            {/* Split out from Security into its own card -- previously both
+                lived under one "Security" heading and the combined block
+                was the single busiest, most text-heavy section on the
+                page. */}
+            <SectionCard icon={ShieldCheck} title="Two-factor authentication">
+              <TwoFactorSection user={user} setUser={setUser} />
+            </SectionCard>
+
+            <SectionCard icon={HeartPulse} title="Integrations">
+              <AppleHealthSection />
+            </SectionCard>
+
+            <SectionCard icon={Download} title="Your data">
+              <ExportSection />
+            </SectionCard>
+          </div>
         </div>
       </div>
     </main>
+  );
+}
+
+// Small mockup card painted with the two colors the sliders above actually
+// control -- computed directly from the live hue state (not the CSS custom
+// properties, which only update once the settings-change effect runs),
+// so dragging a slider updates this preview in the same render.
+function AppearancePreview({ darkHue, lightHue }) {
+  const bg = hslToHex(darkHue, 18, 13);
+  const light = hslToHex(lightHue, 30, 58);
+  return (
+    <div className="mt-3 rounded-xl p-3 border border-white/10" style={{ background: bg }}>
+      <p className="text-[10px] uppercase tracking-wide" style={{ color: light, fontFamily: '"IBM Plex Mono", monospace' }}>
+        Preview
+      </p>
+      <button
+        type="button"
+        tabIndex={-1}
+        className="mt-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold pointer-events-none"
+        style={{ background: light, color: "#16210f" }}
+      >
+        Button
+      </button>
+    </div>
+  );
+}
+
+// "Download all my data" -- a trust/portability feature standard on Day One,
+// Reflectly, etc. that was previously entirely absent here: there was no way
+// to get your own journal, health, retrospect, or chat data out of the app.
+// Backed by GET /api/export/all (see server/src/modules/export/routes.js).
+// Fetched manually here (not via the shared apiFetch helper) since that
+// helper always calls res.json() and returns parsed data -- this needs the
+// raw response as a Blob so the browser can trigger an actual file download
+// via a temporary object URL, not just hand back a JS object.
+function ExportSection() {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function exportData() {
+    setBusy(true);
+    setError("");
+    try {
+      const apiBase = import.meta.env.VITE_API_URL || "http://localhost:5000";
+      const token = localStorage.getItem("reflectai_token");
+      const res = await fetch(`${apiBase}/api/export/all`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error("Export failed. Please try again.");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `reflectai-export-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err?.message || "Export failed. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <p className="text-sm font-medium">Export your data</p>
+          <p className="text-xs text-white/70 mt-1 max-w-md">
+            Download every journal entry, health reading, retrospect analysis, and chat message as one JSON file.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={exportData}
+          disabled={busy}
+          className="ui-button-ghost px-4 py-2.5 min-h-11 text-sm disabled:opacity-60"
+        >
+          {busy ? "Preparing..." : "Download my data"}
+        </button>
+      </div>
+      {error && <p className="text-xs text-red-300 mt-2">{error}</p>}
+    </div>
+  );
+}
+
+// Lets each account pick its own daily journaling-reminder hour, or turn
+// reminders off entirely -- backed by PATCH /api/auth/reminder-preferences
+// (see server/src/modules/auth/routes.js) and read by the hourly
+// send-reminders script (server/src/scripts/sendJournalingReminders.js).
+// Saves immediately on change (no separate Save button) since there are only
+// two small controls here.
+function formatHour(h) {
+  const period = h >= 12 ? "PM" : "AM";
+  const twelve = h % 12 === 0 ? 12 : h % 12;
+  return `${twelve}:00 ${period}`;
+}
+
+function ReminderSection({ user, setUser }) {
+  const [enabled, setEnabled] = useState(user?.reminderEnabled ?? true);
+  const [hour, setHour] = useState(user?.reminderHour ?? 20);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setEnabled(user?.reminderEnabled ?? true);
+    setHour(user?.reminderHour ?? 20);
+  }, [user?.reminderEnabled, user?.reminderHour]);
+
+  async function save(nextEnabled, nextHour) {
+    setBusy(true);
+    setError("");
+    setSaved(false);
+    try {
+      const data = await apiFetch("/api/auth/reminder-preferences", {
+        method: "PATCH",
+        body: JSON.stringify({ enabled: nextEnabled, hour: nextHour }),
+      });
+      setUser((prev) => ({ ...prev, ...data }));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setError(describeError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 surface p-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <p className="text-sm font-medium">Daily journaling reminder</p>
+          <p className="text-xs text-white/70 mt-1 max-w-md">
+            A gentle email nudge if you haven't journaled yet by your chosen time.
+          </p>
+        </div>
+        <label className="inline-flex items-center gap-2 cursor-pointer shrink-0">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(e) => {
+              const next = e.target.checked;
+              setEnabled(next);
+              save(next, hour);
+            }}
+            className="w-4 h-4"
+          />
+          <span className="text-xs text-white/70">{enabled ? "On" : "Off"}</span>
+        </label>
+      </div>
+
+      {enabled && (
+        <div className="mt-3 flex items-center gap-3 border-t border-white/10 pt-3">
+          <p className="text-xs text-white/70">Remind me around</p>
+          <select
+            value={hour}
+            onChange={(e) => {
+              const next = Number(e.target.value);
+              setHour(next);
+              save(enabled, next);
+            }}
+            // Same visual language as .ui-input (background/border/focus
+            // color) without importing its width:100% -- that would fight
+            // this flex row's layout. Previously a hardcoded near-black navy
+            // (#111827) that looked like a different, unstyled control next
+            // to every real .ui-input field elsewhere in the app.
+            className="rounded-[0.8rem] bg-[#101814]/90 border border-white/15 px-3 py-1.5 text-xs outline-none focus:border-[#c5d7a6]"
+          >
+            {Array.from({ length: 24 }).map((_, h) => (
+              <option key={h} value={h}>
+                {formatHour(h)}
+              </option>
+            ))}
+          </select>
+          {busy && <span className="text-xs text-white/50">Saving...</span>}
+          {saved && !busy && <span className="text-xs text-emerald-300">Saved</span>}
+        </div>
+      )}
+      {error && <p className="text-xs text-red-300 mt-2">{error}</p>}
+    </div>
   );
 }
 
@@ -268,7 +488,7 @@ function AppleHealthSection() {
   }
 
   return (
-    <div className="mt-3 surface p-3">
+    <div>
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <p className="text-sm font-medium">Apple Health</p>
@@ -281,7 +501,7 @@ function AppleHealthSection() {
           type="button"
           onClick={generateToken}
           disabled={busy}
-          className="px-4 py-2.5 min-h-11 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 text-sm font-medium disabled:opacity-60"
+          className="ui-button-ghost px-4 py-2.5 min-h-11 text-sm disabled:opacity-60"
         >
           {busy ? "Generating..." : token ? "Regenerate token" : "Generate sync token"}
         </button>
@@ -307,7 +527,7 @@ function AppleHealthSection() {
                 <button
                   type="button"
                   onClick={copyToken}
-                  className="px-3 py-2 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 text-xs shrink-0"
+                  className="ui-button-ghost px-3 py-2 text-xs shrink-0"
                 >
                   {copied ? "Copied" : "Copy"}
                 </button>
@@ -391,13 +611,15 @@ function TwoFactorSection({ user, setUser }) {
   }
 
   return (
-    <div className="mt-4 surface p-3">
+    <div>
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <p className="text-sm font-medium">Two-factor authentication</p>
+          <p className="text-sm font-medium">
+            {user?.twoFactorEnabled ? "Enabled" : "Not enabled"}
+          </p>
           <p className="text-xs text-white/70 mt-1 max-w-md">
             {user?.twoFactorEnabled
-              ? "Enabled -- logging in also requires a code from your authenticator app."
+              ? "Logging in also requires a code from your authenticator app."
               : "Add an authenticator app code as a second step at login."}
           </p>
         </div>
@@ -405,7 +627,7 @@ function TwoFactorSection({ user, setUser }) {
           <button
             type="button"
             onClick={() => setShowDisable(true)}
-            className="px-4 py-2.5 min-h-11 rounded-xl border border-red-400/40 bg-red-500/10 hover:bg-red-500/20 text-red-200 text-sm font-medium"
+            className="ui-button-danger px-4 py-2.5 min-h-11 text-sm"
           >
             Disable
           </button>
@@ -415,7 +637,7 @@ function TwoFactorSection({ user, setUser }) {
             type="button"
             onClick={startSetup}
             disabled={busy}
-            className="px-4 py-2.5 min-h-11 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 text-sm font-medium disabled:opacity-60"
+            className="ui-button-ghost px-4 py-2.5 min-h-11 text-sm disabled:opacity-60"
           >
             {busy ? "Starting..." : "Enable"}
           </button>
@@ -466,7 +688,7 @@ function TwoFactorSection({ user, setUser }) {
           </div>
           <button
             type="button"
-            className="px-4 py-2.5 min-h-11 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 text-sm font-medium"
+            className="ui-button-ghost px-4 py-2.5 min-h-11 text-sm"
             onClick={() => setBackupCodes(null)}
           >
             I've saved these codes
@@ -485,7 +707,7 @@ function TwoFactorSection({ user, setUser }) {
           />
           <div className="flex gap-2">
             <button
-              className="px-4 py-2.5 min-h-11 rounded-xl border border-red-400/40 bg-red-500/10 hover:bg-red-500/20 text-red-200 text-sm font-medium"
+              className="ui-button-danger px-4 py-2.5 min-h-11 text-sm"
               disabled={busy}
             >
               {busy ? "Disabling..." : "Confirm disable"}
@@ -522,7 +744,7 @@ function HueSlider({ label, detail, hue, saturation, lightness, defaultHue, onCh
           <button
             type="button"
             onClick={() => onChange(defaultHue)}
-            className="px-2.5 py-1.5 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 text-xs shrink-0"
+            className="ui-button-ghost px-2.5 py-1.5 text-xs shrink-0"
           >
             Reset
           </button>
@@ -556,7 +778,7 @@ function SelectOption({ title, detail, value, onChange }) {
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="rounded-lg bg-[#111827] border border-white/15 px-2 py-1 text-xs"
+          className="rounded-[0.8rem] bg-[#101814]/90 border border-white/15 px-3 py-1.5 text-xs outline-none focus:border-[#c5d7a6]"
         >
           <option value="midnight">Midnight</option>
           <option value="daylight">Daylight</option>

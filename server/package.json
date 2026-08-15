@@ -7,7 +7,11 @@
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
     "seed": "node src/seed.js",
-    "flush-non-demo": "node src/scripts/flushNonDemoUsers.js"
+    "flush-non-demo": "node src/scripts/flushNonDemoUsers.js",
+    "send-reminders": "node src/scripts/sendJournalingReminders.js",
+    "embed-journals": "node src/scripts/embedJournalEntries.js",
+    "seed-demo-journal": "node src/scripts/seedDemoJournal.js",
+    "clear-retrospect-cache": "node src/scripts/clearRetrospectCache.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

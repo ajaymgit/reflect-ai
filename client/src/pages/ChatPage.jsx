@@ -1,10 +1,39 @@
 import { motion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, Feather, PenSquare, RotateCcw, Sparkles, SlidersHorizontal } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { apiFetch, describeError } from "../api";
 import { useAuth } from "../context/AuthContext";
+import FirstTimeTip from "../components/FirstTimeTip";
+import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
+import { suggestMoodFromText } from "../utils/moodSuggestion";
+import { MOODS as moodOptions, MOOD_BG_CLASS } from "../utils/moodColors";
 
-const moodOptions = ["happy", "calm", "reflective", "sad", "stressed", "angry"];
+// Quick-journal draft autosave -- same pattern JournalPage's composer uses
+// (see DRAFT_KEY there), so switching away from Chat mid-thought doesn't
+// silently lose whatever was typed in the sidebar composer. Separate key
+// from Write's own draft since these are two independent composers.
+const CHAT_DRAFT_KEY = "equoria-chat-quickjournal-draft";
+
+// Plain-language read on what a conversation has touched on so far, built
+// from the same `focus` category each turn already returns (previously only
+// used to tint the message pane's background, never surfaced as text) --
+// the "what happened after the conversation" summary AI journaling apps like
+// Rosebud/Mindsera show, instead of leaving the transcript as the only
+// artifact of a session.
+const FOCUS_LABEL = {
+  emotional_safety: "some heavier feelings",
+  positive_state: "what's been going well",
+  relationships: "a relationship",
+  general_reflection: "general reflection",
+};
+
+// Same stagger/entrance pattern the rest of the redesigned pages use --
+// previously Chat rendered with a hard instant cut, the one page in regular
+// daily use (alongside Settings) that never picked this up.
+const pageVariants = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] } } };
+const staticPageVariants = { hidden: { opacity: 1, y: 0 }, visible: { opacity: 1, y: 0 } };
+
 // Previously used emoji (☀️🍃🌿) here while Dashboard and Journal used
 // colored dots for the exact same six moods -- two different visual
 // languages for the same concept. Unified to the colored-dot style below.
@@ -16,6 +45,11 @@ const moodMeta = {
   stressed: { label: "Stressed" },
   angry: { label: "Angry" },
 };
+const personas = [
+  { id: "gentle", label: "Gentle listener", detail: "Warm, soft, validating -- emotion first." },
+  { id: "stoic", label: "Stoic challenger", detail: "Calmer and more direct -- what's in your control vs. not." },
+  { id: "cbt", label: "CBT reframer", detail: "Gently reframes all-or-nothing thinking before the question." },
+];
 const quickPrompts = [
   "Quick emotional check-in",
   "I feel stuck today",
@@ -26,17 +60,11 @@ const quickPrompts = [
 // (#a7b899 / #7f8b74) that don't exist anywhere else in the app's mood
 // palette -- they rendered as grey-green dots instead of the purple tones
 // (#a989b2 / #84689d) used on Dashboard, the mood calendar, and the memory
-// globe for those exact two moods. Also unified angry's Tailwind named color
-// to the same #ef4444 hex used elsewhere, for one source of truth.
-const moodColor = {
-  happy: "bg-[#e8ab5f]/80",
-  calm: "bg-[#8eb184]/80",
-  reflective: "bg-[#a989b2]/80",
-  sad: "bg-[#84689d]/80",
-  stressed: "bg-[#da8b5b]/80",
-  angry: "bg-[#ef4444]/80",
-};
-
+// globe for those exact two moods. Now pulled from the same shared
+// utils/moodColors.js every other page uses, one source of truth.
+const moodColor = Object.fromEntries(
+  Object.keys(MOOD_BG_CLASS).map((mood) => [mood, `${MOOD_BG_CLASS[mood]}/80`])
+);
 export default function ChatPage() {
   const { user } = useAuth();
   const location = useLocation();
@@ -47,6 +75,7 @@ export default function ChatPage() {
   const [quickEntryStatus, setQuickEntryStatus] = useState("");
   const [savingQuickEntry, setSavingQuickEntry] = useState(false);
   const [mood, setMood] = useState("calm");
+  const [isKeepsake, setIsKeepsake] = useState(false);
   const [themeMode] = useState("midnight");
   const [writingMode] = useState("focus");
   const [ambientOn] = useState(true);
@@ -55,15 +84,54 @@ export default function ChatPage() {
   const [smartPrompt, setSmartPrompt] = useState("");
   const [meta, setMeta] = useState({ readiness: { score: 0, label: "Low" }, confidence: 0 });
   const [chatMode, setChatMode] = useState("quick");
+  const [persona, setPersona] = useState("gentle");
   const [responseStyle, setResponseStyle] = useState(50);
   const [useMemory, setUseMemory] = useState(true);
   const [statusText, setStatusText] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [resettingChat, setResettingChat] = useState(false);
+  const reducedMotion = usePrefersReducedMotion();
+  const hydratedDraft = useRef(false);
   function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   const listRef = useRef(null);
   const endRef = useRef(null);
+
+  // Restore an unsaved quick-journal draft, same reasoning as JournalPage's
+  // composer: a refresh or accidental navigation away from Chat previously
+  // lost whatever was typed in the sidebar with zero warning.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(CHAT_DRAFT_KEY);
+      if (raw) {
+        const draft = JSON.parse(raw);
+        if (draft?.content) {
+          setQuickEntry(draft.content);
+          setMood(draft.mood || "calm");
+        }
+      }
+    } catch {
+      // ignore -- worst case the draft just doesn't restore
+    }
+    hydratedDraft.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!hydratedDraft.current) return;
+    try {
+      if (quickEntry.trim()) {
+        localStorage.setItem(CHAT_DRAFT_KEY, JSON.stringify({ content: quickEntry, mood }));
+      } else {
+        localStorage.removeItem(CHAT_DRAFT_KEY);
+      }
+    } catch {
+      // ignore
+    }
+  }, [quickEntry, mood]);
+
+  const suggestedQuickMood = useMemo(() => suggestMoodFromText(quickEntry), [quickEntry]);
 
   useEffect(() => {
     apiFetch("/api/chat/session")
@@ -103,6 +171,42 @@ export default function ChatPage() {
     setSmartPrompt(promptByMood[topMood] || "What feels most important to write about right now?");
   }, [recentEntries]);
 
+  // Plain-language "what this touched on" summary built from each turn's
+  // existing `focus` field -- previously that data only ever drove a
+  // background tint, and the transcript itself was the only artifact of a
+  // conversation. Only shown once there's enough of a conversation for a
+  // summary to mean anything.
+  const conversationTopics = useMemo(() => {
+    if (turns.length < 2) return [];
+    const seen = new Set();
+    const ordered = [];
+    for (const t of turns) {
+      const label = FOCUS_LABEL[t.focus] || FOCUS_LABEL.general_reflection;
+      if (!seen.has(label)) {
+        seen.add(label);
+        ordered.push(label);
+      }
+    }
+    return ordered;
+  }, [turns]);
+
+  // Clears both the visible thread and the server-side memory context (see
+  // DELETE /api/chat/session) -- previously there was no way to start over
+  // without the old thread reappearing on next load.
+  async function newChat() {
+    if (turns.length > 0 && !window.confirm("Start a new chat? This clears the current conversation.")) return;
+    setResettingChat(true);
+    try {
+      await apiFetch("/api/chat/session", { method: "DELETE" });
+      setTurns([]);
+      setMeta({ readiness: { score: 0, label: "Low" }, confidence: 0 });
+    } catch {
+      // best-effort -- if the request fails the old thread just stays
+    } finally {
+      setResettingChat(false);
+    }
+  }
+
   async function sendMessage(e) {
     e.preventDefault();
     if (!message.trim()) return;
@@ -120,6 +224,7 @@ export default function ChatPage() {
             mode: chatMode,
             responseStyle,
             useMemory,
+            persona,
           },
         }),
       });
@@ -170,12 +275,18 @@ export default function ChatPage() {
     try {
       const saved = await apiFetch("/api/journal/quick-entry", {
         method: "POST",
-        body: JSON.stringify({ content: quickEntry, mood }),
+        body: JSON.stringify({ content: quickEntry, mood, isKeepsake }),
       });
       setRecentEntries((prev) => [saved, ...prev].slice(0, 30));
       setSelectedEntryId(saved._id);
       setQuickEntry("");
-      setQuickEntryStatus("Saved");
+      setIsKeepsake(false);
+      setQuickEntryStatus(isKeepsake ? "Saved as a Keepsake" : "Saved");
+      try {
+        localStorage.removeItem(CHAT_DRAFT_KEY);
+      } catch {
+        // ignore
+      }
     } catch (err) {
       // Previously this had no try/catch at all: a failure here was a silent
       // unhandled promise rejection -- no status shown, nothing cleared, the
@@ -200,7 +311,6 @@ export default function ChatPage() {
   }
 
   const selectedEntry = recentEntries.find((e) => e._id === selectedEntryId) || null;
-  const sparkline = recentEntries.slice(0, 14).reverse();
   const heroGreeting = new Date().getHours() < 16 ? "Good day" : "Good evening";
   const latestFocus = turns[turns.length - 1]?.focus || "general_reflection";
   const lastUserThread = turns
@@ -216,6 +326,9 @@ export default function ChatPage() {
           ? "bg-[#4a3550]/20"
           : "bg-[#1f2a22]/20";
 
+  const activeModeLabel = { quick: "Quick chat", deep: "Deep reflection", analysis: "Pattern analysis" }[chatMode];
+  const activePersonaLabel = personas.find((p) => p.id === persona)?.label || "Gentle listener";
+
   return (
     <div
       className={`text-white flex flex-col theme-${themeMode} ${
@@ -223,8 +336,13 @@ export default function ChatPage() {
       }`}
     >
       <main className="p-3 md:p-6">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4 h-full">
-          <section className={`glass rounded-3xl flex flex-col min-h-[70vh] ${toneClass}`}>
+        <motion.div
+          className="max-w-7xl mx-auto grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4 h-full"
+          variants={reducedMotion ? staticPageVariants : pageVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <section className={`glass rounded-2xl flex flex-col min-h-[70vh] ${toneClass}`}>
             <div className="p-4 md:p-5 border-b border-white/10 flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm text-white/80">{heroGreeting}, {user?.name}</p>
@@ -241,59 +359,128 @@ export default function ChatPage() {
                     {confidenceLabel(meta.confidence)}
                   </span>
                 )}
+                {turns.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={newChat}
+                    disabled={resettingChat}
+                    title="Clear this conversation and start fresh"
+                    className="text-xs px-3 py-1 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 inline-flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    <RotateCcw size={11} />
+                    New chat
+                  </button>
+                )}
                 <Link to="/dashboard" className="text-xs px-3 py-1 rounded-full bg-white/5 border border-white/10 hover:bg-white/10">
                   Home
                 </Link>
               </div>
             </div>
-            <div className="px-4 md:px-5 py-3 border-b border-white/10 space-y-3">
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { id: "quick", label: "Quick chat" },
-                  { id: "deep", label: "Deep reflection" },
-                  { id: "analysis", label: "Pattern analysis" },
-                ].map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setChatMode(item.id)}
-                    aria-pressed={chatMode === item.id}
-                    className={`text-xs px-3 py-2 rounded-full border ${
-                      chatMode === item.id
-                        ? "bg-[#8fae73]/30 border-[#c5d7a6]"
-                        : "bg-white/5 border-white/10 hover:bg-white/10"
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-3 items-center">
-                <label className="text-xs text-white/70 flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={useMemory}
-                    onChange={(e) => setUseMemory(e.target.checked)}
-                    className="accent-[#8fae73]"
-                  />
-                  Use journal memory
-                </label>
-                <label className="text-xs text-white/70 flex items-center gap-2">
-                  <span className="shrink-0">Response style</span>
-                  <input
-                    className="w-full"
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={responseStyle}
-                    onChange={(e) => setResponseStyle(Number(e.target.value))}
-                  />
-                  <span className="text-[11px] text-white/55 shrink-0">
-                    {responseStyle < 35 ? "Very gentle" : responseStyle < 70 ? "Balanced" : "Analytical"}
-                  </span>
-                </label>
-              </div>
+            {/* Consolidated into one compact row (always-visible summary +
+                a toggle) instead of three stacked rows of pills that used to
+                sit above the composer before a single message was even
+                sent. Expanding reveals the exact same controls this used to
+                show unconditionally. */}
+            <div className="px-4 md:px-5 py-2.5 border-b border-white/10">
+              <button
+                type="button"
+                onClick={() => setSettingsOpen((v) => !v)}
+                aria-expanded={settingsOpen}
+                className="w-full flex items-center justify-between gap-2 text-xs text-white/70 hover:text-white transition"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <SlidersHorizontal size={13} className="text-white/55" />
+                  {activeModeLabel} · {activePersonaLabel}
+                </span>
+                <ChevronDown size={14} className={`text-white/55 transition-transform ${settingsOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {settingsOpen && (
+                <div className="mt-3 space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { id: "quick", label: "Quick chat" },
+                      { id: "deep", label: "Deep reflection" },
+                      { id: "analysis", label: "Pattern analysis" },
+                    ].map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setChatMode(item.id)}
+                        aria-pressed={chatMode === item.id}
+                        className={`text-xs px-3 py-2 rounded-full border ${
+                          chatMode === item.id
+                            ? "bg-[#8fae73]/30 border-[#c5d7a6]"
+                            : "bg-white/5 border-white/10 hover:bg-white/10"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Distinct coaching voices (see the persona rules block in
+                      chat/service.js's prompt) -- previously Chat only ever
+                      spoke in one fixed voice regardless of what kind of
+                      reflection someone actually wanted right now. */}
+                  <div className="flex flex-wrap gap-2">
+                    {personas.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setPersona(p.id)}
+                        aria-pressed={persona === p.id}
+                        title={p.detail}
+                        className={`text-xs px-3 py-2 rounded-full border ${
+                          persona === p.id
+                            ? "bg-[#a989b2]/25 border-[#a989b2]/60"
+                            : "bg-white/5 border-white/10 hover:bg-white/10"
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-3 items-center">
+                    <label className="text-xs text-white/70 flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={useMemory}
+                        onChange={(e) => setUseMemory(e.target.checked)}
+                        className="accent-[#8fae73]"
+                      />
+                      Use journal memory
+                    </label>
+                    <label className="text-xs text-white/70 flex items-center gap-2">
+                      <span className="shrink-0">Response style</span>
+                      <input
+                        className="w-full"
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={responseStyle}
+                        onChange={(e) => setResponseStyle(Number(e.target.value))}
+                      />
+                      <span className="text-[11px] text-white/55 shrink-0">
+                        {responseStyle < 35 ? "Very gentle" : responseStyle < 70 ? "Balanced" : "Analytical"}
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              )}
             </div>
+
+            {/* "What this touched on" -- see FOCUS_LABEL/conversationTopics
+                above. Sits right under the controls so it reads as a summary
+                of the conversation so far rather than competing with any
+                single message. */}
+            {conversationTopics.length > 0 && (
+              <div className="px-4 md:px-5 py-2 border-b border-white/10">
+                <p className="text-[11px] text-white/60">
+                  So far: <span className="text-white/70">{conversationTopics.join(", ")}</span>
+                </p>
+              </div>
+            )}
+
             {lastUserThread && (
               <div className="px-4 md:px-5 pt-3">
                 <button
@@ -323,7 +510,7 @@ export default function ChatPage() {
                     <p className="text-[11px] text-[#d9d2b0] mb-1">ReflectAI</p>
                     <p className="text-sm leading-6">{turn.aiResponse}</p>
                     {turn.evidence?.length > 0 && (
-                      <details className="mt-3 rounded-lg bg-[#111827] p-2 border border-white/10 text-xs">
+                      <details className="mt-3 rounded-lg bg-black/30 p-2 border border-white/10 text-xs">
                         <summary className="cursor-pointer text-[#d9d2b0]">Why this response</summary>
                         <div className="mt-2 grid gap-2">
                           {turn.evidence.map((ev, i) => (
@@ -375,7 +562,11 @@ export default function ChatPage() {
               <form onSubmit={sendMessage} className="flex gap-2 items-end">
                 <textarea
                   rows={2}
-                  className={`flex-1 rounded-xl bg-[#1f2a22] p-3 border border-white/10 outline-none focus:border-[#8fae73] resize-none min-h-11 ${
+                  // .ui-input -- same composer treatment JournalPage's
+                  // textarea uses, instead of a one-off hardcoded
+                  // bg-[#1f2a22]/border-white/10 combo that looked like a
+                  // different, unstyled input next to the rest of the app.
+                  className={`ui-input flex-1 resize-none min-h-11 ${
                     writingMode === "typewriter" ? "text-lg leading-8" : ""
                   }`}
                   placeholder="Message ReflectAI... (Enter to send, Shift+Enter for new line)"
@@ -384,7 +575,7 @@ export default function ChatPage() {
                   onKeyDown={onComposerKeyDown}
                 />
                 <button
-                  className="rounded-xl px-5 bg-[#8fae73] hover:bg-[#9fbe83] text-slate-900 min-h-11 font-medium disabled:opacity-60"
+                  className="px-5 min-h-11 ui-button-primary"
                   disabled={loading || !message.trim()}
                 >
                   Send
@@ -396,83 +587,122 @@ export default function ChatPage() {
             </div>
           </section>
 
-          <aside className="glass rounded-3xl p-4 md:p-5 h-fit xl:sticky xl:top-6 space-y-4">
-            <div>
-              <p className="text-[#d9d2b0] text-xs uppercase tracking-wider">Quick Journal</p>
-              <p className="text-sm text-white/70 mt-1">Capture your current state without leaving chat.</p>
+          <aside className="glass rounded-2xl p-4 md:p-5 h-fit xl:sticky xl:top-6 space-y-4">
+            <div className="flex items-center gap-2">
+              <PenSquare size={15} className="text-white/50" />
+              <p className="text-sm font-medium">Quick journal</p>
             </div>
+            <FirstTimeTip id="chat-quickjournal-keepsake">
+              This composer now supports Keepsakes too -- flag an entry here the same way you can from Write.
+            </FirstTimeTip>
             <textarea
-              className="w-full rounded-xl bg-[#1f2a22] p-3 border border-white/10 min-h-28 outline-none focus:border-[#8fae73]"
+              className="ui-input min-h-24"
               value={quickEntry}
               onChange={(e) => setQuickEntry(e.target.value)}
               placeholder="How are you feeling today?"
             />
-            <div className="grid grid-cols-2 gap-2">
-              {moodOptions.map((m) => (
-                <button
-                  type="button"
-                  key={m}
-                  onClick={() => setMood(m)}
-                  aria-pressed={mood === m}
-                  className={`px-3 py-2 min-h-11 rounded-xl border text-sm flex items-center justify-center gap-2 ${
-                    mood === m ? "bg-[#8fae73]/30 border-[#c5d7a6]" : "border-white/10"
-                  }`}
-                >
-                  <span className={`h-2.5 w-2.5 rounded-full ${moodColor[m] || "bg-white/40"}`} />
-                  <span>{moodMeta[m]?.label || m}</span>
-                </button>
-              ))}
+            {/* Same local, keyword-based suggestion Write's composer uses
+                (see ../utils/moodSuggestion) -- a dismissible suggestion
+                someone can accept, never an auto-applied mood. */}
+            {suggestedQuickMood && suggestedQuickMood !== mood && (
+              <button
+                type="button"
+                onClick={() => setMood(suggestedQuickMood)}
+                className="w-full text-left text-xs rounded-lg px-3 py-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white/70"
+              >
+                This reads as <span className="capitalize text-white">{suggestedQuickMood}</span> to me. Use it?
+              </button>
+            )}
+            {/* Compact circle row instead of a 2-col grid of full-width
+                labeled buttons -- same "row of circles" language as
+                Dashboard's weekly streak row, and takes a third of the
+                vertical space so the composer above doesn't get pushed down
+                by six stacked buttons. Label only shows for the selected
+                mood, right below the row, instead of on every button. */}
+            <div>
+              <div className="flex justify-between">
+                {moodOptions.map((m) => (
+                  <button
+                    type="button"
+                    key={m}
+                    onClick={() => setMood(m)}
+                    aria-pressed={mood === m}
+                    title={moodMeta[m]?.label || m}
+                    className={`h-9 w-9 rounded-full flex items-center justify-center border-2 transition ${
+                      mood === m ? "border-white/70 scale-110" : "border-transparent opacity-70 hover:opacity-100"
+                    } ${moodColor[m] || "bg-white/40"}`}
+                  />
+                ))}
+              </div>
+              <p className="text-xs text-white/60 text-center mt-2 capitalize">{moodMeta[mood]?.label || mood}</p>
             </div>
+            {/* Same opt-in Keepsake flag Write's composer has -- previously
+                saving from here always produced a plain entry with no way
+                to flag it, a real capability gap versus the Write page. */}
             <button
               type="button"
-              className="w-full px-4 py-3 min-h-11 rounded-xl bg-[#8fae73] hover:bg-[#9fbe83] text-slate-900 font-medium disabled:opacity-60"
+              onClick={() => setIsKeepsake((v) => !v)}
+              aria-pressed={isKeepsake}
+              className={`w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl border text-xs transition ${
+                isKeepsake
+                  ? "border-[#e8ab5f]/60 bg-[#e8ab5f]/15 text-white"
+                  : "border-white/15 bg-white/5 text-white/60 hover:border-white/25 hover:text-white/85"
+              }`}
+            >
+              <Sparkles size={12} className={isKeepsake ? "text-[#e8ab5f]" : "text-white/55"} />
+              {isKeepsake ? "Saving as a Keepsake" : "Save as a Keepsake"}
+            </button>
+            <button
+              type="button"
+              className="w-full px-4 py-3 min-h-11 ui-button-primary"
               onClick={saveQuickEntry}
               disabled={savingQuickEntry || !quickEntry.trim()}
             >
-              {savingQuickEntry ? "Saving..." : "Save Journal Entry"}
+              {savingQuickEntry ? "Saving..." : "Save journal entry"}
             </button>
             {quickEntryStatus && (
-              <p className={`text-xs ${quickEntryStatus === "Saved" ? "text-[#c5d7a6]" : "text-red-300"}`}>
+              <p className={`text-xs ${quickEntryStatus.startsWith("Saved") ? "text-[#c5d7a6]" : "text-red-300"}`}>
                 {quickEntryStatus}
               </p>
             )}
 
             <div className="border-t border-white/10 pt-4 space-y-3">
-              <p className="text-[#d9d2b0] text-xs uppercase tracking-wider">Emotional Timeline</p>
-              <div className="flex items-end gap-1 h-8">
-                {sparkline.map((entry) => (
-                  <button
-                    key={entry._id}
-                    type="button"
-                    title={`${new Date(entry.createdAt).toDateString()} • ${entry.mood}`}
-                    onClick={() => setSelectedEntryId(entry._id)}
-                    className={`w-3 rounded-t ${moodColor[entry.mood] || "bg-white/40"} ${
-                      selectedEntryId === entry._id ? "h-8 ring-1 ring-white/80" : "h-5"
-                    }`}
-                  />
-                ))}
+              <div className="flex items-center gap-2">
+                <Feather size={15} className="text-white/50" />
+                <p className="text-sm font-medium">Emotional timeline</p>
               </div>
-              <div className="max-h-48 overflow-y-auto scroll-area space-y-2">
-                {recentEntries.map((entry) => (
-                  <button
-                    key={entry._id}
-                    type="button"
-                    onClick={() => setSelectedEntryId(entry._id)}
-                    className={`w-full text-left rounded-xl p-2 border transition ${
-                      selectedEntryId === entry._id
-                        ? "bg-white/10 border-white/30"
-                        : "bg-white/5 border-white/10 hover:bg-white/10"
-                    }`}
-                  >
-                    <p className="text-[11px] text-white/60">
-                      {new Date(entry.createdAt).toDateString()} • {entry.mood}
-                    </p>
-                    <p className="text-xs line-clamp-2 text-white/80">{entry.content}</p>
-                  </button>
-                ))}
+              {/* One horizontal scrollable strip instead of two separate
+                  elements (a bar-chart sparkline, then a whole separate
+                  scrolling list below it) showing the same entries twice.
+                  Each chip is just a date with a small mood-color dot --
+                  color used as a functional indicator (like a status dot),
+                  not a full tinted icon badge. */}
+              <div className="flex gap-1 overflow-x-auto scroll-area pb-1 -mx-1 px-1">
+                {recentEntries.map((entry) => {
+                  const active = selectedEntryId === entry._id;
+                  return (
+                    <button
+                      key={entry._id}
+                      type="button"
+                      title={`${new Date(entry.createdAt).toDateString()} • ${entry.mood}`}
+                      onClick={() => setSelectedEntryId(entry._id)}
+                      className={`shrink-0 flex flex-col items-center gap-1.5 rounded-lg px-2.5 py-2 transition ${
+                        active ? "bg-white/10" : "hover:bg-white/5"
+                      }`}
+                    >
+                      <span className={`h-1.5 w-1.5 rounded-full ${moodColor[entry.mood] || "bg-white/40"}`} />
+                      <span className="text-[10px] text-white/50 whitespace-nowrap">
+                        {new Date(entry.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                      </span>
+                    </button>
+                  );
+                })}
+                {recentEntries.length === 0 && (
+                  <p className="text-xs text-white/55 py-2 italic">Nothing here yet -- your first entry will show up as a chip.</p>
+                )}
               </div>
               {selectedEntry && (
-                <div className="rounded-xl p-3 bg-[#111827] border border-white/10">
+                <div className="rounded-xl p-3 bg-black/30 border border-white/10">
                   <p className="text-[11px] text-[#d9d2b0]">
                     {new Date(selectedEntry.createdAt).toDateString()} • {selectedEntry.mood}
                   </p>
@@ -481,7 +711,7 @@ export default function ChatPage() {
               )}
             </div>
           </aside>
-        </div>
+        </motion.div>
       </main>
     </div>
   );

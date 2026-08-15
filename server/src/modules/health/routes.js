@@ -1,8 +1,12 @@
 import { Router } from "express";
 import HealthData from "../../models/HealthData.js";
+import JournalEntry from "../../models/JournalEntry.js";
 import { requireAuth } from "../../shared/middleware/auth.js";
 import { requireHealthSyncToken } from "../../shared/middleware/healthSyncAuth.js";
+import { validateRequest } from "../../shared/middleware/validateRequest.js";
+import { manualHealthEntrySchema } from "../../shared/validators/healthSchemas.js";
 import { asyncHandler } from "../../shared/utils/asyncHandler.js";
+import { computeHealthMoodCorrelations, MOOD_SCORE } from "../../shared/utils/correlation.js";
 
 const router = Router();
 
@@ -40,11 +44,51 @@ function getStatus(stressScore = 0) {
   return "Good";
 }
 
+function dayKey(date) {
+  const d = new Date(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// One mood score per day, most-recent-entry-per-day wins -- same convention
+// used by correlation.js and the dashboard's mood calendar. Used to overlay
+// mood directly onto the weekly health trend chart so the Health page can
+// show "here's steps/sleep AND mood on the same days" in one chart instead
+// of making someone flip to the separate Connections tab to see the two
+// relate at all.
+function moodScoreByDay(journalRows) {
+  const map = new Map();
+  for (const entry of journalRows) {
+    const key = dayKey(entry.createdAt);
+    const existing = map.get(key);
+    if (!existing || new Date(entry.createdAt) > new Date(existing.date)) {
+      map.set(key, { date: entry.createdAt, score: MOOD_SCORE[entry.mood] ?? null });
+    }
+  }
+  return map;
+}
+
 router.get(
   "/overview",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const rows = await HealthData.find({ userId: req.user._id }).sort({ date: -1 }).limit(30);
+    // A wider window than `rows` (60 days of health + journals) purely for
+    // computing correlations -- more paired days makes for a more reliable
+    // Pearson coefficient than the 30-day window everything else on this
+    // page uses. Kept separate from `rows` so the existing weekly/monthly
+    // averages and trend chart are completely unaffected.
+    const [rows, correlationHealthRows, correlationJournalRows] = await Promise.all([
+      HealthData.find({ userId: req.user._id }).sort({ date: -1 }).limit(30),
+      HealthData.find({ userId: req.user._id }).sort({ date: -1 }).limit(60),
+      JournalEntry.find({ userId: req.user._id }).sort({ createdAt: -1 }).limit(90).select("mood createdAt"),
+    ]);
+    const correlations = computeHealthMoodCorrelations({
+      healthRows: correlationHealthRows,
+      journalRows: correlationJournalRows,
+    });
+    // Reuses the same 90-day journal fetch already made for correlations --
+    // no extra query -- just re-keyed by day so the weekly trend chart can
+    // overlay "and here's the mood that day" on the same axis as steps/sleep.
+    const moodByDay = moodScoreByDay(correlationJournalRows);
     const latest = rows[0] || null;
     const weeklyRows = rows.slice(0, 7);
     const monthlyRows = rows.slice(0, 30);
@@ -71,6 +115,7 @@ router.get(
           sleep: r.sleepHours,
           stress: r.stressScore,
           heartRate: r.restingHeartRate,
+          mood: moodByDay.get(dayKey(r.date))?.score ?? null,
         })),
       averages: {
         weekly: {
@@ -94,10 +139,17 @@ router.get(
       // HealthPage.jsx's `data?.status || "Loading..."` still renders it
       // normally since it's a non-empty string, not null/undefined.
       status: rows.length ? getStatus(avg(weeklyRows, "stressScore")) : "No data yet",
+      // Previously two hardcoded sentences picked only by whether rows.length
+      // >= 7 -- "improving" was shown to every user with a week of data
+      // regardless of whether their trend was actually improving, flat, or
+      // worsening. Now a real Pearson correlation computed from that
+      // person's own health + mood data (see shared/utils/correlation.js),
+      // with an honest "not enough data" message when there genuinely isn't
+      // enough paired data yet to say anything.
       insight:
-        rows.length >= 7
-          ? "Your stress trend is improving as movement and consistency increase."
-          : "Add more health entries to unlock stronger mind-body correlation insights.",
+        correlations.description ||
+        "Add more health entries and journal entries on the same days to unlock a real mind-body correlation.",
+      correlations: correlations.results,
     });
   }),
 );
@@ -148,6 +200,53 @@ router.post(
     );
 
     res.json({ ok: true, date: row.date, steps: row.steps, sleepHours: row.sleepHours, restingHeartRate: row.restingHeartRate, stressScore: row.stressScore });
+  }),
+);
+
+// Manual counterpart to /sync -- same upsert-by-day logic and the same
+// estimateStressScore() heuristic, but reachable from the web app itself
+// under a normal login session instead of requiring the iOS companion app
+// and its separate sync token. Defaults to today when no date is given,
+// and clamps any future date back to today (a "log today's data" form has
+// no legitimate reason to backdate into the future).
+router.post(
+  "/manual-entry",
+  requireAuth,
+  validateRequest(manualHealthEntrySchema),
+  asyncHandler(async (req, res) => {
+    const { date: rawDate, steps, sleepHours, restingHeartRate } = req.validated.body;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let date = rawDate ? new Date(rawDate) : today;
+    date.setHours(0, 0, 0, 0);
+    if (date > today) date = today;
+
+    const providedCount = [steps, sleepHours, restingHeartRate].filter((v) => v !== undefined).length;
+
+    const update = {
+      source: "manual",
+      completeness: Number((providedCount / 3).toFixed(2)),
+      confidence: 0.7,
+      stressScore: estimateStressScore({ restingHeartRate, sleepHours }),
+    };
+    if (steps !== undefined) update.steps = steps;
+    if (sleepHours !== undefined) update.sleepHours = sleepHours;
+    if (restingHeartRate !== undefined) update.restingHeartRate = restingHeartRate;
+
+    const row = await HealthData.findOneAndUpdate(
+      { userId: req.user._id, date },
+      { $set: update, $setOnInsert: { userId: req.user._id, date } },
+      { upsert: true, new: true },
+    );
+
+    res.json({
+      ok: true,
+      date: row.date,
+      steps: row.steps,
+      sleepHours: row.sleepHours,
+      restingHeartRate: row.restingHeartRate,
+      stressScore: row.stressScore,
+    });
   }),
 );
 

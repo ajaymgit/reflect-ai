@@ -16,6 +16,7 @@ import {
   twoFactorVerifySchema,
   twoFactorLoginSchema,
   twoFactorDisableSchema,
+  reminderPreferencesSchema,
 } from "../../shared/validators/authSchemas.js";
 import { asyncHandler } from "../../shared/utils/asyncHandler.js";
 import { AppError } from "../../shared/utils/AppError.js";
@@ -65,7 +66,17 @@ function signTwoFactorPendingToken(user) {
 async function issueLoginTokens(user) {
   const token = signAccessToken(user);
   const refreshToken = await issueRefreshToken(user);
-  return { token, refreshToken, user: { id: user._id, name: user.name, email: user.email } };
+  return {
+    token,
+    refreshToken,
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      reminderEnabled: user.reminderEnabled ?? true,
+      reminderHour: user.reminderHour ?? 20,
+    },
+  };
 }
 
 const router = Router();
@@ -177,7 +188,13 @@ router.post(
     res.status(201).json({
       token,
       refreshToken,
-      user: { id: user._id, name: user.name, email: user.email },
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        reminderEnabled: user.reminderEnabled ?? true,
+        reminderHour: user.reminderHour ?? 20,
+      },
     });
   }),
 );
@@ -219,7 +236,25 @@ router.get(
       name: req.user.name,
       email: req.user.email,
       twoFactorEnabled: !!req.user.twoFactorEnabled,
+      reminderEnabled: req.user.reminderEnabled ?? true,
+      reminderHour: req.user.reminderHour ?? 20,
     });
+  }),
+);
+
+// Lets each account pick its own journaling-reminder time (or turn reminders
+// off entirely) instead of one fixed time for every user. Read by
+// scripts/sendJournalingReminders.js, which is meant to be run hourly (see
+// that file's header comment) and only emails accounts whose reminderHour
+// matches the hour it's currently running in.
+router.patch(
+  "/reminder-preferences",
+  requireAuth,
+  validateRequest(reminderPreferencesSchema),
+  asyncHandler(async (req, res) => {
+    const { enabled, hour } = req.body;
+    await User.findByIdAndUpdate(req.user._id, { reminderEnabled: enabled, reminderHour: hour });
+    res.json({ reminderEnabled: enabled, reminderHour: hour });
   }),
 );
 

@@ -25,6 +25,23 @@ const retrospectSchema = new mongoose.Schema(
       set: (v) => (v === null || v === undefined ? v : encryptField(v)),
       get: (v) => (v === null || v === undefined ? v : decryptField(v)),
     },
+    // Added alongside real AI generation of the Retrospect page -- previously
+    // these two were hardcoded, identical for every user, and never actually
+    // stored anywhere. Same encryption treatment as detectedPatterns/
+    // socraticQuestion since these also describe real, specific personal
+    // patterns derived from someone's actual journal/health data.
+    behavioralLoops: {
+      type: String,
+      default: null,
+      set: encryptArrayField,
+      get: decryptArrayField,
+    },
+    healthCorrelation: {
+      type: String,
+      default: null,
+      set: (v) => (v === null || v === undefined ? v : encryptField(v)),
+      get: (v) => (v === null || v === undefined ? v : decryptField(v)),
+    },
     confidence: { type: Number, default: 0.7 },
   },
   {

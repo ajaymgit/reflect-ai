@@ -10,10 +10,12 @@ const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const JournalPage = lazy(() => import("./pages/JournalPage"));
+const YearInReviewPage = lazy(() => import("./pages/YearInReviewPage"));
 const RetrospectPage = lazy(() => import("./pages/RetrospectPage"));
 const ChatPage = lazy(() => import("./pages/ChatPage"));
 const HealthPage = lazy(() => import("./pages/HealthPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const MorePage = lazy(() => import("./pages/MorePage"));
 
 export default function App() {
   const routeFallback = (
@@ -88,6 +90,19 @@ export default function App() {
             </Suspense>
           }
         />
+        {/* Journal History is no longer its own page -- it's the "History"
+            tab inside JournalPage now (see JournalPage.jsx). This route just
+            redirects so old links/bookmarks to /journal/history still land
+            somewhere sensible instead of 404-ing. */}
+        <Route path="journal/history" element={<Navigate to="/journal/new?view=history" replace />} />
+        <Route
+          path="year-in-review"
+          element={
+            <Suspense fallback={routeFallback}>
+              <YearInReviewPage />
+            </Suspense>
+          }
+        />
         <Route
           path="retrospect"
           element={
@@ -117,6 +132,15 @@ export default function App() {
           element={
             <Suspense fallback={routeFallback}>
               <SettingsPage />
+            </Suspense>
+          }
+        />
+        {/* Mobile-only overflow menu -- see AppShell.jsx / MorePage.jsx */}
+        <Route
+          path="more"
+          element={
+            <Suspense fallback={routeFallback}>
+              <MorePage />
             </Suspense>
           }
         />

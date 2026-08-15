@@ -3,6 +3,7 @@ import HealthData from "../../models/HealthData.js";
 import JournalEntry from "../../models/JournalEntry.js";
 import { requireAuth } from "../../shared/middleware/auth.js";
 import { asyncHandler } from "../../shared/utils/asyncHandler.js";
+import { getStreakDays } from "../../shared/utils/streak.js";
 
 const router = Router();
 
@@ -24,28 +25,6 @@ function getRangeStart(range) {
   start.setDate(now.getDate() - 6);
   start.setHours(0, 0, 0, 0);
   return start;
-}
-
-function getStreakDays(journals = []) {
-  if (!journals.length) return 0;
-  const uniqueDays = new Set(
-    journals.map((entry) => {
-      const date = new Date(entry.createdAt);
-      return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-    }),
-  );
-
-  let streak = 0;
-  const cursor = new Date();
-  cursor.setHours(0, 0, 0, 0);
-
-  while (true) {
-    const key = `${cursor.getFullYear()}-${cursor.getMonth()}-${cursor.getDate()}`;
-    if (!uniqueDays.has(key)) break;
-    streak += 1;
-    cursor.setDate(cursor.getDate() - 1);
-  }
-  return streak;
 }
 
 function buildCumulativeInsight({ mood, avgStress, avgSleep, avgSteps }) {
@@ -92,6 +71,23 @@ function buildEmotionDistribution(journals = []) {
 
 const ALLOWED_RANGES = new Set(["today", "week", "month"]);
 
+// Same "35-95, null with zero data" wellness formula the /summary handler
+// below already uses for the single current score -- factored out so the
+// 14-day trend line can compute the identical number for each individual
+// day instead of drifting out of sync with a slightly different formula.
+function wellnessFromStress(stressScore) {
+  if (!Number.isFinite(stressScore)) return null;
+  return Math.max(35, Math.min(95, 100 - Math.round(stressScore * 0.6)));
+}
+
+// Same guard as journal/routes.js's visibleFilter -- excludes time-capsule
+// entries (JournalEntry.revealAt in the future) from Dashboard's own
+// journal queries, so a capsule can't leak through as "today's mood," a
+// recent entry, or a mood-calendar day before its reveal date.
+function visibleFilter(extra = {}) {
+  return { ...extra, revealAt: { $not: { $gt: new Date() } } };
+}
+
 router.get(
   "/summary",
   requireAuth,
@@ -103,11 +99,21 @@ router.get(
     const rawRange = String(req.query.range || "week").toLowerCase();
     const range = ALLOWED_RANGES.has(rawRange) ? rawRange : "week";
     const rangeStart = getRangeStart(range);
-    const [latestJournal, allRecentJournals, rangeJournals, healthRows] = await Promise.all([
-      JournalEntry.findOne({ userId: req.user._id }).sort({ createdAt: -1 }),
-      JournalEntry.find({ userId: req.user._id }).sort({ createdAt: -1 }).limit(60),
-      JournalEntry.find({ userId: req.user._id, createdAt: { $gte: rangeStart } }).sort({ createdAt: -1 }).limit(30),
+    const trendStart = new Date();
+    trendStart.setDate(trendStart.getDate() - 13);
+    trendStart.setHours(0, 0, 0, 0);
+    const [latestJournal, allRecentJournals, rangeJournals, healthRows, trendHealthRows] = await Promise.all([
+      JournalEntry.findOne(visibleFilter({ userId: req.user._id })).sort({ createdAt: -1 }),
+      JournalEntry.find(visibleFilter({ userId: req.user._id })).sort({ createdAt: -1 }).limit(60),
+      JournalEntry.find(visibleFilter({ userId: req.user._id, createdAt: { $gte: rangeStart } }))
+        .sort({ createdAt: -1 })
+        .limit(30),
       HealthData.find({ userId: req.user._id, date: { $gte: rangeStart } }).sort({ date: -1 }).limit(30),
+      // Separate, fixed 14-day window purely for the wellness sparkline --
+      // deliberately independent of `range` (which the rest of this endpoint
+      // uses and can be as short as "today") so the trend line always shows
+      // a real trend instead of collapsing to 0-1 points.
+      HealthData.find({ userId: req.user._id, date: { $gte: trendStart } }).sort({ date: 1 }).select("date stressScore"),
     ]);
 
     const recentJournals = rangeJournals.slice(0, 8);
@@ -129,9 +135,29 @@ router.get(
     // client render an honest "not enough data yet" state instead.
     const wellness = healthRows.length ? Math.max(35, Math.min(95, 100 - Math.round(avgStress * 0.6))) : null;
 
+    // One point per day for the last 14 days -- feeds the small trend
+    // sparkline under the Dashboard hero's wellness number, giving that
+    // headline figure actual context (rising/falling/flat) instead of just
+    // sitting there as an isolated number.
+    const wellnessByDay = new Map();
+    for (const row of trendHealthRows) {
+      const d = new Date(row.date);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      wellnessByDay.set(key, wellnessFromStress(row.stressScore));
+    }
+    const wellnessTrend = [];
+    for (let i = 13; i >= 0; i -= 1) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      d.setHours(0, 0, 0, 0);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      wellnessTrend.push({ date: key, score: wellnessByDay.get(key) ?? null });
+    }
+
     res.json({
       greeting: `Welcome back, ${req.user.name}`,
       dailyWellnessScore: wellness,
+      wellnessTrend,
       journalingStreak: streak,
       entriesInRange: rangeJournals.length,
       todaysMood: latestJournal?.mood || "No check-in yet",
@@ -151,7 +177,10 @@ router.get(
       recentEntries: recentJournals.map((j) => ({
         id: j._id,
         title: j.title || truncateAtWord(j.content, 42),
+        excerpt: truncateAtWord(j.content, 110),
         mood: j.mood,
+        tags: j.tags || [],
+        isKeepsake: j.isKeepsake === true,
         createdAt: j.createdAt,
       })),
       retrospectAlert:
@@ -163,10 +192,10 @@ router.get(
 );
 
 // Backs the Dashboard mood-calendar heatmap (a GitHub-contributions-style
-// grid of the last ~18 weeks, color-coded by that day's mood) and the memory
-// globe. Only returns days that actually have an entry -- the client renders
-// every other day as an empty cell, so a sparse journaling history doesn't
-// get papered over with a fabricated mood.
+// grid of the last ~18 weeks, color-coded by that day's mood) and the
+// Keepsakes globe. Only returns days that actually have an entry -- the
+// client renders every other day as an empty cell, so a sparse journaling
+// history doesn't get papered over with a fabricated mood.
 router.get(
   "/mood-calendar",
   requireAuth,
@@ -176,17 +205,21 @@ router.get(
     start.setDate(start.getDate() - (days - 1));
     start.setHours(0, 0, 0, 0);
 
-    const entries = await JournalEntry.find({ userId: req.user._id, createdAt: { $gte: start } })
+    const entries = await JournalEntry.find(visibleFilter({ userId: req.user._id, createdAt: { $gte: start } }))
       .sort({ createdAt: 1 })
-      .select("mood title themes createdAt");
+      .select("mood title themes isKeepsake createdAt");
 
     // Most recent entry per calendar day wins, matching the same
     // most-recent-entry convention used for "todaysMood" above. title/themes
-    // ride along too -- the memory globe uses them so each pearl represents
-    // an actual entry (real title, real extracted keywords) instead of just
-    // a colored dot with no connection back to what was written.
+    // ride along too -- the Keepsakes globe uses them so each pearl
+    // represents an actual entry (real title, real extracted keywords)
+    // instead of just a colored dot with no connection back to what was
+    // written. isKeepsake rides along too -- previously the globe decided
+    // for itself which entries were "core" (today's, or whatever tied to the
+    // single most recurring theme); now that's a real per-entry flag someone
+    // sets themselves at write-time (see JournalEntry.isKeepsake), so this
+    // just passes it through rather than deriving a heuristic here.
     const byDay = new Map();
-    const themeCounts = new Map();
     for (const entry of entries) {
       const d = new Date(entry.createdAt);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -194,28 +227,12 @@ router.get(
         mood: entry.mood,
         title: entry.title || "",
         themes: entry.themes || [],
+        isKeepsake: entry.isKeepsake === true,
       });
-      for (const theme of entry.themes || []) {
-        themeCounts.set(theme, (themeCounts.get(theme) || 0) + 1);
-      }
-    }
-
-    // The single most-recurring keyword across this window -- used to pick
-    // out which memories the globe treats as "core" (glowing, trailed,
-    // constellation-linked) so that grouping means something ("these entries
-    // are about the same thing") instead of an arbitrary pick.
-    let topTheme = null;
-    let topThemeCount = 0;
-    for (const [theme, count] of themeCounts) {
-      if (count > topThemeCount && count >= 2) {
-        topTheme = theme;
-        topThemeCount = count;
-      }
     }
 
     res.json({
       days: Array.from(byDay.entries()).map(([date, info]) => ({ date, ...info })),
-      topTheme,
     });
   }),
 );

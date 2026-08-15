@@ -3,7 +3,8 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { apiFetch } from "../api";
 import { isoDay } from "../utils/date";
 import DayEntryPreview from "./DayEntryPreview";
-import MoodGlobeLauncher from "./MoodGlobeLauncher";
+import MoodRoseChart from "./MoodRoseChart";
+import { MOOD_META as emotionMeta, MOOD_BG_CLASS } from "../utils/moodColors";
 
 // Previously a GitHub-contributions-style strip of the last 18 weeks. Redone
 // as an actual month calendar (weekday grid, current month by default) with
@@ -13,22 +14,9 @@ import MoodGlobeLauncher from "./MoodGlobeLauncher";
 // new request per month.
 const FETCH_DAYS = 365;
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const emotionMeta = [
-  { key: "happy", label: "Happy", color: "bg-[#e8ab5f]" },
-  { key: "calm", label: "Calm", color: "bg-[#8eb184]" },
-  { key: "reflective", label: "Reflective", color: "bg-[#a989b2]" },
-  { key: "sad", label: "Sad", color: "bg-[#84689d]" },
-  { key: "stressed", label: "Stressed", color: "bg-[#da8b5b]" },
-  { key: "angry", label: "Angry", color: "bg-[#ef4444]" },
-];
-const moodColors = {
-  happy: "bg-[#e8ab5f]/75",
-  calm: "bg-[#8eb184]/75",
-  reflective: "bg-[#a989b2]/75",
-  sad: "bg-[#84689d]/75",
-  stressed: "bg-[#da8b5b]/75",
-  angry: "bg-[#ef4444]/75",
-};
+const moodColors = Object.fromEntries(
+  Object.keys(MOOD_BG_CLASS).map((mood) => [mood, `${MOOD_BG_CLASS[mood]}/75`])
+);
 
 function startOfMonth(d) {
   return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -62,11 +50,6 @@ function monthCounts(viewDate, moodByDate) {
 
 export default function MoodCalendar() {
   const [moodByDate, setMoodByDate] = useState(null);
-  // title/themes per day, alongside moodByDate -- lets the memory globe show
-  // each pearl's real entry title and group entries that share a recurring
-  // theme, instead of just a mood-colored dot with no content behind it.
-  const [metaByDate, setMetaByDate] = useState({});
-  const [topTheme, setTopTheme] = useState(null);
   const [viewDate, setViewDate] = useState(() => startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState(null);
 
@@ -74,14 +57,10 @@ export default function MoodCalendar() {
     apiFetch(`/api/dashboard/mood-calendar?days=${FETCH_DAYS}`)
       .then((data) => {
         const byDate = {};
-        const meta = {};
         for (const item of data?.days || []) {
           byDate[item.date] = item.mood;
-          meta[item.date] = { title: item.title || "", themes: item.themes || [] };
         }
         setMoodByDate(byDate);
-        setMetaByDate(meta);
-        setTopTheme(data?.topTheme || null);
       })
       .catch(() => setMoodByDate({}));
   }, []);
@@ -123,10 +102,7 @@ export default function MoodCalendar() {
   return (
     <div className="grid md:grid-cols-[300px_1fr] gap-6">
       <div>
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-[#d9d2b0] uppercase tracking-wider">Mood Calendar</p>
-          <MoodGlobeLauncher moodByDate={moodByDate} metaByDate={metaByDate} topTheme={topTheme} />
-        </div>
+        <p className="text-xs text-[#d9d2b0] uppercase tracking-wider">Mood Calendar</p>
         <p className="text-sm text-white/75 mt-2 mb-3">Color-coded by mood. Click any day you journaled on.</p>
 
         {/* Previously the 7-column grid stretched to the full width of the
@@ -156,7 +132,7 @@ export default function MoodCalendar() {
 
         <div className="grid grid-cols-7 gap-1">
           {WEEKDAY_LABELS.map((w) => (
-            <p key={w} className="text-[9px] uppercase tracking-wide text-white/40 text-center pb-1">
+            <p key={w} className="text-[9px] uppercase tracking-wide text-white/55 text-center pb-1">
               {w[0]}
             </p>
           ))}
@@ -171,7 +147,7 @@ export default function MoodCalendar() {
                 className={`aspect-square rounded text-[11px] flex items-center justify-center transition ${
                   cell.mood
                     ? `${moodColors[cell.mood] || "bg-white/30"} text-white font-medium cursor-pointer hover:brightness-110`
-                    : "bg-white/5 text-white/40"
+                    : "bg-white/5 text-white/55"
                 } ${cell.date === todayKey ? "ring-1 ring-white/70" : ""} ${
                   selectedDate === cell.date ? "ring-2 ring-white" : ""
                 }`}
@@ -206,6 +182,15 @@ export default function MoodCalendar() {
             </div>
           ))}
         </div>
+
+        {/* Same month-scoped `counts` the pills above already use -- kept in
+            sync with calendar navigation for free, unlike the old
+            last-60-entries-regardless-of-month distribution this replaced. */}
+        {totalThisMonth > 0 && (
+          <div className="mt-4">
+            <MoodRoseChart distribution={counts} />
+          </div>
+        )}
 
         {/* Fills the space below the pills: how consistently you journaled
             this month, plus which mood showed up most. Both derived from

@@ -4,6 +4,28 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ReflectAI</title>
+    <!-- Previously no webfont was actually loaded at all -- the CSS asked for
+         "Inter" but nothing here ever fetched it, so every browser silently
+         fell back to system-ui (San Francisco on macOS, Segoe on Windows,
+         etc). That system-default sans-serif look is exactly what reads as
+         "generic AI-generated template" today, since it's what every
+         unstyled shadcn/Tailwind starter renders with out of the box.
+         Fraunces (a characterful serif, for headings) + Manrope (a distinct
+         geometric sans, for body) actually get loaded and give the app a
+         real, deliberate typographic identity instead. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- IBM Plex Mono added alongside Fraunces/Manrope: premium editorial
+         products (the pattern researched for this pass) pair an expressive
+         serif for headings with a monospace utility face for metadata --
+         dates, counts, tags, stat labels -- so those small data-ish bits of
+         text read as deliberately "designed data" rather than just smaller
+         body text. Applied via .ui-kicker and .ui-mono in index.css, not by
+         hand on every page. -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
   </head>
   <body class="bg-[#09090B]">
     <div id="root"></div>

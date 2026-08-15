@@ -47,5 +47,21 @@ router.get(
   }),
 );
 
+// "New chat" -- clears the visible thread and the memory context/journal
+// evidence future turns can draw on (chatSettings.useMemory reads this same
+// turns array server-side in service.js), rather than just resetting client
+// state and leaving the old thread to reappear on next load. Deliberately a
+// real delete of the turns array, not a soft "archived" flag -- there's
+// nowhere in the app a past chat session is ever browsed back through the
+// way journal entries are, so there's no value in keeping it around.
+router.delete(
+  "/session",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    await ChatSession.updateOne({ userId: req.user._id }, { $set: { turns: [] } }, { upsert: true });
+    res.json({ ok: true });
+  }),
+);
+
 export default router;
 

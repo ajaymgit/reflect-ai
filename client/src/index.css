@@ -10,8 +10,20 @@ body {
      it was. */
   background: var(--user-dark, #0f172a);
   color: #f8fafc;
-  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  font-family: Manrope, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   margin: 0;
+}
+
+/* Every heading tag, not just .ui-title -- a lot of card headers in this app
+   use plain <h3 className="font-medium"> rather than the .ui-title class, so
+   scoping this to element selectors (rather than only .ui-title below) gives
+   the whole app a consistent typographic identity instead of just the page
+   titles. */
+h1,
+h2,
+h3,
+h4 {
+  font-family: Fraunces, Georgia, serif;
 }
 
 #root {
@@ -54,6 +66,22 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 0.72rem;
+  /* Monospace rather than Manrope -- kickers are always metadata ("Your
+     journal", "Year in review", stat labels), and a monospace face is the
+     established editorial convention for signaling "this is data/label
+     text" at a glance, distinct from both the serif headings and the
+     sans-serif body copy that follow it. One CSS change, applies everywhere
+     .ui-kicker is already used. */
+  font-family: "IBM Plex Mono", ui-monospace, "SF Mono", monospace;
+}
+
+/* For dates, counts, and other small data values sprinkled through cards
+   (entry timestamps, stat numbers' units, tag chips) -- same rationale as
+   .ui-kicker above, offered as a standalone utility for spots that aren't
+   already a kicker. */
+.ui-mono {
+  font-family: "IBM Plex Mono", ui-monospace, "SF Mono", monospace;
+  letter-spacing: -0.01em;
 }
 
 .ui-input {
@@ -76,25 +104,85 @@ body {
   box-shadow: 0 0 0 3px rgba(143, 174, 115, 0.2);
 }
 
+/* Chunky, pressable buttons -- a flat fill with a solid darker "lip" on the
+   bottom edge that compresses on click, instead of the previous subtle
+   gradient + hover-lift. This is the one change that upgrades every primary
+   button across the whole app at once (Dashboard's CTAs, Journal's save,
+   Chat's send, Settings' save, auth forms) without touching each page,
+   since they all already share these two classes. color-mix keeps the
+   pressed-edge shade tied to --user-light (the Settings -> Appearance hue
+   slider), same pattern already used for the active nav pill in
+   AppShell.jsx, so a custom accent color still gets a correctly-darkened
+   edge instead of a hardcoded one. */
 .ui-button-primary {
-  border-radius: 0.8rem;
-  border: 1px solid rgba(207, 225, 176, 0.6);
-  background: linear-gradient(180deg, var(--user-light-soft, #a9c487) 0%, var(--user-light, #8fae73) 100%);
-  color: #1b241f;
-  font-weight: 600;
-  transition: transform 0.15s ease, filter 0.2s ease;
+  border-radius: 1rem;
+  border: none;
+  border-bottom: 4px solid color-mix(in srgb, var(--user-light, #8fae73) 55%, #0e1509 45%);
+  background: var(--user-light, #8fae73);
+  color: #16210f;
+  font-weight: 700;
+  transition: transform 0.08s ease, border-bottom-width 0.08s ease, filter 0.15s ease;
 }
 
 .ui-button-primary:hover {
-  filter: brightness(1.05);
-  transform: translateY(-1px);
+  filter: brightness(1.04);
+}
+
+.ui-button-primary:active {
+  transform: translateY(3px);
+  border-bottom-width: 1px;
+}
+
+.ui-button-primary:disabled {
+  filter: grayscale(0.3);
+  transform: none;
 }
 
 .ui-button-ghost {
-  border-radius: 0.8rem;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.05);
+  border-radius: 1rem;
+  border: 2px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.04);
   color: rgba(248, 250, 252, 0.95);
+  font-weight: 600;
+  transition: transform 0.08s ease, border-color 0.15s ease;
+}
+
+.ui-button-ghost:hover {
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
+.ui-button-ghost:active {
+  transform: translateY(2px);
+}
+
+/* Same shape/press behavior as .ui-button-ghost, but rust-tinted for
+   destructive actions (log out everywhere, disable 2FA) -- previously these
+   used raw Tailwind red-400/red-500 (border-red-400/40 bg-red-500/10
+   text-red-200), a saturated red with no relationship to the rest of the
+   app's muted earth-tone palette. Uses the same rust (#c2574a) as
+   MOOD_HEX.angry, so "this is a warning" reads in the app's own color
+   language instead of a generic Bootstrap-style danger red. */
+.ui-button-danger {
+  border-radius: 1rem;
+  border: 2px solid rgba(194, 87, 74, 0.45);
+  background: rgba(194, 87, 74, 0.12);
+  color: #e2a89c;
+  font-weight: 600;
+  transition: transform 0.08s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.ui-button-danger:hover {
+  border-color: rgba(194, 87, 74, 0.7);
+  background: rgba(194, 87, 74, 0.2);
+}
+
+.ui-button-danger:active {
+  transform: translateY(2px);
+}
+
+.ui-button-danger:disabled {
+  filter: grayscale(0.2);
+  transform: none;
 }
 
 .ui-page {
@@ -183,8 +271,11 @@ body[data-theme-mode="midnight"] .page-gradient {
 }
 
 .mood-angry {
-  --mood-primary: rgba(248, 113, 113, 0.24);
-  --mood-secondary: rgba(252, 165, 165, 0.2);
+  /* Muted brick-red (#c2574a), matching MOOD_HEX.angry in moodColors.js --
+     was a raw saturated red-400/300 that read as an error state rather than
+     a mood, jarring against the other five desaturated earth-tone moods. */
+  --mood-primary: rgba(194, 87, 74, 0.26);
+  --mood-secondary: rgba(214, 130, 118, 0.2);
 }
 
 .mood-reflective {
@@ -215,6 +306,53 @@ body[data-theme-mode="midnight"] .page-gradient {
   }
   100% {
     transform: translate3d(0, 18px, 0) scale(1.03);
+  }
+}
+
+/* Subtle per-page entrance -- previously navigating between pages was an
+   instant hard cut, which reads as less considered than even a small
+   transition. Applied once, at the AppShell level around <Outlet/> (see
+   AppShell.jsx), so every page gets it for free instead of each page having
+   to opt in individually. Respects prefers-reduced-motion. */
+@keyframes page-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.page-transition {
+  animation: page-fade-in 0.32s ease both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-transition {
+    animation: none;
+  }
+}
+
+/* Pulsing placeholder bar for loading states -- previously most async pages
+   just showed plain "Loading..." text with no visual weight, which felt
+   flatter/less finished than the rest of the app's polish level. */
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+.skeleton {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 0.5rem;
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
   }
 }
 

@@ -22,6 +22,9 @@ struct ContentView: View {
     @State private var isSyncing = false
     @State private var statusMessage = ""
     @State private var showScanner = false
+    @StateObject private var sleepRecorder = SleepSessionRecorder.shared
+    @State private var sleepStatusMessage = ""
+    @State private var stoppingSleep = false
 
     private var lastSyncDate: Date? {
         lastSyncEpoch > 0 ? Date(timeIntervalSince1970: lastSyncEpoch) : nil
@@ -32,6 +35,7 @@ struct ContentView: View {
             Form {
                 serverSection
                 healthSection
+                sleepSection
                 syncSection
             }
             .navigationTitle("ReflectHealthSync")
@@ -91,6 +95,78 @@ struct ContentView: View {
                     }
                 }
             }
+        }
+    }
+
+    // No Apple Watch required -- see SleepSessionRecorder.swift. Tap Start
+    // before bed, leave the phone charging nearby, tap Stop when you wake
+    // (or it auto-stops on its own after 12h as a safety net). It plays a
+    // silent audio loop to stay alive in the background and samples the
+    // accelerometer to work out how much of that time you were actually
+    // still versus moving.
+    private var sleepSection: some View {
+        Section {
+            if sleepRecorder.isRecording, let start = sleepRecorder.sessionStart {
+                HStack {
+                    Image(systemName: "moon.zzz.fill").foregroundStyle(.indigo)
+                    VStack(alignment: .leading) {
+                        Text("Recording sleep")
+                        Text("Started \(start.formatted(date: .omitted, time: .shortened))")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Button(role: .destructive) {
+                    Task {
+                        stoppingSleep = true
+                        sleepStatusMessage = "Saving..."
+                        do {
+                            let result = try await sleepRecorder.stopAndSave(writeToHealth: true)
+                            sleepStatusMessage = "Recorded \(String(format: "%.1f", result.sleepHours))h asleep."
+                            // Push the fresh number to the server right away
+                            // rather than waiting on background delivery to
+                            // notice the HealthKit write.
+                            if let date = try? await HealthKitManager.shared.sync(serverURL: serverURL, syncToken: syncToken) {
+                                lastSyncEpoch = date.timeIntervalSince1970
+                                sleepStatusMessage += " Synced."
+                            }
+                        } catch {
+                            sleepStatusMessage = "Couldn't save: \(error.localizedDescription)"
+                        }
+                        stoppingSleep = false
+                    }
+                } label: {
+                    Label(stoppingSleep ? "Saving..." : "Stop & Save", systemImage: "stop.circle")
+                }
+                .disabled(stoppingSleep)
+            } else {
+                Button {
+                    do {
+                        try sleepRecorder.start()
+                        sleepStatusMessage = ""
+                    } catch {
+                        sleepStatusMessage = error.localizedDescription
+                    }
+                } label: {
+                    Label("Start Sleep Tracking", systemImage: "moon.zzz")
+                }
+                .disabled(!isConnected)
+                if let last = sleepRecorder.lastResult {
+                    Text("Last night: \(String(format: "%.1f", last.sleepHours))h asleep")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if !sleepStatusMessage.isEmpty {
+                Text(sleepStatusMessage)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("Sleep (no Apple Watch needed)")
+        } footer: {
+            Text("Keep the phone charging near your bed overnight with this running. Uses your accelerometer to estimate time asleep -- less precise than a Watch, but real data instead of none.")
         }
     }
 

@@ -5,10 +5,12 @@
   border-radius: 24px;
   overflow: hidden;
   isolation: isolate;
+  /* Warm olive/gold, matching the rest of the app -- was blue-teal (a
+     leftover from the deep-space palette this globe was ported in with). */
   background:
-    radial-gradient(ellipse 70% 55% at 50% 42%, rgba(70, 120, 150, 0.22), transparent 60%),
-    radial-gradient(ellipse 50% 40% at 70% 70%, rgba(40, 70, 90, 0.2), transparent 50%),
-    #071019;
+    radial-gradient(ellipse 70% 55% at 50% 42%, rgba(232, 171, 95, 0.16), transparent 60%),
+    radial-gradient(ellipse 50% 40% at 70% 70%, rgba(143, 174, 115, 0.16), transparent 50%),
+    #12180f;
   box-shadow:
     0 30px 80px rgba(4, 10, 18, 0.45),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);

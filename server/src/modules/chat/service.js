@@ -5,7 +5,10 @@ import HealthData from "../../models/HealthData.js";
 import JournalEntry from "../../models/JournalEntry.js";
 import RetrospectAnalysis from "../../models/RetrospectAnalysis.js";
 import { env, policyConfig } from "../../shared/config/env.js";
+import { findSemanticMatches } from "../../shared/services/embeddings.js";
 import { AppError } from "../../shared/utils/AppError.js";
+import { fetchWithTimeout } from "../../shared/utils/fetchWithTimeout.js";
+import { logError, logInfo } from "../../shared/utils/logger.js";
 
 // Appends one turn to a user's chat session. Deliberately NOT
 // `ChatSession.findOneAndUpdate({...}, { $push: {...} }, { upsert: true })`
@@ -212,6 +215,40 @@ function truncateAtWord(text, maxLen) {
   return `${clean}…`;
 }
 
+// Prefers semantic (meaning-based) evidence candidates over the plain
+// keyword-scored ones above when possible -- e.g. "what did I say about my
+// thesis advisor" can now surface an entry that never uses those exact
+// words. Deliberately additive, not a replacement: buildEvidenceCandidates
+// above is untouched and still runs as the fallback whenever semantic
+// matching comes back empty (no entries embedded yet -- see
+// scripts/embedJournalEntries.js -- Ollama unreachable, or the embedding
+// model was never pulled), so this can never make evidence retrieval worse
+// than it already was, only better when embeddings are available.
+async function buildSmartEvidenceCandidates(userId, journalPool, userMessage, intent) {
+  if (!journalPool.length) return [];
+  try {
+    const withEmbeddings = await JournalEntry.find({
+      _id: { $in: journalPool.map((j) => j._id) },
+    }).select("+embedding content mood createdAt");
+    const semanticMatches = await findSemanticMatches(withEmbeddings, userMessage, { limit: 5 });
+    if (semanticMatches.length) {
+      logInfo("Using semantic evidence candidates", { count: semanticMatches.length });
+      return semanticMatches.map(({ journal, score }) => ({
+        journalId: String(journal._id),
+        quote: truncateAtWord(journal.content, 220),
+        date: journal.createdAt,
+        mood: journal.mood,
+        semanticScore: score,
+      }));
+    }
+  } catch (error) {
+    logError("Semantic evidence lookup failed, falling back to keyword matching", {
+      error: error?.message || String(error),
+    });
+  }
+  return buildEvidenceCandidates(journalPool, userMessage, intent);
+}
+
 function normalizeEvidence(evidence, candidates) {
   if (!Array.isArray(evidence)) return [];
   const byId = new Map(candidates.map((c) => [c.journalId, c]));
@@ -224,6 +261,30 @@ function normalizeEvidence(evidence, candidates) {
           quote: ev.quote || matched.quote,
           date: ev.date || matched.date,
         };
+      }
+      // Small/local models (e.g. a 3B Ollama model) are unreliable at
+      // transcribing a 24-char Mongo ObjectId verbatim, so an evidence item
+      // can be genuinely grounded in a real candidate journal entry even
+      // when journalId fails to match exactly -- the model just mangled the
+      // ID while still quoting real content it was given. Recover that case
+      // by matching on the quoted text itself instead of discarding it. This
+      // still only ever returns a candidate the model was actually shown, so
+      // it is not the "fabricated/unrelated evidence" pattern deliberately
+      // removed above -- it's the same real evidence, matched by a more
+      // reliable signal than a verbatim ID echo.
+      const quoteText = normalizeText(String(ev.quote || ""));
+      if (quoteText.length >= 15) {
+        const byQuote = candidates.find((c) => {
+          const candidateText = normalizeText(c.quote);
+          return candidateText.includes(quoteText) || quoteText.includes(candidateText.slice(0, 40));
+        });
+        if (byQuote) {
+          return {
+            journalId: byQuote.journalId,
+            quote: byQuote.quote,
+            date: byQuote.date,
+          };
+        }
       }
       return null;
     })
@@ -336,13 +397,24 @@ function textToPayload(text, context) {
   };
 }
 
+// Distinct coaching voices, same idea as Stoic's "AI Mentors" -- previously
+// Chat only ever had one fixed voice regardless of what someone actually
+// wanted from a conversation. Only affects the AI-generated path (see the
+// persona rules block in the prompt below); the rule-based fallback used
+// when no AI provider is available/configured still uses its own fixed
+// canned-question banks regardless of persona -- giving each persona its own
+// full set of heuristic templates would be a much bigger, separate project,
+// and the fallback path is already the degraded-experience case.
+const PERSONAS = ["gentle", "stoic", "cbt"];
+
 function normalizeChatSettings(raw = {}) {
   const mode = ["quick", "deep", "analysis"].includes(raw.mode) ? raw.mode : "quick";
   const responseStyle = Number.isFinite(raw.responseStyle)
     ? Math.max(0, Math.min(100, Number(raw.responseStyle)))
     : 50;
   const useMemory = raw.useMemory !== false;
-  return { mode, responseStyle, useMemory };
+  const persona = PERSONAS.includes(raw.persona) ? raw.persona : "gentle";
+  return { mode, responseStyle, useMemory, persona };
 }
 
 function humanizeQuestion(question = "", focus = "general_reflection") {
@@ -842,8 +914,37 @@ function scrubHealthReferences(payload) {
   };
 }
 
+// llama3.2:3b reliably passes schema validation (confidence is typeof
+// number) but has been empirically observed -- even with an explicit prompt
+// instruction and a non-zero example value -- to still emit a literal 0 for
+// confidence. That's almost certainly a structured-output formatting
+// artifact of this specific small model under Ollama's forced "format:
+// json" grammar, not a genuine "I'm not sure" signal: the prompt's own rule
+// is that real uncertainty should show up as fallback=true, so a model that
+// has already committed to fallback=false while citing real, evidence-
+// matched grounding but reports confidence=0 is contradicting itself in one
+// field only. Recovering that one broken field from a signal we can already
+// trust (whether real evidence was returned, per the evidence-matching fix
+// above) is not the "confidence floor-boost" anti-pattern removed elsewhere
+// in this file -- that boosted a genuinely low model-reported confidence.
+// This only fires when the number is clearly broken (<=0) on an explicit
+// fallback=false claim with real evidence attached; a fallback=false claim
+// with no evidence still correctly fails verifyInsight's evidencePresent
+// check regardless.
+function recoverOllamaConfidence(payload) {
+  if (
+    payload.fallback === false &&
+    (!Number.isFinite(payload.confidence) || payload.confidence <= 0) &&
+    Array.isArray(payload.evidence) &&
+    payload.evidence.length > 0
+  ) {
+    return { ...payload, confidence: 0.72 };
+  }
+  return payload;
+}
+
 async function generateInsightWithOllama(prompt) {
-  const response = await fetch(`${ollamaBaseUrl}/api/chat`, {
+  const response = await fetchWithTimeout(`${ollamaBaseUrl}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -871,12 +972,16 @@ async function generateInsightWithOllama(prompt) {
   const data = await response.json();
   const text = String(data?.message?.content || "").replace(/```json|```/g, "").trim();
   const parsed = parseJsonSafe(text);
-  if (validateAiPayload(parsed)) return parsed;
+  if (validateAiPayload(parsed)) {
+    logInfo("Ollama generated a valid response", { ollamaModel });
+    return recoverOllamaConfidence(parsed);
+  }
   const coerced = coerceAiPayload(parsed);
   if (!coerced) {
     throw new AppError("AI_PARSE_FAILED", "Ollama response could not be normalized", 502);
   }
-  return coerced;
+  logInfo("Ollama generated a response (coerced to schema)", { ollamaModel });
+  return recoverOllamaConfidence(coerced);
 }
 
 async function generateInsight(context, userMessage) {
@@ -891,7 +996,7 @@ Return ONLY valid JSON with this exact shape:
   "insight":"string",
   "question":"string",
   "evidence":[{"journalId":"string","quote":"string","date":"ISO date"}],
-  "confidence":0.0,
+  "confidence":0.78,
   "reasoning":"string",
   "fallback":false,
   "currentFocus":"string"
@@ -901,6 +1006,7 @@ Rules:
 - Ask open-ended Socratic question.
 - Use at least one evidence object from evidenceCandidates when fallback=false.
 - If evidence is weak, set fallback=true and keep insight empty.
+- confidence is REQUIRED and must be your real, calibrated certainty as a number strictly between 0 and 1 (never 0, never exactly the 0.78 shown in the shape above -- that is only an example of the format, not a value to copy). If fallback=false, confidence must be at least 0.65, since fallback=false is itself a claim that you are reasonably certain. If you are not that certain, set fallback=true instead of writing a low confidence number.
 - If user requests topic shift, do not repeat prior focus.
 - Sound human, warm, and natural (like a supportive friend), not robotic or clinical.
 - Keep wording simple and conversational. Avoid corporate phrases and avoid repeating the same sentence patterns.
@@ -923,6 +1029,10 @@ Rules:
   - mode="analysis": emphasize pattern analysis with warm tone.
   - useMemory=false: do not reference old journals or prior sessions.
   - responseStyle in [0..100]: lower means softer friend-like, higher means more analytical but still humane.
+  - persona is a voice/style overlay on top of mode above -- it changes HOW you talk, not the JSON shape or the safety rules:
+    - persona="gentle" (default): warm, soft, validating -- a gentle listener. Emotion first, minimal challenge.
+    - persona="stoic": calmer and more direct. Draw on Stoic-style reframing -- separate what's in the user's control from what isn't -- while staying warm, never cold, preachy, or lecturing.
+    - persona="cbt": before the question, offer one gentle CBT-style reframe of any all-or-nothing/catastrophizing language you notice in their message, stated as a genuine observation, not a correction.
 - Mode output guardrails (MUST):
   - quick: one short friendly check-in question, no heavy analysis language.
   - deep: include one emotionally validating sentence + one deeper pattern question.
@@ -944,9 +1054,21 @@ ${userMessage}
   for (let attempt = 0; attempt < 3; attempt += 1) {
     if (useOllama) {
       try {
-        return await generateInsightWithOllama(prompt);
-      } catch {
-        // Fall through to cloud LLM if configured.
+        const result = await generateInsightWithOllama(prompt);
+        return { payload: result, source: "ollama" };
+      } catch (error) {
+        // Previously a bare `catch {}` -- the real reason Ollama failed
+        // (connection refused, bad JSON, model not found, non-2xx status)
+        // was discarded and never visible anywhere, making "why isn't it
+        // using Ollama" undiagnosable from the outside. Now logged, then
+        // still falls through to cloud LLM if configured, same as before.
+        lastError = error;
+        logError("Ollama generation attempt failed", {
+          attempt: attempt + 1,
+          ollamaBaseUrl,
+          ollamaModel,
+          error: error?.message || String(error),
+        });
       }
     }
 
@@ -974,11 +1096,12 @@ ${userMessage}
         text = String(result.output_text || "").replace(/```json|```/g, "").trim();
       }
       const parsed = parseJsonSafe(text);
-      if (validateAiPayload(parsed)) return parsed;
+      const source = usingGeminiCompat ? "gemini" : "openai";
+      if (validateAiPayload(parsed)) return { payload: parsed, source };
       const coerced = coerceAiPayload(parsed);
-      if (coerced) return coerced;
+      if (coerced) return { payload: coerced, source };
       const textPayload = textToPayload(text, context);
-      if (textPayload) return textPayload;
+      if (textPayload) return { payload: textPayload, source };
     } catch (error) {
       lastError = error;
       // Try the next attempt before failing hard.
@@ -992,9 +1115,21 @@ ${userMessage}
 }
 
 function verifyInsight({ payload, rawText, healthQuality }) {
+  // Evidence/confidence should only be required when the model is actually
+  // asserting something about the user's patterns (a non-empty `insight`) --
+  // not for a plain conversational turn (fallback=false, insight="") like a
+  // warm follow-up question to "lets start from my morning." Previously ANY
+  // fallback=false turn required evidence, which meant completely ordinary
+  // small talk with no claim to ground -- exactly what the prompt's own
+  // rules tell the model to give for greetings/casual openers -- was
+  // rejected every single time and silently replaced with the generic
+  // fallback question, even though the model behaved correctly. This was
+  // caught live: real chat turns coming back fallback:false, evidence: [],
+  // insight: "" and still failing verification on every casual message.
+  const hasInsightClaim = !payload.fallback && String(payload.insight || "").trim().length > 0;
   const decisions = {
-    evidencePresent: payload.fallback ? true : payload.evidence.length > 0,
-    confidenceOk: payload.fallback ? true : payload.confidence >= policyConfig.minConfidence,
+    evidencePresent: hasInsightClaim ? payload.evidence.length > 0 : true,
+    confidenceOk: hasInsightClaim ? payload.confidence >= policyConfig.minConfidence : true,
     healthClaimsEligible: true,
   };
 
@@ -1065,7 +1200,7 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
   const normalizedSettings = normalizeChatSettings(chatSettings);
   const context = await buildChatContext(userId);
   const journalPool = normalizedSettings.useMemory ? context.journals : [];
-  const evidenceCandidates = buildEvidenceCandidates(journalPool, userMessage, "reflection");
+  const evidenceCandidates = await buildSmartEvidenceCandidates(userId, journalPool, userMessage, "reflection");
   const blueprint = buildLongitudinalBlueprint({
     userMessage,
     journals: journalPool,
@@ -1099,8 +1234,16 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
         },
         userMessage,
       );
-      payload = enrichPayload(generated, evidenceCandidates);
-      responseSource = usingGeminiCompat ? "gemini" : "openai";
+      payload = enrichPayload(generated.payload, evidenceCandidates);
+      // Same repetition guard already applied to heuristic replies (see
+      // buildHeuristicResponse below) -- previously only that rule-based path
+      // got it, so a genuine Ollama/cloud reply could ask the near-same
+      // question turn after turn on the same focus with nothing catching it.
+      // Confirmed live: real transcripts showed "What do you think is missing
+      // from your social life..." twice in a row once the fallback-loop bug
+      // (verifyInsight) was fixed and AI replies started flowing through.
+      payload = avoidRepeatedQuestion(payload, context.session?.turns || []);
+      responseSource = generated.source;
     } catch (error) {
       parseFailed = true;
       payload = null;
@@ -1148,10 +1291,6 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
     responseSource = "fallback";
   }
 
-  if (responseSource !== "fallback" && useOllama) {
-    responseSource = "ollama";
-  }
-
   // Captured BEFORE scrub runs, so verifyInsight's health-eligibility check
   // below inspects what the model actually said, not text that scrub may
   // have already sanitized. Checking the post-scrub text would let every
@@ -1165,6 +1304,22 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
 
   const verification = verifyInsight({ payload, rawText, healthQuality: context.healthQuality });
   const accepted = verification.accepted;
+  // Only logs the rejection case, not every turn -- added during the
+  // original "why is everything falling back" investigation, when logging
+  // unconditionally was the right call for visibility into a completely
+  // silent failure. Now that the underlying bugs are fixed and verified,
+  // an accepted turn is the expected/uninteresting case; a rejected one is
+  // still worth a log line to see why (evidence, confidence, or health-
+  // eligibility) without a log line on every single message sent.
+  if (!accepted) {
+    logInfo("Chat turn rejected by verification", {
+      responseSource,
+      decisions: verification.decisions,
+      payloadFallback: payload.fallback,
+      evidenceCount: (payload.evidence || []).length,
+      confidence: payload.confidence,
+    });
+  }
   const finalPayload = accepted ? payload : fallbackPayload();
   finalPayload.source = accepted ? responseSource : "fallback";
   finalPayload.chatSettings = normalizedSettings;

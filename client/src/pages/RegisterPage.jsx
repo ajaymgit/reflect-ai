@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import { apiFetch, describeError } from "../api";
 import { useAuth } from "../context/AuthContext";
 import PasswordInput from "../components/PasswordInput";
+import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
@@ -12,6 +14,7 @@ export default function RegisterPage() {
   const [submitting, setSubmitting] = useState(false);
   const { setToken, setUser } = useAuth();
   const navigate = useNavigate();
+  const reducedMotion = usePrefersReducedMotion();
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -36,8 +39,13 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen page-gradient living-bg mood-calm text-white flex items-center justify-center p-4">
-      <div className="w-full max-w-5xl grid md:grid-cols-2 gap-4">
-        <section className="ui-card rounded-3xl p-8 hidden md:flex flex-col justify-between">
+      <motion.div
+        className="w-full max-w-5xl grid md:grid-cols-2 gap-4"
+        initial={reducedMotion ? false : { opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <section className="ui-card rounded-2xl p-8 hidden md:flex flex-col justify-between">
           <div>
             <p className="ui-kicker">Equoria</p>
             <h1 className="ui-title mt-3">Create your reflective space</h1>
@@ -45,14 +53,18 @@ export default function RegisterPage() {
               Build a private journaling routine and chat with ReflectAI for contextual self-reflection.
             </p>
           </div>
+          {/* Names the actual differentiated features (a quick tour follows
+              right after signup -- see Onboarding.jsx) instead of generic
+              "memory-aware reflection" bullet points that could describe
+              almost any AI journaling app. */}
           <ul className="text-sm text-white/70 space-y-2">
-            <li>• Memory-aware reflection</li>
-            <li>• Evidence-linked prompts</li>
-            <li>• Calm, focused chat experience</li>
+            <li>• Keepsakes -- flag entries worth revisiting later</li>
+            <li>• Time capsules -- seal a letter to your future self</li>
+            <li>• Retrospect -- real patterns in your mood over time</li>
           </ul>
         </section>
 
-        <form onSubmit={handleSubmit} className="ui-card rounded-3xl p-6 md:p-8 space-y-4">
+        <form onSubmit={handleSubmit} className="ui-card rounded-2xl p-6 md:p-8 space-y-4">
           <div>
             <p className="ui-kicker">Get started</p>
             <h2 className="ui-title mt-1">Create Equoria account</h2>
@@ -86,7 +98,7 @@ export default function RegisterPage() {
             </Link>
           </p>
         </form>
-      </div>
+      </motion.div>
     </div>
   );
 }

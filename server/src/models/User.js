@@ -5,6 +5,16 @@ const userSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     passwordHash: { type: String, required: true },
+    // Per-user journaling reminder preference (see
+    // scripts/sendJournalingReminders.js and PATCH /api/auth/reminder-
+    // preferences). reminderHour is a 0-23 local hour, matched against
+    // the server's local time when the reminder script runs -- there's no
+    // per-user timezone stored, so this assumes the user and server are in
+    // the same timezone, which is fine for this project's scope (a single
+    // person's own local deployment) but wouldn't generalize to a multi-
+    // timezone production userbase without adding one.
+    reminderEnabled: { type: Boolean, default: true },
+    reminderHour: { type: Number, default: 20, min: 0, max: 23 },
     // Incremented by POST /api/auth/logout-all to invalidate every JWT issued
     // before that point (embedded in each token's "tv" claim and checked in
     // requireAuth). Tokens signed before this field existed have no "tv"

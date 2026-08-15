@@ -5,7 +5,6 @@ import {
   MeshTransmissionMaterial,
   OrbitControls,
   Sparkles,
-  Stars,
   Trail,
 } from "@react-three/drei";
 import { Bloom, EffectComposer, Vignette } from "@react-three/postprocessing";
@@ -13,11 +12,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import "./MemoryOrbGlobe.css";
 
-// Ported from the equoria-journal side project's MemoryOrbGlobe -- a full 3D
-// "memory planet": a glowing core with small orbiting pearls, one per
-// journal entry, colored by mood. Journal entries feed in as `orbs`
-// ({ id, date, color, label, emotion, core }) built by MoodGlobeLauncher from
-// the same mood-calendar data the calendar already fetches.
+// Was ported wholesale from an unrelated side project as a literal "memory
+// planet" -- deep-space fog, an icy blue-white core, a cold starfield -- and
+// it looked it: nothing about the palette or setting had anything to do
+// with journaling. Reworked around the same "core memory" a journal already
+// naturally has (today's entry, or whatever ties to your most recurring
+// theme) -- warm tones matching the rest of the app (the gold/olive already
+// used for the core-memory badge elsewhere), and each memory drifts with
+// its own independent, organic wobble instead of every orb rotating
+// together on tidy shared shells like satellites -- reads as memories
+// floating in a mind, not planets on rails. Journal entries feed in as
+// `orbs` ({ id, date, color, label, emotion, core }) built by
+// MoodGlobeLauncher from the same mood-calendar data the calendar already
+// fetches.
 
 const CORE_RADIUS = 1.05;
 const SHELL_RADII = [2.55, 3.05, 3.55];
@@ -50,14 +57,17 @@ function MemoryCore() {
 
   return (
     <group>
-      <pointLight ref={lightRef} color="#c8e8f5" distance={8} intensity={1} />
+      {/* Warm gold, matching the core-memory badge gradient used elsewhere
+          in this app (#e8ab5f -> #8fae73) -- previously an icy blue-white
+          that read as a distant star, not "you." */}
+      <pointLight ref={lightRef} color="#f6d9a0" distance={8} intensity={1} />
 
       {/* Soft solid pearl */}
       <mesh>
         <sphereGeometry args={[CORE_RADIUS * 0.72, 64, 64]} />
         <meshStandardMaterial
-          color="#eaf6fc"
-          emissive="#7eb8d0"
+          color="#fdf3e0"
+          emissive="#e8ab5f"
           emissiveIntensity={0.35}
           roughness={0.35}
           metalness={0.05}
@@ -76,7 +86,7 @@ function MemoryCore() {
           ior={1.4}
           chromaticAberration={0.02}
           anisotropicBlur={0.2}
-          color="#d0ebf5"
+          color="#f3e2bd"
         />
       </mesh>
     </group>
@@ -101,7 +111,31 @@ function MemoryPearl({
   const lightRef = useRef(null);
 
   const phase = index * 0.41;
-  const orbitSpeed = 0.045 + (index % 7) * 0.006;
+  // Previously every pearl orbited the same axis at a speed that only
+  // varied in magnitude (index % 7), so the whole shell always rotated the
+  // same direction together -- unmistakably mechanical, like satellites on
+  // rails. Sign now also varies per orb (roughly half drift one way, half
+  // the other), and each orb gets its own semi-random wobble axis instead
+  // of sharing one tilted axis -- memories drifting independently, not a
+  // synchronized orbit.
+  const direction_sign = index % 2 === 0 ? 1 : -1;
+  const orbitSpeed = direction_sign * (0.03 + (index % 7) * 0.006);
+  const wobbleAxis = useMemo(
+    () =>
+      new THREE.Vector3(
+        Math.sin(index * 12.9898) * 0.4,
+        1,
+        Math.cos(index * 78.233) * 0.4,
+      ).normalize(),
+    [index],
+  );
+  // Unique-ish frequency/amplitude per orb (derived from index, not random,
+  // so it's stable across re-renders) for the extra x/z drift layered on
+  // top of the orbit -- this is what actually breaks the "rigid shell"
+  // read, since it moves each pearl off its clean circular path.
+  const driftFreqX = 0.6 + (index % 5) * 0.11;
+  const driftFreqZ = 0.5 + (index % 4) * 0.14;
+  const driftAmp = 0.09 + (index % 3) * 0.03;
   const scaleAnim = useRef(0);
   const emissiveAnim = useRef(0.25);
   const opacityAnim = useRef(0.96);
@@ -112,9 +146,11 @@ function MemoryPearl({
     const intro = introReady ? THREE.MathUtils.smootherstep(stagger, 0, 1) : 0;
 
     const angle = t * orbitSpeed + phase;
-    const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0.15, 1, 0.08).normalize(), angle);
+    const q = new THREE.Quaternion().setFromAxisAngle(wobbleAxis, angle);
     const radius = shellRadius + (selected ? 0.18 : hovered ? 0.08 : 0);
     const pos = direction.clone().applyQuaternion(q).multiplyScalar(radius);
+    pos.x += Math.sin(t * driftFreqX + phase) * driftAmp;
+    pos.z += Math.cos(t * driftFreqZ + phase * 1.3) * driftAmp;
     pos.y += Math.sin(t * 0.9 + phase) * 0.05;
 
     if (groupRef.current) groupRef.current.position.copy(pos);
@@ -189,9 +225,13 @@ function MemoryPearl({
     </group>
   );
 
-  // Only core memories (currently: today's entry, if any) trail light behind
-  // them as they orbit -- keeps the extra draw calls cheap while still
-  // making the globe read as alive rather than static balls on rails.
+  // Only Keepsakes trail light behind them as they orbit -- keeps the extra
+  // draw calls cheap while still making the globe read as alive rather than
+  // static balls on rails. In practice every orb passed into this globe is
+  // already a Keepsake (see MoodGlobeLauncher.jsx's buildKeepsakeOrbs, which
+  // filters to isKeepsake entries before this component ever sees them), so
+  // this condition is mostly a defensive default rather than an active
+  // filter today.
   if (!orb.core) return body;
 
   return (
@@ -201,7 +241,7 @@ function MemoryPearl({
   );
 }
 
-/** Faint threads connecting core memories into a constellation. Recomputed
+/** Faint threads connecting Keepsakes into a constellation. Recomputed
     every frame from the pearls' own live (already-animated) group positions,
     so the lines stay perfectly attached without re-deriving the orbit math. */
 function ConstellationLines({ pearlRefs, coreIndices }) {
@@ -239,7 +279,7 @@ function ConstellationLines({ pearlRefs, coreIndices }) {
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
       </bufferGeometry>
       <lineBasicMaterial
-        color="#bfe8ff"
+        color="#e8ab5f"
         transparent
         opacity={0.22}
         blending={THREE.AdditiveBlending}
@@ -303,16 +343,22 @@ function GlobeScene({ orbs, selectedId, onSelect }) {
 
   return (
     <>
-      <color attach="background" args={["#071019"]} />
-      <fog attach="fog" args={["#071019", 12, 28]} />
+      {/* Warm dark green, matching this app's actual card/background tones
+          (rgba(32,45,38,...) elsewhere) -- was a near-black deep-space blue
+          before, which is most of why this read as an unrelated space scene
+          rather than part of a journaling app. The literal starfield is
+          gone too (Stars specifically reads as "outer space" no matter what
+          color it's tinted); Sparkles alone, recolored warm, reads more like
+          drifting light/dust in a room than a night sky. */}
+      <color attach="background" args={["#12180f"]} />
+      <fog attach="fog" args={["#12180f", 12, 28]} />
 
-      <ambientLight intensity={0.4} color="#d4e8f2" />
-      <directionalLight position={[4, 5, 2]} intensity={0.85} color="#fff8f0" />
-      <directionalLight position={[-3, -2, -4]} intensity={0.25} color="#6a9bb8" />
+      <ambientLight intensity={0.45} color="#f5e6c8" />
+      <directionalLight position={[4, 5, 2]} intensity={0.85} color="#fff3df" />
+      <directionalLight position={[-3, -2, -4]} intensity={0.25} color="#6f8f5c" />
 
-      <Stars radius={60} depth={50} count={1600} factor={2.2} saturation={0} fade speed={0.35} />
-      <Sparkles count={40} scale={9} size={1.4} speed={0.25} opacity={0.35} color="#dff3fa" />
-      <Environment preset="warehouse" environmentIntensity={0.35} />
+      <Sparkles count={70} scale={9} size={1.6} speed={0.25} opacity={0.4} color="#f6d9a0" />
+      <Environment preset="sunset" environmentIntensity={0.3} />
 
       <Float speed={0.35} rotationIntensity={0.04} floatIntensity={0.1}>
         <group ref={worldRef}>
@@ -392,7 +438,7 @@ export default function MemoryOrbGlobe({ orbs, onOrbClick }) {
           <div
             className="orb-panel-swatch"
             style={{
-              background: `radial-gradient(circle at 35% 30%, #fff 0%, ${selected.color} 55%, color-mix(in srgb, ${selected.color} 60%, #102030) 100%)`,
+              background: `radial-gradient(circle at 35% 30%, #fff 0%, ${selected.color} 55%, color-mix(in srgb, ${selected.color} 60%, #1c2418) 100%)`,
               boxShadow: `0 0 28px ${selected.color}88`,
             }}
           />

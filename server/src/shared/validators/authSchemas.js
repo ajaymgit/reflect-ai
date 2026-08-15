@@ -81,3 +81,12 @@ export const twoFactorDisableSchema = z.object({
   query: z.object({}).optional(),
 });
 
+export const reminderPreferencesSchema = z.object({
+  body: z.object({
+    enabled: z.boolean(),
+    hour: z.number().int().min(0).max(23),
+  }),
+  params: z.object({}).optional(),
+  query: z.object({}).optional(),
+});
+
