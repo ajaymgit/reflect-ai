@@ -261,10 +261,14 @@ export default function YearInReviewPage() {
                   return (
                     <div key={mood} className="flex items-center gap-3">
                       <span className="w-16 shrink-0 text-xs text-ink/70 capitalize">{mood}</span>
-                      <div className="flex-1 h-2 rounded-full bg-ink/8 overflow-hidden">
+                      <div className="ui-bar-track flex-1 h-2 rounded-full bg-ink/8 overflow-hidden">
                         <div
                           className="h-full rounded-full"
-                          style={{ width: `${Math.max(4, (count / maxMoodCount) * 100)}%`, ...moodDotStyle(mood) }}
+                          style={{
+                            width: `${Math.max(4, (count / maxMoodCount) * 100)}%`,
+                            ...moodDotStyle(mood),
+                            backgroundImage: "linear-gradient(180deg, rgb(255 255 255 / 0.35), rgb(255 255 255 / 0) 65%)",
+                          }}
                         />
                       </div>
                       <span className="w-9 shrink-0 text-right text-xs text-ink/55 ui-mono">{pct}%</span>

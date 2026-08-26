@@ -195,10 +195,13 @@ function RetrospectPreviewCard({ retro }) {
           {distribution.map(([mood, count]) => (
             <div key={mood} className="flex items-center gap-2.5">
               <span className="w-16 shrink-0 text-xs text-ink/70 capitalize">{mood}</span>
-              <div className="flex-1 h-1.5 rounded-full bg-ink/8 overflow-hidden">
+              <div className="ui-bar-track flex-1 h-1.5 rounded-full bg-ink/8 overflow-hidden">
                 <div
                   className="h-full rounded-full"
-                  style={{ width: `${Math.max(6, (count / topCount) * 100)}%`, background: MOOD_COLOR[mood] || "rgb(var(--signal))" }}
+                  style={{
+                    width: `${Math.max(6, (count / topCount) * 100)}%`,
+                    background: `linear-gradient(180deg, rgb(255 255 255 / 0.35), rgb(255 255 255 / 0) 65%), ${MOOD_COLOR[mood] || "rgb(var(--signal))"}`,
+                  }}
                 />
               </div>
             </div>

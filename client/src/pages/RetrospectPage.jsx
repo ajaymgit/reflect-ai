@@ -419,10 +419,13 @@ function MoodBalance({ distribution }) {
         {distribution.map((d) => (
           <div key={d.mood} className="flex items-center gap-3">
             <span className="w-16 shrink-0 text-xs text-ink/70 capitalize">{d.mood}</span>
-            <div className="flex-1 h-2 rounded-full bg-ink/8 overflow-hidden">
+            <div className="ui-bar-track flex-1 h-2 rounded-full bg-ink/8 overflow-hidden">
               <div
                 className="h-full rounded-full"
-                style={{ width: `${Math.max(4, (d.pct / max) * 100)}%`, background: MOOD_COLOR[d.mood] || "rgb(var(--signal))" }}
+                style={{
+                  width: `${Math.max(4, (d.pct / max) * 100)}%`,
+                  background: `linear-gradient(180deg, rgb(255 255 255 / 0.35), rgb(255 255 255 / 0) 65%), ${MOOD_COLOR[d.mood] || "rgb(var(--signal))"}`,
+                }}
               />
             </div>
             <span className="w-9 shrink-0 text-right text-xs text-ink/55 ui-mono">{d.pct}%</span>
@@ -463,7 +466,10 @@ function WritingRhythm({ rhythm }) {
                 className="w-full max-w-[28px] rounded-t-md transition-all"
                 style={{
                   height: `${Math.max(8, (b.count / max) * 100)}%`,
-                  background: b.label === rhythm.dominantBucket ? "rgb(var(--signal))" : "rgb(var(--ink) / 0.15)",
+                  background:
+                    b.label === rhythm.dominantBucket
+                      ? "linear-gradient(90deg, rgb(255 255 255 / 0.25), rgb(255 255 255 / 0) 55%), rgb(var(--signal))"
+                      : "rgb(var(--ink) / 0.15)",
                 }}
                 title={`${b.label}: ${b.count} ${b.count === 1 ? "entry" : "entries"}`}
               />

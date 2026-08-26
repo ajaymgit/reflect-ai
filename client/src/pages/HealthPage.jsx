@@ -496,7 +496,7 @@ function RangeGauge({ value, scale, color }) {
   const zoneEnd = toPct(goodMax);
 
   return (
-    <div className="relative h-1.5 rounded-full bg-ink/8 mt-3 max-w-[160px]">
+    <div className="ui-bar-track relative h-1.5 rounded-full bg-ink/8 mt-3 max-w-[160px]">
       {/* Was bg-ink/15 on a bg-ink/8 track -- an 8%-vs-15% grey-on-grey
           difference that reads as basically flat in the dark theme, so the
           whole point of this gauge (see where today's value falls against
@@ -572,10 +572,13 @@ function CorrelationBars({ top }) {
                   correlation" reads in the app's own color language. */}
               <span style={{ color: positive ? MOOD_HEX.calm : MOOD_HEX.angry }}>r = {c.r.toFixed(2)}</span>
             </div>
-            <div className="mt-1 h-2 rounded-full bg-ink/10 overflow-hidden">
+            <div className="ui-bar-track mt-1 h-2 rounded-full bg-ink/10 overflow-hidden">
               <div
                 className="h-full rounded-full"
-                style={{ width: `${pct}%`, background: positive ? `${MOOD_HEX.calm}b3` : `${MOOD_HEX.angry}b3` }}
+                style={{
+                  width: `${pct}%`,
+                  background: `linear-gradient(180deg, rgb(255 255 255 / 0.35), rgb(255 255 255 / 0) 65%), ${positive ? MOOD_HEX.calm : MOOD_HEX.angry}b3`,
+                }}
               />
             </div>
           </div>

@@ -222,9 +222,9 @@ export default function MoodCalendar() {
                 {totalThisMonth} / {daysElapsed} days
               </span>
             </div>
-            <div className="mt-2 h-1.5 rounded-full bg-ink/10 overflow-hidden">
+            <div className="ui-bar-track mt-2 h-1.5 rounded-full bg-ink/10 overflow-hidden">
               <div
-                className="h-full rounded-full bg-signal"
+                className="h-full rounded-full bg-signal bg-gradient-to-b from-white/35 to-white/0"
                 style={{ width: `${Math.min(100, consistencyPct)}%` }}
               />
             </div>
