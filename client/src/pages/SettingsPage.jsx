@@ -6,7 +6,7 @@ import { apiFetch, describeError } from "../api";
 import { useAuth } from "../context/AuthContext";
 import PasswordInput from "../components/PasswordInput";
 import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
-import { DEFAULT_DARK_HUE, DEFAULT_LIGHT_HUE, DEFAULT_SURFACE_HUE, hslToHex, hslToRgbTriplet } from "../utils/theme";
+import { DEFAULT_DARK_HUE, DEFAULT_LIGHT_HUE, DEFAULT_SURFACE_HUE, hslToHex, hslToRgbTriplet, surfaceTone } from "../utils/theme";
 
 // Same stagger/entrance pattern the other main pages use -- Settings was
 // one of the last three destinations (with JournalHistory and More) still
@@ -214,6 +214,15 @@ export default function SettingsPage() {
   // would lose to Midnight's/Organic's own body-level values every time.
   // Only a declaration on body itself -- and inline style is the highest
   // form of that -- can actually win.
+  //
+  // Saturation/lightness come from surfaceTone(themeMode) (utils/theme.js),
+  // not a fixed pair -- a single fixed near-white value made cards
+  // near-illegible on Midnight/Organic Dark (light ink text over a
+  // near-white card) and looked like a faint wash rather than the color
+  // actually picked even on light themes. Depending on settings.themeMode
+  // also means switching the Theme mode dropdown while a custom Surface
+  // color is active recomputes the right light/dark family instead of
+  // leaving a light-family tone applied on a dark theme.
   useEffect(() => {
     const body = document.body;
     if (!hasCustomSurfaceHue) {
@@ -221,9 +230,10 @@ export default function SettingsPage() {
       body.style.removeProperty("--paper-sunken");
       return;
     }
-    body.style.setProperty("--paper-raised", hslToRgbTriplet(settings.surfaceHue, 25, 97));
-    body.style.setProperty("--paper-sunken", hslToRgbTriplet(settings.surfaceHue, 25, 90));
-  }, [settings.surfaceHue, hasCustomSurfaceHue]);
+    const tone = surfaceTone(settings.themeMode);
+    body.style.setProperty("--paper-raised", hslToRgbTriplet(settings.surfaceHue, tone.raised.s, tone.raised.l));
+    body.style.setProperty("--paper-sunken", hslToRgbTriplet(settings.surfaceHue, tone.sunken.s, tone.sunken.l));
+  }, [settings.surfaceHue, settings.themeMode, hasCustomSurfaceHue]);
 
   // Applying data-theme-mode instantly on toggle used to just snap between
   // the two palettes. A radial-gradient background (.page-gradient) can't be
@@ -259,6 +269,12 @@ export default function SettingsPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.themeMode]);
+
+  // Drives both the Surface slider's own swatch/track colors and the
+  // preview card below -- same tone the applied CSS override actually uses
+  // (see surfaceTone()'s comment in utils/theme.js), so what's shown here
+  // never disagrees with what dragging the slider actually produces.
+  const surfaceRaisedTone = surfaceTone(settings.themeMode).raised;
 
   return (
     <main className="ui-page">
@@ -331,8 +347,8 @@ export default function SettingsPage() {
                     label="Surface color"
                     detail="Cards, sidebar, and panels."
                     hue={settings.surfaceHue}
-                    saturation={25}
-                    lightness={97}
+                    saturation={surfaceRaisedTone.s}
+                    lightness={surfaceRaisedTone.l}
                     defaultHue={DEFAULT_SURFACE_HUE}
                     onChange={(hue) => {
                       setHasCustomSurfaceHue(true);
@@ -345,7 +361,12 @@ export default function SettingsPage() {
                   />
                 </div>
               </div>
-              <AppearancePreview darkHue={settings.darkHue} lightHue={settings.lightHue} surfaceHue={settings.surfaceHue} />
+              <AppearancePreview
+                darkHue={settings.darkHue}
+                lightHue={settings.lightHue}
+                surfaceHue={settings.surfaceHue}
+                surfaceToneValue={surfaceRaisedTone}
+              />
               <p className="text-xs text-ink/50 mt-2">Applies instantly across the whole app.</p>
             </SectionCard>
 
@@ -429,13 +450,15 @@ export default function SettingsPage() {
 // control -- computed directly from the live hue state (not the CSS custom
 // properties, which only update once the settings-change effect runs),
 // so dragging a slider updates this preview in the same render.
-function AppearancePreview({ darkHue, lightHue, surfaceHue }) {
+function AppearancePreview({ darkHue, lightHue, surfaceHue, surfaceToneValue }) {
   const bg = hslToHex(darkHue, 45, 92);
   const light = hslToHex(lightHue, 62, 53);
-  // Same 25/97 as the live --paper-raised override above, so this swatch
-  // matches what the Surface slider will actually produce, not an
-  // approximation of it.
-  const surface = hslToHex(surfaceHue, 25, 97);
+  // Same saturation/lightness (passed down from surfaceTone(themeMode) in
+  // the parent -- renamed to surfaceToneValue here so it doesn't shadow the
+  // surfaceTone() function name) as the live --paper-raised override, so
+  // this swatch matches what the Surface slider will actually produce, not
+  // an approximation of it -- including which theme family's tone it's using.
+  const surface = hslToHex(surfaceHue, surfaceToneValue.s, surfaceToneValue.l);
   return (
     <div className="mt-3 rounded-xl p-3 border border-ink/10" style={{ background: bg }}>
       <div className="rounded-lg p-2 border border-ink/10" style={{ background: surface }}>

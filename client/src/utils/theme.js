@@ -26,6 +26,30 @@ export const DEFAULT_SURFACE_HUE = 43;
 
 export const VALID_THEME_MODES = new Set(["midnight", "daylight", "organic-light", "organic-dark"]);
 
+function isDarkThemeFamily(themeMode) {
+  return themeMode === "midnight" || themeMode === "organic-dark";
+}
+
+// Saturation/lightness for the Surface slider (--paper-raised/--paper-sunken),
+// relative to the active theme's own light/dark family instead of one fixed
+// pale value. A single fixed near-white lightness (the original version:
+// s25/l97 for every theme) produced two real problems, not just a taste
+// preference: on Midnight/Organic Dark, where --ink is a light color, a
+// near-white card meant near-illegible light-on-light text -- and even on
+// light themes it read as "barely tinted white," not "the color the user
+// actually picked." Branching on family means light themes get a light,
+// clearly-colored card (dark ink stays legible) and dark themes get a dark,
+// clearly-colored card (light ink stays legible) -- same shape as how the
+// theme presets themselves handle it (every theme's own --paper-raised stays
+// in its family: Daylight's is near-white, Midnight's is near-black, just a
+// step off --paper each way), just with much bolder saturation than the
+// presets use so the chosen hue is unmistakable rather than a faint wash.
+export function surfaceTone(themeMode) {
+  return isDarkThemeFamily(themeMode)
+    ? { raised: { s: 55, l: 22 }, sunken: { s: 55, l: 13 } }
+    : { raised: { s: 60, l: 90 }, sunken: { s: 60, l: 80 } };
+}
+
 // h: 0-360, s/l: 0-100. Plain HSL->hex, no library needed for one conversion.
 export function hslToHex(h, s, l) {
   s /= 100;
@@ -69,10 +93,8 @@ export function applyStoredTheme() {
     settings = null;
   }
 
-  document.body.setAttribute(
-    "data-theme-mode",
-    VALID_THEME_MODES.has(settings?.themeMode) ? settings.themeMode : "daylight",
-  );
+  const themeMode = VALID_THEME_MODES.has(settings?.themeMode) ? settings.themeMode : "daylight";
+  document.body.setAttribute("data-theme-mode", themeMode);
 
   const root = document.documentElement;
   const body = document.body;
@@ -98,8 +120,9 @@ export function applyStoredTheme() {
   // declares --paper-raised/--paper-sunken directly on body itself, which
   // always beats a value merely inherited from html).
   if (typeof settings?.surfaceHue === "number") {
-    body.style.setProperty("--paper-raised", hslToRgbTriplet(settings.surfaceHue, 25, 97));
-    body.style.setProperty("--paper-sunken", hslToRgbTriplet(settings.surfaceHue, 25, 90));
+    const tone = surfaceTone(themeMode);
+    body.style.setProperty("--paper-raised", hslToRgbTriplet(settings.surfaceHue, tone.raised.s, tone.raised.l));
+    body.style.setProperty("--paper-sunken", hslToRgbTriplet(settings.surfaceHue, tone.sunken.s, tone.sunken.l));
   } else {
     body.style.removeProperty("--paper-raised");
     body.style.removeProperty("--paper-sunken");
