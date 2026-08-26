@@ -110,17 +110,29 @@ export default function EntryModal({ entry, onClose, onUpdated, onDeleted }) {
     setSecondsLeft(DELETE_UNDO_SECONDS);
     setPendingDelete(true);
     clearDeleteTimer();
+    // The tick itself only decrements state -- committing the delete used to
+    // happen right here, inside this setSecondsLeft updater function. React
+    // 18 StrictMode deliberately invokes updater functions twice (to catch
+    // exactly this class of impurity: a side effect hiding inside what's
+    // supposed to be a pure state transition), so in dev, letting the
+    // countdown reach zero could fire commitDelete() -- a real DELETE
+    // request -- twice. The first succeeds; the second 404s and surfaces a
+    // false "Couldn't delete that entry" alert even though the delete
+    // actually went through. Moved the actual commit into the effect below,
+    // which only runs off a genuine secondsLeft transition to 0, not off
+    // however many times the updater itself gets invoked.
     deleteTickRef.current = setInterval(() => {
-      setSecondsLeft((s) => {
-        if (s <= 1) {
-          clearDeleteTimer();
-          commitDelete();
-          return 0;
-        }
-        return s - 1;
-      });
+      setSecondsLeft((s) => Math.max(0, s - 1));
     }, 1000);
   }
+
+  useEffect(() => {
+    if (pendingDelete && secondsLeft === 0) {
+      clearDeleteTimer();
+      commitDelete();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [secondsLeft, pendingDelete]);
 
   async function commitDelete() {
     try {
