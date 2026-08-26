@@ -145,6 +145,20 @@ export default function RetrospectPage() {
                   re-measure. */}
               <ResponsiveContainer key={data ? "loaded" : "loading"} width="100%" height="100%">
                 <BarChart data={moodSeries} barCategoryGap="35%">
+                  {/* Each mood color gets its own top-to-bottom gradient
+                      (full tone fading to ~55% of itself) instead of a flat
+                      fill -- previously every bar was a single solid color
+                      block, which reads as a spreadsheet chart rather than
+                      something considered. One gradient per SCORE_COLOR
+                      entry, referenced by id below. */}
+                  <defs>
+                    {Object.entries(SCORE_COLOR).map(([score, color]) => (
+                      <linearGradient key={score} id={`moodBar-${score}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={color} stopOpacity={0.95} />
+                        <stop offset="100%" stopColor={color} stopOpacity={0.55} />
+                      </linearGradient>
+                    ))}
+                  </defs>
                   {/* axisLine/tickLine off on both axes -- the default
                       Recharts frame (solid axis lines boxing in the plot
                       area) is one of the more obvious "unstyled chart
@@ -177,9 +191,15 @@ export default function RetrospectPage() {
                     cursor="pointer"
                     onClick={(point) => setSelectedDate(point?.payload?.rawDate || point?.rawDate || null)}
                   >
-                    {moodSeries.map((entry, i) => (
-                      <Cell key={i} fill={SCORE_COLOR[Math.round(entry.score)] ?? "rgb(var(--signal))"} />
-                    ))}
+                    {moodSeries.map((entry, i) => {
+                      const roundedScore = Math.round(entry.score);
+                      return (
+                        <Cell
+                          key={i}
+                          fill={SCORE_COLOR[roundedScore] ? `url(#moodBar-${roundedScore})` : "rgb(var(--signal))"}
+                        />
+                      );
+                    })}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>

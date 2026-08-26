@@ -654,6 +654,15 @@ function MoodOverlayChart({ data, onPointClick }) {
               if (raw && onPointClick) onPointClick(isoDay(new Date(raw)));
             }}
           >
+            {/* Same top-to-bottom gradient treatment as the Steps/Stress/
+                Sleep TrendCharts below (see gradientId there) -- previously
+                this was the one bar fill left flat/solid on the page. */}
+            <defs>
+              <linearGradient id="stepsBarGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#e8ab5f" stopOpacity={0.85} />
+                <stop offset="100%" stopColor="#e8ab5f" stopOpacity={0.35} />
+              </linearGradient>
+            </defs>
             <XAxis
               dataKey="date"
               tickFormatter={(v) => new Date(v).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
@@ -679,7 +688,7 @@ function MoodOverlayChart({ data, onPointClick }) {
               formatter={(value, name) => (name === "mood" ? [MOOD_SCORE_LABEL[Math.round(value)] || "--", "Mood"] : [value, "Steps"])}
               contentStyle={{ background: "rgb(var(--paper-raised))", border: "1px solid rgb(var(--ink) / 0.15)", borderRadius: 8, fontSize: 11 }}
             />
-            <Bar yAxisId="left" dataKey="steps" fill="#e8ab5f" fillOpacity={0.55} radius={[4, 4, 0, 0]} />
+            <Bar yAxisId="left" dataKey="steps" fill="url(#stepsBarGradient)" radius={[4, 4, 0, 0]} />
             <Line
               yAxisId="right"
               dataKey="mood"

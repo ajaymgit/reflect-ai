@@ -88,25 +88,69 @@ h4 {
    page background dark and sets body's own text color light for the areas
    outside cards, so text inside a card never silently inherits an
    illegible light-on-light color from its ancestor. */
+/* Real elevation instead of a barely-visible 1px hairline -- pure-black-
+   tinted (not --ink-tinted: --ink flips to a light color in Midnight mode,
+   which would render as a glow instead of a shadow there) so the same
+   values read as a soft floating shadow in both themes. The inset
+   highlight is a one-pixel light seam along the top inner edge, standard
+   "light hits the top of a raised surface" cue -- subtle enough to be
+   invisible as a distinct element, felt rather than seen. transition
+   covers the interactive-card hover/press rules below; on a static card
+   this just never fires. */
 .ui-card {
   border-radius: 0.375rem;
   border: 1px solid rgb(var(--ink) / 0.12);
   background: rgb(var(--paper-raised));
   color: rgb(var(--ink));
-  box-shadow: 0 1px 0 rgb(var(--ink) / 0.04);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.05),
+    0 10px 28px -14px rgb(0 0 0 / 0.22),
+    inset 0 1px 0 rgb(255 255 255 / 0.04);
+  transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+
+/* Every clickable entry/keepsake/quick-link card in the app is a plain
+   <button class="ui-card ..."> or <a class="ui-card ...">, styled only
+   with a hover:bg background tint until now -- flat, no sense that the
+   card is a physical, liftable thing. Scoped to the tag (not the class
+   alone) so static info cards -- Health snapshot, mood balance, etc --
+   stay put and never look like they're aching to be clicked. */
+button.ui-card:hover,
+a.ui-card:hover {
+  transform: translateY(-2px);
+  border-color: rgb(var(--ink) / 0.22);
+  box-shadow:
+    0 2px 6px rgb(0 0 0 / 0.08),
+    0 20px 40px -16px rgb(0 0 0 / 0.3),
+    inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+
+button.ui-card:active,
+a.ui-card:active {
+  transform: translateY(0);
+  transition-duration: 0.06s;
 }
 
 /* Hierarchy signal for the single "main event" card per page is now a
    thick colored left border, not a bigger radius -- a completely different
    mechanism than the old soft-glass system, and one that reads clearly at
-   a glance even in a screenshot thumbnail. */
+   a glance even in a screenshot thumbnail. The radial wash is a genuinely
+   subtle spotlight in the signal accent (7% opacity, fades out by the
+   card's midpoint) -- the same "one considered accent, not a purple AI
+   glow" restraint as everywhere else, just enough to make this one card
+   read as lit rather than identical to every other flat panel on the page. */
 .ui-card-hero {
   border-radius: 0.375rem;
   border: 1px solid rgb(var(--ink) / 0.12);
   border-left: 5px solid var(--user-light, rgb(var(--signal)));
-  background: rgb(var(--paper-raised));
+  background:
+    radial-gradient(120% 160% at 0% 0%, rgb(var(--signal) / 0.07), transparent 55%),
+    rgb(var(--paper-raised));
   color: rgb(var(--ink));
-  box-shadow: 0 4px 16px rgb(var(--ink) / 0.08);
+  box-shadow:
+    0 2px 6px rgb(0 0 0 / 0.06),
+    0 24px 56px -20px rgb(0 0 0 / 0.3),
+    inset 0 1px 0 rgb(255 255 255 / 0.05);
 }
 
 .ui-strip {
@@ -255,16 +299,23 @@ h4 {
   background: var(--user-light, rgb(var(--signal)));
   color: #ffffff;
   font-weight: 700;
-  transition: transform 0.08s ease, border-bottom-width 0.08s ease, filter 0.15s ease;
+  /* Tinted-to-accent shadow (not a flat black drop shadow) so the button
+     reads as sitting slightly above the page even before any interaction
+     -- previously the border-bottom "lip" was the only depth cue, which
+     reads as pressable but not actually raised. */
+  box-shadow: 0 4px 14px -4px color-mix(in srgb, var(--user-light, rgb(var(--signal))) 55%, transparent);
+  transition: transform 0.08s ease, border-bottom-width 0.08s ease, filter 0.15s ease, box-shadow 0.15s ease;
 }
 
 .ui-button-primary:hover {
   filter: brightness(1.08);
+  box-shadow: 0 8px 20px -4px color-mix(in srgb, var(--user-light, rgb(var(--signal))) 65%, transparent);
 }
 
 .ui-button-primary:active {
   transform: translateY(3px);
   border-bottom-width: 1px;
+  box-shadow: 0 2px 8px -4px color-mix(in srgb, var(--user-light, rgb(var(--signal))) 45%, transparent);
 }
 
 .ui-button-primary:disabled {
