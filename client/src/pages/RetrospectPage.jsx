@@ -48,16 +48,25 @@ function dayKeyFromDate(d) {
 
 export default function RetrospectPage() {
   const [data, setData] = useState(null);
+  const [loadError, setLoadError] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
   const navigate = useNavigate();
   const reducedMotion = usePrefersReducedMotion();
   const cVariants = reducedMotion ? staticContainerVariants : containerVariants;
   const iVariants = reducedMotion ? staticItemVariants : itemVariants;
 
-  useEffect(() => {
-    apiFetch("/api/retrospect/analysis")
+  function loadAnalysis() {
+    setLoadError(false);
+    // Previously swallowed entirely -- a failed load left this page stuck
+    // on "Analyzing entries..." forever with no way to tell a real error
+    // apart from a slow AI response.
+    return apiFetch("/api/retrospect/analysis")
       .then(setData)
-      .catch(() => {});
+      .catch(() => setLoadError(true));
+  }
+
+  useEffect(() => {
+    loadAnalysis();
   }, []);
 
   const moodSeries = (data?.timeline || []).map((item) => ({
@@ -86,6 +95,17 @@ export default function RetrospectPage() {
   return (
     <main className="ui-page">
       <motion.div className="max-w-6xl mx-auto space-y-4" variants={cVariants} initial="hidden" animate="visible">
+        {loadError && (
+          <motion.div
+            variants={iVariants}
+            className="ui-card rounded-2xl p-4 border-ember/30 flex items-center justify-between gap-3 flex-wrap"
+          >
+            <p className="text-sm text-ink/80">Couldn't load your Retrospect data. This may just be a connection hiccup.</p>
+            <button type="button" onClick={loadAnalysis} className="text-sm text-signal hover:text-signal-soft font-medium shrink-0">
+              Try again
+            </button>
+          </motion.div>
+        )}
         {/* Headline finding -- pull-quote treatment (left rule + serif),
             matching Health's "This month's finding" and Year in Review's "A
             pattern worth knowing" -- the same generated-sentence pattern

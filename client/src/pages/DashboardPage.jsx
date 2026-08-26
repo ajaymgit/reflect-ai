@@ -282,6 +282,7 @@ function RetrospectPreviewCard({ retro }) {
 // (/api/retrospect/analysis).
 export default function DashboardPage() {
   const [data, setData] = useState(null);
+  const [loadError, setLoadError] = useState(false);
   const [retro, setRetro] = useState(null);
   const [range] = useState("week");
   const [entryLimit, setEntryLimit] = useState(6);
@@ -291,14 +292,26 @@ export default function DashboardPage() {
   const cVariants = reducedMotion ? staticContainerVariants : containerVariants;
   const iVariants = reducedMotion ? staticItemVariants : itemVariants;
 
-  useEffect(() => {
+  function loadSummary() {
     // tzOffset: the browser's own getTimezoneOffset() (minutes to add to
     // local time to reach UTC) -- lets the server bucket the streak and
     // "today" by this person's actual calendar day instead of the
     // server's, which previously could disagree near midnight.
-    apiFetch(`/api/dashboard/summary?range=${range}&tzOffset=${new Date().getTimezoneOffset()}`)
+    setLoadError(false);
+    return apiFetch(`/api/dashboard/summary?range=${range}&tzOffset=${new Date().getTimezoneOffset()}`)
       .then(setData)
-      .catch(() => {});
+      // Previously swallowed entirely -- a failed load here left every card
+      // on the home page (streak, mood, health snapshot, recent entries) in
+      // its normal "genuinely no data yet" empty state, indistinguishable
+      // from a real network/server failure. This is the first page anyone
+      // sees after logging in, so it's worth a visible retry instead of a
+      // silently-empty home screen.
+      .catch(() => setLoadError(true));
+  }
+
+  useEffect(() => {
+    loadSummary();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range]);
 
   useEffect(() => {
@@ -338,6 +351,17 @@ export default function DashboardPage() {
         initial="hidden"
         animate="visible"
       >
+        {loadError && (
+          <motion.div
+            variants={iVariants}
+            className="ui-card rounded-2xl p-4 border-ember/30 flex items-center justify-between gap-3 flex-wrap"
+          >
+            <p className="text-sm text-ink/80">Couldn't load your dashboard data. This may just be a connection hiccup.</p>
+            <button type="button" onClick={loadSummary} className="text-sm text-signal hover:text-signal-soft font-medium shrink-0">
+              Try again
+            </button>
+          </motion.div>
+        )}
         {/* .ui-card-hero (wider radius) instead of .ui-card -- this is the
             one card on the page someone should register as "the main
             event" before anything else, so it gets the app's biggest-radius

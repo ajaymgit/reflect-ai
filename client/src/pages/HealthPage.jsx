@@ -93,12 +93,20 @@ function strongestPerMetric(correlations) {
 // server-computed statistics this page actually has behind it.
 export default function HealthPage() {
   const [data, setData] = useState(null);
+  const [loadError, setLoadError] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
   const reducedMotion = usePrefersReducedMotion();
   const cVariants = reducedMotion ? staticContainerVariants : containerVariants;
   const iVariants = reducedMotion ? staticItemVariants : itemVariants;
 
-  const loadOverview = () => apiFetch("/api/health-data/overview").then(setData).catch(() => {});
+  // Previously swallowed entirely -- a failed load here rendered the exact
+  // same "No health data yet" empty state as someone who genuinely has
+  // never logged anything, silently telling a real user with real history
+  // that their data was missing.
+  const loadOverview = () => {
+    setLoadError(false);
+    return apiFetch("/api/health-data/overview").then(setData).catch(() => setLoadError(true));
+  };
 
   useEffect(() => {
     loadOverview();
@@ -116,6 +124,17 @@ export default function HealthPage() {
   return (
     <main className="ui-page">
       <motion.div className="max-w-4xl mx-auto space-y-4" variants={cVariants} initial="hidden" animate="visible">
+        {loadError && (
+          <motion.div
+            variants={iVariants}
+            className="ui-card rounded-2xl p-4 border-ember/30 flex items-center justify-between gap-3 flex-wrap"
+          >
+            <p className="text-sm text-ink/80">Couldn't load your health data. This may just be a connection hiccup.</p>
+            <button type="button" onClick={loadOverview} className="text-sm text-signal hover:text-signal-soft font-medium shrink-0">
+              Try again
+            </button>
+          </motion.div>
+        )}
         <motion.div variants={iVariants} className="ui-card rounded-2xl p-5">
           <p className="ui-kicker">Health dashboard</p>
           <h2 className="ui-title mt-1">Mind-body metrics</h2>

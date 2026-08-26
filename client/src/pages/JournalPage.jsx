@@ -218,6 +218,7 @@ export default function JournalPage() {
   const [openMemory, setOpenMemory] = useState(null);
   const [themeCloud, setThemeCloud] = useState([]);
   const [rebuildingThemes, setRebuildingThemes] = useState(false);
+  const [rebuildThemesError, setRebuildThemesError] = useState("");
   const [searchPreset, setSearchPreset] = useState(null);
   const hydratedFromDraft = useRef(false);
   const draftSaveTimer = useRef(null);
@@ -323,12 +324,18 @@ export default function JournalPage() {
   // POST /api/journal/recompute-themes.
   async function rebuildThemes() {
     setRebuildingThemes(true);
+    setRebuildThemesError("");
     try {
       await apiFetch("/api/journal/recompute-themes", { method: "POST" });
       const data = await apiFetch("/api/journal/theme-cloud");
       setThemeCloud(data?.themes || []);
-    } catch {
-      // Best-effort -- the cloud just stays as it was if this fails.
+    } catch (err) {
+      // Previously swallowed entirely -- clicking "Rebuild" during a server
+      // hiccup looked identical to a successful no-op rebuild, with no way
+      // to tell the two apart. The cloud still just stays as it was (this
+      // action was never destructive), but now says so instead of pretending
+      // nothing happened.
+      setRebuildThemesError(describeError(err));
     } finally {
       setRebuildingThemes(false);
     }
@@ -853,6 +860,9 @@ export default function JournalPage() {
                 {rebuildingThemes ? "Rebuilding…" : "Rebuild"}
               </button>
             </div>
+            {rebuildThemesError && (
+              <p className="text-[11px] text-accent-ember mt-1.5">Couldn't rebuild: {rebuildThemesError}</p>
+            )}
             <div className="flex flex-wrap gap-2 mt-4">
               {themeCloud.map((t) => (
                 <button
