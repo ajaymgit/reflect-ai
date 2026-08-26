@@ -14,10 +14,24 @@ function encryptNumber(v) {
   return encryptField(String(v));
 }
 function decryptNumber(v) {
-  if (v === null || v === undefined) return 0;
+  // Returns null (not 0) when the field was never actually recorded --
+  // /manual-entry and /sync both only set whichever fields were actually
+  // provided (see health/routes.js's `if (x !== undefined) update.x = x`),
+  // so a day logged with just steps genuinely has no stored sleepHours /
+  // stressScore / restingHeartRate at all, not a real zero. Returning 0
+  // here previously made every `Number.isFinite(row.field)` check
+  // downstream (HealthPage's "Resting heart rate today" line,
+  // correlation.js's per-metric pairing, Retrospect's AI health-data
+  // payload) treat "never logged" as "logged as exactly 0" -- a real bug:
+  // a 0 bpm resting heart rate rendered on-screen for data that was simply
+  // never entered, and correlation.js counting those phantom-zero days as
+  // real paired samples in its Pearson math. null correctly fails
+  // Number.isFinite so all of that "was this actually recorded" logic
+  // works as originally intended.
+  if (v === null || v === undefined) return null;
   const decrypted = decryptField(v);
   const parsed = Number(decrypted);
-  return Number.isFinite(parsed) ? parsed : 0;
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 const healthDataSchema = new mongoose.Schema(
