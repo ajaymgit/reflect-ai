@@ -48,6 +48,27 @@ function todaysPrompt() {
   return writingPrompts[dayOfYear % writingPrompts.length];
 }
 
+// "Opens Dec 25, 2026" told you the date but not how far off that actually
+// is -- someone glancing at a sealed capsule shouldn't have to do the
+// calendar math themselves to know it's basically tomorrow versus still
+// months away. Calendar-day difference (not a raw 24h-bucket count), so a
+// capsule sealed for 11:58pm tonight reads as "tomorrow" the instant it
+// becomes tomorrow, not still "today" for another two minutes.
+function daysUntil(dateStr) {
+  const target = new Date(dateStr);
+  target.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = Math.round((target.getTime() - today.getTime()) / 86400000);
+  if (days <= 0) return "today";
+  if (days === 1) return "tomorrow";
+  if (days < 30) return `in ${days} days`;
+  const months = Math.round(days / 30.44);
+  if (months < 12) return `in ${months} ${months === 1 ? "month" : "months"}`;
+  const years = Math.round(days / 365.25);
+  return `in ${years} ${years === 1 ? "year" : "years"}`;
+}
+
 // Same mid-word-cutoff problem as the server's recentEntries titles (see
 // dashboard/routes.js) -- a plain slice() with no ellipsis on the related
 // entry preview below.
@@ -772,6 +793,8 @@ export default function JournalPage() {
                     <span className="text-[11px] text-ink/50">
                       Opens{" "}
                       {new Date(c.revealAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                      {" "}
+                      <span className="text-ink/35">· {daysUntil(c.revealAt)}</span>
                     </span>
                     <span className="h-1.5 w-1.5 rounded-full" style={moodDotStyle(c.mood)} />
                   </div>
