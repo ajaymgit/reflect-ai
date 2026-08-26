@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { BookOpen, Clock, Lightbulb, Mail, Sparkles } from "lucide-react";
 import { apiFetch, describeError } from "../api";
-import EntryModal from "../components/EntryModal";
+import EntryModal, { EntryModalById } from "../components/EntryModal";
 import FirstTimeTip from "../components/FirstTimeTip";
 import JournalHistoryView from "./JournalHistoryPage";
 import { suggestMoodFromText } from "../utils/moodSuggestion";
@@ -871,6 +871,12 @@ function MemorySearch({ presetQuery }) {
   const [mode, setMode] = useState("empty_query");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Previously a search result was a dead end -- you could see a title and
+  // an excerpt but had no way to open the full entry, unlike every other
+  // place an entry appears in the app (Dashboard, History, Capsules, On
+  // This Day all open EntryModal on click). Just the id, since /search only
+  // returns an excerpt, not full content -- EntryModalById fetches the rest.
+  const [openEntryId, setOpenEntryId] = useState(null);
 
   async function runSearch(e, overrideQuery) {
     e?.preventDefault();
@@ -936,16 +942,33 @@ function MemorySearch({ presetQuery }) {
       {results.length > 0 && (
         <div className="space-y-2">
           {results.map((r) => (
-            <div key={r.id} className="surface p-2.5">
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => setOpenEntryId(r.id)}
+              className="surface p-2.5 w-full text-left hover:bg-ink/10 transition"
+            >
               <div className="flex items-center justify-between gap-2">
                 <p className="text-[11px] text-ink/50">{new Date(r.createdAt).toLocaleDateString()}</p>
                 <span className="text-[10px] text-ink/55">{Math.round(r.score * 100)}% match</span>
               </div>
               <p className="text-sm mt-1">{r.title || truncateAtWord(r.excerpt, 90)}</p>
               {r.title && <p className="text-xs text-ink/60 mt-0.5">{truncateAtWord(r.excerpt, 90)}</p>}
-            </div>
+            </button>
           ))}
         </div>
+      )}
+
+      {openEntryId && (
+        <EntryModalById
+          entryId={openEntryId}
+          apiFetch={apiFetch}
+          onClose={() => setOpenEntryId(null)}
+          onDeleted={() => {
+            setOpenEntryId(null);
+            setResults((prev) => prev.filter((r) => r.id !== openEntryId));
+          }}
+        />
       )}
     </div>
   );
