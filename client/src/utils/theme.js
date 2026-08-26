@@ -50,6 +50,34 @@ export function surfaceTone(themeMode) {
     : { raised: { s: 60, l: 90 }, sunken: { s: 60, l: 80 } };
 }
 
+// Same family-branching, for the Dark color slider (--user-dark, the page
+// background). This one was the actual regression: it stayed fixed at
+// s45/l92 (a pale tone tuned for light themes -- it's literally Daylight's
+// own paper lightness) no matter what Theme mode was selected, while
+// Surface color above was already fixed to branch on family. Customize Dark
+// color on Daylight, then switch to Midnight, and the page background used
+// to stay pinned pale-light -- with the sidebar/cards now correctly dark
+// (from the surfaceTone fix) sitting on top of it. Confirmed live: dataTheme
+// "midnight" but .page-gradient's background still rgb(244,235,225), the
+// light-family tone. l:8 mirrors Midnight/Organic Dark's own --paper
+// lightness (~8%), the same way l:92 above mirrors Daylight/Organic Light's.
+export function darkColorTone(themeMode) {
+  return isDarkThemeFamily(themeMode) ? { s: 45, l: 8 } : { s: 45, l: 92 };
+}
+
+// And for the Light color slider (--user-light, the accent/button color).
+// Same underlying issue: a fixed l:53 accent is tuned for a light
+// background's contrast, and reads dim/muddy against a dark one -- which is
+// exactly why each dark theme PRESET already brightens its own --signal
+// relative to its light counterpart (Daylight's --signal is l~53%; Midnight's
+// is l~72%; Organic Light's --signal is l~44%; Organic Dark's is l~59%) --
+// see the "light-mode hexes read muddy against a dark green base" comment on
+// the Midnight token block in index.css. This mirrors that same brightening
+// for the user's custom accent instead of leaving it exempt from it.
+export function lightColorTone(themeMode) {
+  return isDarkThemeFamily(themeMode) ? { s: 60, l: 68 } : { s: 62, l: 53 };
+}
+
 // h: 0-360, s/l: 0-100. Plain HSL->hex, no library needed for one conversion.
 export function hslToHex(h, s, l) {
   s /= 100;
@@ -100,15 +128,22 @@ export function applyStoredTheme() {
   const body = document.body;
 
   if (typeof settings?.darkHue === "number") {
-    root.style.setProperty("--user-dark", hslToHex(settings.darkHue, 45, 92));
+    const tone = darkColorTone(themeMode);
+    root.style.setProperty("--user-dark", hslToHex(settings.darkHue, tone.s, tone.l));
   } else {
     root.style.removeProperty("--user-dark");
   }
 
   if (typeof settings?.lightHue === "number") {
-    root.style.setProperty("--user-light", hslToHex(settings.lightHue, 62, 53));
-    root.style.setProperty("--user-light-soft", hslToHex(settings.lightHue, 67, 73));
-    root.style.setProperty("--user-light-glow", `hsla(${settings.lightHue}, 62%, 53%, 0.28)`);
+    const tone = lightColorTone(themeMode);
+    // -soft is a lighter step off the base accent (used for e.g. hover
+    // states); +20 lightness off whatever base this family uses, capped so
+    // it can't overshoot into washed-out white on the already-bright dark
+    // family value.
+    const softL = Math.min(95, tone.l + 20);
+    root.style.setProperty("--user-light", hslToHex(settings.lightHue, tone.s, tone.l));
+    root.style.setProperty("--user-light-soft", hslToHex(settings.lightHue, tone.s, softL));
+    root.style.setProperty("--user-light-glow", `hsla(${settings.lightHue}, ${tone.s}%, ${tone.l}%, 0.28)`);
   } else {
     root.style.removeProperty("--user-light");
     root.style.removeProperty("--user-light-soft");

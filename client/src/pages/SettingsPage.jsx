@@ -6,7 +6,16 @@ import { apiFetch, describeError } from "../api";
 import { useAuth } from "../context/AuthContext";
 import PasswordInput from "../components/PasswordInput";
 import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
-import { DEFAULT_DARK_HUE, DEFAULT_LIGHT_HUE, DEFAULT_SURFACE_HUE, hslToHex, hslToRgbTriplet, surfaceTone } from "../utils/theme";
+import {
+  DEFAULT_DARK_HUE,
+  DEFAULT_LIGHT_HUE,
+  DEFAULT_SURFACE_HUE,
+  hslToHex,
+  hslToRgbTriplet,
+  surfaceTone,
+  darkColorTone,
+  lightColorTone,
+} from "../utils/theme";
 
 // Same stagger/entrance pattern the other main pages use -- Settings was
 // one of the last three destinations (with JournalHistory and More) still
@@ -168,6 +177,15 @@ export default function SettingsPage() {
   // effect gated on a single shared flag -- each now only touches the CSS
   // variables it owns, so customizing Light color can never write
   // --user-dark (and vice versa).
+  // s/l now come from darkColorTone(themeMode) instead of a fixed 45/92 --
+  // that fixed pale value was tuned for light themes only (it's literally
+  // Daylight's own paper lightness), so customizing Dark color on Daylight
+  // then switching to Midnight/Organic Dark left the page background
+  // pinned pale-light while the (already theme-aware, via surfaceTone)
+  // cards correctly went dark -- a jarring, actually-broken-looking
+  // mismatch. Depending on settings.themeMode means switching Theme mode
+  // while a custom Dark color is active recomputes the right family, same
+  // as the Surface color effect below already does.
   useEffect(() => {
     const root = document.documentElement;
     if (!hasCustomDarkHue) {
@@ -178,9 +196,14 @@ export default function SettingsPage() {
       root.style.removeProperty("--user-dark");
       return;
     }
-    root.style.setProperty("--user-dark", hslToHex(settings.darkHue, 45, 92));
-  }, [settings.darkHue, hasCustomDarkHue]);
+    const tone = darkColorTone(settings.themeMode);
+    root.style.setProperty("--user-dark", hslToHex(settings.darkHue, tone.s, tone.l));
+  }, [settings.darkHue, settings.themeMode, hasCustomDarkHue]);
 
+  // Same fix, for the accent/button color -- a fixed l:53 accent reads dim
+  // against a dark background, which is exactly why each dark theme PRESET
+  // already brightens its own --signal relative to its light counterpart
+  // (see the comment on lightColorTone() in utils/theme.js).
   useEffect(() => {
     const root = document.documentElement;
     if (!hasCustomLightHue) {
@@ -189,10 +212,12 @@ export default function SettingsPage() {
       root.style.removeProperty("--user-light-glow");
       return;
     }
-    root.style.setProperty("--user-light", hslToHex(settings.lightHue, 62, 53));
-    root.style.setProperty("--user-light-soft", hslToHex(settings.lightHue, 67, 73));
-    root.style.setProperty("--user-light-glow", `hsla(${settings.lightHue}, 62%, 53%, 0.28)`);
-  }, [settings.lightHue, hasCustomLightHue]);
+    const tone = lightColorTone(settings.themeMode);
+    const softL = Math.min(95, tone.l + 20);
+    root.style.setProperty("--user-light", hslToHex(settings.lightHue, tone.s, tone.l));
+    root.style.setProperty("--user-light-soft", hslToHex(settings.lightHue, tone.s, softL));
+    root.style.setProperty("--user-light-glow", `hsla(${settings.lightHue}, ${tone.s}%, ${tone.l}%, 0.28)`);
+  }, [settings.lightHue, settings.themeMode, hasCustomLightHue]);
 
   // Cards and the sidebar ("the brown part") read --paper-raised/
   // --paper-sunken directly -- via `rgb(var(--paper-raised))` in index.css
@@ -270,10 +295,14 @@ export default function SettingsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.themeMode]);
 
-  // Drives both the Surface slider's own swatch/track colors and the
-  // preview card below -- same tone the applied CSS override actually uses
-  // (see surfaceTone()'s comment in utils/theme.js), so what's shown here
-  // never disagrees with what dragging the slider actually produces.
+  // Drive each slider's own swatch/track colors and the preview card below
+  // -- same tones the applied CSS overrides actually use (see
+  // darkColorTone()/lightColorTone()/surfaceTone()'s comments in
+  // utils/theme.js), so what's shown here never disagrees with what
+  // dragging the slider actually produces, and updates immediately if
+  // Theme mode is switched.
+  const darkTone = darkColorTone(settings.themeMode);
+  const lightTone = lightColorTone(settings.themeMode);
   const surfaceRaisedTone = surfaceTone(settings.themeMode).raised;
 
   return (
@@ -307,8 +336,8 @@ export default function SettingsPage() {
                   label="Dark color"
                   detail="The app's main background."
                   hue={settings.darkHue}
-                  saturation={45}
-                  lightness={92}
+                  saturation={darkTone.s}
+                  lightness={darkTone.l}
                   defaultHue={DEFAULT_DARK_HUE}
                   onChange={(hue) => {
                     setHasCustomDarkHue(true);
@@ -330,8 +359,8 @@ export default function SettingsPage() {
                   label="Light color"
                   detail="Buttons and highlight accents."
                   hue={settings.lightHue}
-                  saturation={62}
-                  lightness={53}
+                  saturation={lightTone.s}
+                  lightness={lightTone.l}
                   defaultHue={DEFAULT_LIGHT_HUE}
                   onChange={(hue) => {
                     setHasCustomLightHue(true);
@@ -363,7 +392,9 @@ export default function SettingsPage() {
               </div>
               <AppearancePreview
                 darkHue={settings.darkHue}
+                darkToneValue={darkTone}
                 lightHue={settings.lightHue}
+                lightToneValue={lightTone}
                 surfaceHue={settings.surfaceHue}
                 surfaceToneValue={surfaceRaisedTone}
               />
@@ -450,9 +481,9 @@ export default function SettingsPage() {
 // control -- computed directly from the live hue state (not the CSS custom
 // properties, which only update once the settings-change effect runs),
 // so dragging a slider updates this preview in the same render.
-function AppearancePreview({ darkHue, lightHue, surfaceHue, surfaceToneValue }) {
-  const bg = hslToHex(darkHue, 45, 92);
-  const light = hslToHex(lightHue, 62, 53);
+function AppearancePreview({ darkHue, darkToneValue, lightHue, lightToneValue, surfaceHue, surfaceToneValue }) {
+  const bg = hslToHex(darkHue, darkToneValue.s, darkToneValue.l);
+  const light = hslToHex(lightHue, lightToneValue.s, lightToneValue.l);
   // Same saturation/lightness (passed down from surfaceTone(themeMode) in
   // the parent -- renamed to surfaceToneValue here so it doesn't shadow the
   // surfaceTone() function name) as the live --paper-raised override, so
