@@ -1,4 +1,4 @@
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Feather, PenSquare, RotateCcw, Sparkles, SlidersHorizontal } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
@@ -420,7 +420,15 @@ export default function ChatPage() {
                 <ChevronDown size={14} className={`text-ink/55 transition-transform ${settingsOpen ? "rotate-180" : ""}`} />
               </button>
 
+              <AnimatePresence initial={false}>
               {settingsOpen && (
+                <motion.div
+                  initial={reducedMotion ? undefined : { opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={reducedMotion ? undefined : { opacity: 0, height: 0 }}
+                  transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                  className="overflow-hidden"
+                >
                 <div className="mt-3 space-y-3">
                   <div className="flex flex-wrap gap-2">
                     {[
@@ -428,11 +436,12 @@ export default function ChatPage() {
                       { id: "deep", label: "Deep reflection" },
                       { id: "analysis", label: "Pattern analysis" },
                     ].map((item) => (
-                      <button
+                      <motion.button
                         key={item.id}
                         type="button"
                         onClick={() => setChatMode(item.id)}
                         aria-pressed={chatMode === item.id}
+                        whileTap={reducedMotion ? undefined : { scale: 0.94 }}
                         className={`text-sm px-3 py-2 rounded-full border ${
                           chatMode === item.id
                             ? "bg-signal/30 border-ember-soft"
@@ -440,7 +449,7 @@ export default function ChatPage() {
                         }`}
                       >
                         {item.label}
-                      </button>
+                      </motion.button>
                     ))}
                   </div>
                   {/* Distinct coaching voices (see the persona rules block in
@@ -449,12 +458,13 @@ export default function ChatPage() {
                       reflection someone actually wanted right now. */}
                   <div className="flex flex-wrap gap-2">
                     {personas.map((p) => (
-                      <button
+                      <motion.button
                         key={p.id}
                         type="button"
                         onClick={() => setPersona(p.id)}
                         aria-pressed={persona === p.id}
                         title={p.detail}
+                        whileTap={reducedMotion ? undefined : { scale: 0.94 }}
                         className={`text-sm px-3 py-2 rounded-full border ${
                           persona === p.id
                             ? "bg-[#a989b2]/25 border-[#a989b2]/60"
@@ -462,7 +472,7 @@ export default function ChatPage() {
                         }`}
                       >
                         {p.label}
-                      </button>
+                      </motion.button>
                     ))}
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-3 items-center">
@@ -491,7 +501,9 @@ export default function ChatPage() {
                     </label>
                   </div>
                 </div>
+                </motion.div>
               )}
+              </AnimatePresence>
             </div>
 
             {/* "What this touched on" -- see FOCUS_LABEL/conversationTopics
@@ -526,7 +538,13 @@ export default function ChatPage() {
               )}
 
               {turns.map((turn, idx) => (
-                <motion.div key={idx} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2">
+                <motion.div
+                  key={idx}
+                  initial={reducedMotion ? undefined : { opacity: 0, y: 14 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                  className="space-y-2"
+                >
                   <div className="rounded-2xl p-3 max-w-2xl ml-auto bg-signal/30 soft-border">
                     <p className="text-xs text-signal mb-1">You</p>
                     <p className="text-[15px] leading-7">{turn.userMessage}</p>
@@ -599,12 +617,13 @@ export default function ChatPage() {
                   onChange={(e) => setMessage(e.target.value)}
                   onKeyDown={onComposerKeyDown}
                 />
-                <button
+                <motion.button
+                  whileTap={reducedMotion || loading || !message.trim() ? undefined : { scale: 0.94 }}
                   className="px-5 min-h-11 ui-button-primary"
                   disabled={loading || !message.trim()}
                 >
                   Send
-                </button>
+                </motion.button>
               </form>
               <p className="text-xs text-ink/60">
                 ReflectAI supports self-reflection and is not a medical service.
