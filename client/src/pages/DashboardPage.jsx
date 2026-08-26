@@ -74,6 +74,8 @@ function WellnessSparkline({ trend }) {
             connectNulls
             dot={false}
             activeDot={{ r: 3 }}
+            animationDuration={600}
+            animationEasing="ease-out"
           />
         </AreaChart>
       </ResponsiveContainer>

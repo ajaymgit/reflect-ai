@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { apiFetch } from "../api";
 import { isoDay } from "../utils/date";
 import DayEntryPreview from "./DayEntryPreview";
 import { MOOD_HEX, MOOD_LABELS, moodDotStyle } from "../utils/moodColors";
+import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
 
 // Previously a GitHub-contributions-style strip of the last 18 weeks. Redone
 // as an actual month calendar (weekday grid, current month by default) with
@@ -45,6 +47,7 @@ function monthCounts(viewDate, moodByDate) {
 }
 
 export default function MoodCalendar() {
+  const reducedMotion = usePrefersReducedMotion();
   const [moodByDate, setMoodByDate] = useState(null);
   const [viewDate, setViewDate] = useState(() => startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState(null);
@@ -106,24 +109,26 @@ export default function MoodCalendar() {
             ~80-100px square. Capped at 300px, like an actual small calendar
             widget instead of a wall-sized one. */}
         <div className="flex items-center justify-between mb-2">
-          <button
+          <motion.button
             type="button"
             onClick={goPrev}
             aria-label="Previous month"
+            whileTap={reducedMotion ? undefined : { scale: 0.85 }}
             className="p-1 rounded-lg hover:bg-ink/10 text-ink/70 hover:text-ink"
           >
             <ChevronLeft size={14} />
-          </button>
+          </motion.button>
           <p className="text-xs font-medium">{monthLabel}</p>
-          <button
+          <motion.button
             type="button"
             onClick={goNext}
             disabled={isCurrentMonth}
             aria-label="Next month"
+            whileTap={reducedMotion || isCurrentMonth ? undefined : { scale: 0.85 }}
             className="p-1 rounded-lg hover:bg-ink/10 text-ink/70 hover:text-ink disabled:opacity-30 disabled:hover:bg-transparent"
           >
             <ChevronRight size={14} />
-          </button>
+          </motion.button>
         </div>
 
         <div className="grid grid-cols-7 gap-1">
@@ -132,30 +137,48 @@ export default function MoodCalendar() {
               {w[0]}
             </p>
           ))}
-          {cells.map((cell, i) =>
-            cell ? (
-              <button
-                key={cell.date}
-                type="button"
-                onClick={() => cell.mood && setSelectedDate(cell.date)}
-                aria-pressed={selectedDate === cell.date}
-                title={`${cell.date}${cell.mood ? ` • ${cell.mood}` : " • no entry"}`}
-                style={cell.mood ? moodDotStyle(cell.mood, 0.75) : undefined}
-                className={`aspect-square rounded text-[11px] flex items-center justify-center transition ${
-                  cell.mood
-                    ? "text-ink font-medium cursor-pointer hover:brightness-110"
-                    : "bg-ink/5 text-ink/55"
-                } ${cell.date === todayKey ? "ring-1 ring-ink/70" : ""} ${
-                  selectedDate === cell.date ? "ring-2 ring-ink" : ""
-                }`}
-              >
-                {cell.day}
-              </button>
-            ) : (
-              <div key={`blank-${i}`} />
-            ),
-          )}
         </div>
+        {/* Keyed on the month itself so switching months reads as moving to
+            a new page (a quick slide + fade) instead of the grid's numbers
+            just silently swapping in place, which was easy to miss as
+            "did that actually change?" on a fast click of the arrows. */}
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={monthLabel}
+            initial={reducedMotion ? undefined : { opacity: 0, x: 8 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={reducedMotion ? undefined : { opacity: 0, x: -8 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+            className="grid grid-cols-7 gap-1"
+          >
+            {cells.map((cell, i) =>
+              cell ? (
+                <motion.button
+                  key={cell.date}
+                  type="button"
+                  onClick={() => cell.mood && setSelectedDate(cell.date)}
+                  aria-pressed={selectedDate === cell.date}
+                  title={`${cell.date}${cell.mood ? ` • ${cell.mood}` : " • no entry"}`}
+                  style={cell.mood ? moodDotStyle(cell.mood, 0.75) : undefined}
+                  whileHover={reducedMotion || !cell.mood ? undefined : { scale: 1.12 }}
+                  whileTap={reducedMotion || !cell.mood ? undefined : { scale: 0.88 }}
+                  transition={{ duration: 0.15, ease: "easeOut" }}
+                  className={`aspect-square rounded text-[11px] flex items-center justify-center transition ${
+                    cell.mood
+                      ? "text-ink font-medium cursor-pointer hover:brightness-110"
+                      : "bg-ink/5 text-ink/55"
+                  } ${cell.date === todayKey ? "ring-1 ring-ink/70" : ""} ${
+                    selectedDate === cell.date ? "ring-2 ring-ink" : ""
+                  }`}
+                >
+                  {cell.day}
+                </motion.button>
+              ) : (
+                <div key={`blank-${i}`} />
+              ),
+            )}
+          </motion.div>
+        </AnimatePresence>
 
         <DayEntryPreview date={selectedDate} />
       </div>

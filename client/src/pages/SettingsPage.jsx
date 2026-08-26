@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Bell, Download, HeartPulse, LogOut, Palette, ShieldCheck, UserRound } from "lucide-react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { apiFetch, describeError } from "../api";
 import { useAuth } from "../context/AuthContext";
 import PasswordInput from "../components/PasswordInput";
@@ -530,7 +530,19 @@ function ReminderSection({ user, setUser }) {
             ))}
           </select>
           {busy && <span className="text-xs text-ink/50">Saving...</span>}
-          {saved && !busy && <span className="text-xs text-emerald-300">Saved</span>}
+          <AnimatePresence>
+            {saved && !busy && (
+              <motion.span
+                initial={{ opacity: 0, scale: 0.85 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="text-xs text-emerald-300"
+              >
+                Saved
+              </motion.span>
+            )}
+          </AnimatePresence>
         </div>
       )}
       {error && <p className="text-xs text-red-300 mt-2">{error}</p>}
@@ -621,9 +633,20 @@ function AppleHealthSection() {
                 <button
                   type="button"
                   onClick={copyToken}
-                  className="ui-button-ghost px-3 py-2 text-xs shrink-0"
+                  className="ui-button-ghost px-3 py-2 text-xs shrink-0 overflow-hidden"
                 >
-                  {copied ? "Copied" : "Copy"}
+                  <AnimatePresence mode="wait" initial={false}>
+                    <motion.span
+                      key={copied ? "copied" : "copy"}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.15, ease: "easeOut" }}
+                      className="inline-block"
+                    >
+                      {copied ? "Copied" : "Copy"}
+                    </motion.span>
+                  </AnimatePresence>
                 </button>
               </div>
               <p className="text-xs text-ink/50">

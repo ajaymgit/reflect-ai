@@ -626,7 +626,7 @@ function CorrelationScatter({ label, points, r, color }) {
               formatter={(value, name) => (name === "y" ? MOOD_SCORE_LABEL[Math.round(value)] || value : value)}
               contentStyle={{ background: "rgb(var(--paper-raised))", border: "1px solid rgb(var(--ink) / 0.15)", borderRadius: 8, fontSize: 11 }}
             />
-            <Scatter data={points} fill={color} fillOpacity={0.75} />
+            <Scatter data={points} fill={color} fillOpacity={0.75} animationDuration={600} animationEasing="ease-out" />
           </ScatterChart>
         </ResponsiveContainer>
       </div>
@@ -702,7 +702,7 @@ function MoodOverlayChart({ data, onPointClick }) {
               formatter={(value) => [value, "Steps"]}
               contentStyle={tooltipStyle}
             />
-            <Bar dataKey="steps" fill="url(#stepsBarGradient)" radius={[3, 3, 0, 0]} />
+            <Bar dataKey="steps" fill="url(#stepsBarGradient)" radius={[3, 3, 0, 0]} animationDuration={600} animationEasing="ease-out" />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -723,7 +723,7 @@ function MoodOverlayChart({ data, onPointClick }) {
               formatter={(value) => [MOOD_SCORE_LABEL[Math.round(value)] || "--", "Mood"]}
               contentStyle={tooltipStyle}
             />
-            <Line dataKey="mood" stroke="#a989b2" strokeWidth={2.5} dot={{ r: 3, fill: "#a989b2" }} connectNulls />
+            <Line dataKey="mood" stroke="#a989b2" strokeWidth={2.5} dot={{ r: 3, fill: "#a989b2" }} connectNulls animationDuration={600} animationEasing="ease-out" />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -784,6 +784,8 @@ function TrendChart({ title, data, dataKey, accent, valueLabel, axisLabel, onPoi
               fill={`url(#${gradientId})`}
               dot={false}
               activeDot={{ r: 5 }}
+              animationDuration={600}
+              animationEasing="ease-out"
             />
           </AreaChart>
         </ResponsiveContainer>

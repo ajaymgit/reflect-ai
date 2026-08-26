@@ -189,6 +189,13 @@ export default function RetrospectPage() {
                     radius={[4, 4, 0, 0]}
                     maxBarSize={28}
                     cursor="pointer"
+                    // Recharts' own default (1500ms, generic "ease") reads as
+                    // sluggish next to how quickly everything else in this
+                    // app settles (~300-450ms, ease-out) -- shortened so a
+                    // chart appearing doesn't feel like a different, slower
+                    // app underneath the fast one.
+                    animationDuration={600}
+                    animationEasing="ease-out"
                     onClick={(point) => setSelectedDate(point?.payload?.rawDate || point?.rawDate || null)}
                   >
                     {moodSeries.map((entry, i) => {
