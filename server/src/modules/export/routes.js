@@ -130,4 +130,41 @@ router.get(
   }),
 );
 
+// Keepsakes-only companion to /journal.csv -- same shape, same escaping,
+// same visibility guard, just scoped to isKeepsake:true. isKeepsake is a
+// plain unencrypted boolean (see JournalEntry model), so filtering happens
+// at the DB level exactly like the mood filter on GET /api/journal/entries,
+// not a JS-side pass after the fact. Journal entries as a whole can run into
+// the hundreds; a curated "just the moments I actually chose to keep" export
+// is a meaningfully different, smaller thing to hand someone than the full
+// archive CSV above -- worth its own button, not a filter parameter on the
+// existing one.
+router.get(
+  "/keepsakes.csv",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const journals = await JournalEntry.find(
+      visibleJournalFilter({ userId: req.user._id, isKeepsake: true }),
+    ).sort({ createdAt: 1 });
+
+    const header = ["Date", "Title", "Mood", "Tags", "Content"].map(csvEscape).join(",");
+    const rows = journals.map((j) =>
+      [
+        new Date(j.createdAt).toISOString().slice(0, 10),
+        j.title || "",
+        j.mood,
+        (j.tags || []).join("; "),
+        j.content,
+      ]
+        .map(csvEscape)
+        .join(","),
+    );
+    const csv = [header, ...rows].join("\r\n");
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="reflectai-keepsakes-${Date.now()}.csv"`);
+    res.status(200).send(`﻿${csv}`);
+  }),
+);
+
 export default router;

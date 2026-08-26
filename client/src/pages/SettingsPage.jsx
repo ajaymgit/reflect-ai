@@ -525,6 +525,7 @@ function ExportSection() {
   // two genuinely separate requests is in flight.
   const [busyAll, setBusyAll] = useState(false);
   const [busyCsv, setBusyCsv] = useState(false);
+  const [busyKeepsakes, setBusyKeepsakes] = useState(false);
   const [error, setError] = useState("");
 
   // Shared by both downloads -- fetched manually (not via the shared
@@ -597,6 +598,25 @@ function ExportSection() {
           className="ui-button-ghost px-4 py-2.5 min-h-11 text-sm disabled:opacity-60"
         >
           {busyCsv ? "Preparing..." : "Download as CSV"}
+        </button>
+      </div>
+      {/* Just the entries someone chose to flag as a Keepsake -- a smaller,
+          curated export distinct from "everything" above, the CSV
+          counterpart to the archive page's new Keepsakes-only filter. */}
+      <div className="flex items-center justify-between gap-3 flex-wrap mt-3 pt-3 border-t border-ink/10">
+        <div>
+          <p className="text-sm font-medium">Just your Keepsakes</p>
+          <p className="text-xs text-ink/70 mt-1 max-w-md">
+            Only the entries you flagged as a Keepsake, as the same date/title/mood/tags/content CSV.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => downloadFile("/api/export/keepsakes.csv", `reflectai-keepsakes-${today}.csv`, setBusyKeepsakes)}
+          disabled={busyKeepsakes}
+          className="ui-button-ghost px-4 py-2.5 min-h-11 text-sm disabled:opacity-60"
+        >
+          {busyKeepsakes ? "Preparing..." : "Download as CSV"}
         </button>
       </div>
       {error && <p className="text-xs text-red-300 mt-2">{error}</p>}
