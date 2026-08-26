@@ -160,6 +160,14 @@ router.get(
       wellnessTrend,
       journalingStreak: streak,
       entriesInRange: rangeJournals.length,
+      // Recent Entries below is scoped to `range` (this week, by default) --
+      // previously its empty state always read "No entries yet -- write
+      // your first one above," which is only true for a genuinely new
+      // account. Someone with months of history who just hasn't written
+      // this week saw the exact same "start from zero" message as a brand
+      // new user. `allRecentJournals` (already fetched above, uncapped by
+      // range) tells the client which empty state is actually true.
+      hasAnyEntries: allRecentJournals.length > 0,
       todaysMood: latestJournal?.mood || "No check-in yet",
       selectedRange: range,
       emotionDistribution: buildEmotionDistribution(allRecentJournals),

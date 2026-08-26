@@ -116,7 +116,13 @@ export default function RetrospectPage() {
           <DayEntryPreview date={selectedDate} />
         </motion.div>
 
-        <motion.div variants={iVariants} className="grid lg:grid-cols-3 gap-4">
+        {/* items-start -- CSS grid stretches row items to match the tallest
+            sibling by default, so the Emotional timeline card (a fixed h-64
+            chart plus a couple lines of text) was being stretched down to
+            match the right column's full stacked height (Mood balance +
+            Recurring themes + Writing rhythm), leaving a large empty void
+            under the chart bounded by nothing but the card's own border. */}
+        <motion.div variants={iVariants} className="grid lg:grid-cols-3 gap-4 items-start">
           <div className="ui-card rounded-2xl p-4 lg:col-span-2">
             <h3 className="font-medium">Emotional timeline</h3>
             <p className="text-xs text-ink/60 mt-2">

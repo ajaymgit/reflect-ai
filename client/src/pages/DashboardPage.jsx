@@ -538,7 +538,11 @@ export default function DashboardPage() {
                     </button>
                   ))}
                 {(data?.recentEntries || []).length === 0 && (
-                  <p className="text-sm text-ink/50 py-3 sm:col-span-2">No entries yet -- write your first one above.</p>
+                  <p className="text-sm text-ink/50 py-3 sm:col-span-2">
+                    {data?.hasAnyEntries
+                      ? "Nothing written this week yet -- write one above, or check History for older entries."
+                      : "No entries yet -- write your first one above."}
+                  </p>
                 )}
                 {(data?.recentEntries || []).length > 0 &&
                   (data?.recentEntries || []).filter((e) => entryFilter === "all" || e.isKeepsake).length === 0 && (
