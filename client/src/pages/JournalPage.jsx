@@ -834,7 +834,24 @@ export default function JournalPage() {
         </div>
       )}
 
-      {openMemory && <EntryModal entry={openMemory} onClose={() => setOpenMemory(null)} />}
+      {openMemory && (
+        <EntryModal
+          entry={openMemory}
+          onClose={() => setOpenMemory(null)}
+          onUpdated={(updated) => {
+            setOpenMemory(updated);
+            setOnThisDay((prev) => prev.map((e) => (e._id === updated._id ? { ...e, ...updated } : e)));
+            setCapsules((prev) => ({
+              waiting: prev.waiting,
+              ready: prev.ready.map((e) => (e._id === updated._id ? { ...e, ...updated } : e)),
+            }));
+          }}
+          onDeleted={(id) => {
+            setOnThisDay((prev) => prev.filter((e) => e._id !== id));
+            setCapsules((prev) => ({ waiting: prev.waiting, ready: prev.ready.filter((e) => e._id !== id) }));
+          }}
+        />
+      )}
       </>
       )}
     </main>

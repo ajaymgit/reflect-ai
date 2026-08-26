@@ -338,7 +338,20 @@ export default function JournalHistoryView() {
         )}
       </div>
 
-      {openEntry && <EntryModal entry={openEntry} onClose={() => setOpenEntry(null)} />}
+      {openEntry && (
+        <EntryModal
+          entry={openEntry}
+          onClose={() => setOpenEntry(null)}
+          onUpdated={(updated) => {
+            setOpenEntry(updated);
+            setEntries((prev) => prev.map((e) => (e._id === updated._id ? { ...e, ...updated } : e)));
+          }}
+          onDeleted={(id) => {
+            setEntries((prev) => prev.filter((e) => e._id !== id));
+            setTotal((t) => Math.max(0, t - 1));
+          }}
+        />
+      )}
     </>
   );
 }

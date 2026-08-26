@@ -550,7 +550,37 @@ export default function DashboardPage() {
       </motion.div>
 
       {openEntryId && (
-        <EntryModalById entryId={openEntryId} onClose={() => setOpenEntryId(null)} apiFetch={apiFetch} />
+        <EntryModalById
+          entryId={openEntryId}
+          onClose={() => setOpenEntryId(null)}
+          apiFetch={apiFetch}
+          onUpdated={(updated) => {
+            setData((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    recentEntries: (prev.recentEntries || []).map((e) =>
+                      e.id === updated._id
+                        ? {
+                            ...e,
+                            title: updated.title,
+                            mood: updated.mood,
+                            tags: updated.tags,
+                            isKeepsake: updated.isKeepsake,
+                            excerpt: (updated.content || "").slice(0, 110),
+                          }
+                        : e,
+                    ),
+                  }
+                : prev,
+            );
+          }}
+          onDeleted={(id) => {
+            setData((prev) =>
+              prev ? { ...prev, recentEntries: (prev.recentEntries || []).filter((e) => e.id !== id) } : prev,
+            );
+          }}
+        />
       )}
 
       <StreakMilestone streak={data?.journalingStreak} />

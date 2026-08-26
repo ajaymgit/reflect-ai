@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 import JournalEntry from "../../models/JournalEntry.js";
 import { requireAuth } from "../../shared/middleware/auth.js";
 import { validateRequest } from "../../shared/middleware/validateRequest.js";
-import { quickJournalSchema } from "../../shared/validators/chatSchemas.js";
+import { quickJournalSchema, updateJournalSchema } from "../../shared/validators/chatSchemas.js";
 import { asyncHandler } from "../../shared/utils/asyncHandler.js";
 import { extractThemes } from "../../shared/utils/extractThemes.js";
 import { embedJournalEntry, findSemanticMatches } from "../../shared/services/embeddings.js";
@@ -325,6 +325,81 @@ router.get(
     ).select("_id content mood title tags isKeepsake createdAt");
     if (!entry) return res.status(404).json({ code: "NOT_FOUND", message: "Entry not found." });
     res.json({ entry });
+  }),
+);
+
+// Editing an already-saved entry -- previously there was no way to fix a
+// typo, correct a misjudged mood, or retag an entry after the fact anywhere
+// in the app; content str could only ever be created, never changed. Scoped
+// to the caller's own entry via the query itself (same pattern as GET /:id
+// above), so a mismatched id/userId pair looks identical to a nonexistent
+// entry rather than leaking whether some other user's id exists.
+router.patch(
+  "/:id",
+  requireAuth,
+  validateRequest(updateJournalSchema),
+  asyncHandler(async (req, res) => {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ code: "INVALID_ID", message: "Not a valid entry id." });
+    }
+    const entry = await JournalEntry.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!entry) return res.status(404).json({ code: "NOT_FOUND", message: "Entry not found." });
+
+    const { content, mood, title, tags, isKeepsake } = req.validated.body;
+
+    // themes/embedding only get recomputed when content actually changed --
+    // both are pure derivatives of it (see extractThemes/embedJournalEntry),
+    // so re-running them on a request that only touched e.g. mood would be
+    // wasted work (and, for the embedding call, a pointless network round
+    // trip to Ollama/the embedding provider).
+    let contentChanged = false;
+    if (content !== undefined) {
+      const trimmed = content.trim();
+      if (trimmed !== entry.content) {
+        entry.content = trimmed;
+        entry.themes = extractThemes(trimmed);
+        contentChanged = true;
+      }
+    }
+    if (title !== undefined) entry.title = title;
+    if (mood !== undefined) entry.mood = mood;
+    if (tags !== undefined) entry.tags = tags;
+    if (isKeepsake !== undefined) entry.isKeepsake = isKeepsake;
+
+    await entry.save();
+
+    if (contentChanged) {
+      // Fire-and-forget, same as quick-entry's create path below -- the
+      // response above already reflects the saved edit, so a slow/
+      // unavailable embedding call never adds latency to editing or blocks
+      // it on a feature that's a pure enhancement.
+      embedJournalEntry(entry).catch((error) => {
+        logError("Failed to re-embed edited journal entry", {
+          entryId: String(entry._id),
+          error: error?.message || String(error),
+        });
+      });
+    }
+
+    res.json({ entry });
+  }),
+);
+
+// Scoped to the caller's own entry the same way every other id-based route
+// in this file is -- findOneAndDelete's filter (not a separate
+// find-then-check-ownership-then-delete) means there's no window where an
+// existence check and the delete itself could disagree about which entry is
+// being touched.
+router.delete(
+  "/:id",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ code: "INVALID_ID", message: "Not a valid entry id." });
+    }
+    const entry = await JournalEntry.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+    if (!entry) return res.status(404).json({ code: "NOT_FOUND", message: "Entry not found." });
+    res.json({ ok: true });
   }),
 );
 

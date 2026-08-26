@@ -37,3 +37,28 @@ export const quickJournalSchema = z.object({
   query: z.object({}).optional(),
 });
 
+// PATCH /api/journal/:id -- editing an already-saved entry. Every field is
+// optional (someone might only be fixing a typo in the title, or just
+// correcting the mood they picked in the moment) but at least one has to be
+// present, or this is a no-op request that shouldn't hit the database at
+// all. Deliberately excludes revealAt (a time capsule's reveal date is a
+// one-time commitment made at write time, see JournalEntry.js) and
+// themes/embedding (both are always recomputed server-side from `content`
+// in the route itself, see journal/routes.js, so they can never be set
+// directly here and drift out of sync with a hand-edited value).
+export const updateJournalSchema = z.object({
+  body: z
+    .object({
+      content: z.string().min(1).max(10000).optional(),
+      mood: z.enum(["happy", "calm", "reflective", "sad", "stressed", "angry"]).optional(),
+      title: z.string().max(200).optional(),
+      tags: z.array(z.string().min(1).max(40)).max(20).optional(),
+      isKeepsake: z.boolean().optional(),
+    })
+    .refine((body) => Object.keys(body).length > 0, {
+      message: "Provide at least one field to update.",
+    }),
+  params: z.object({ id: z.string().min(1) }),
+  query: z.object({}).optional(),
+});
+
