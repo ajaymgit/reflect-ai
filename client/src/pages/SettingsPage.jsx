@@ -47,11 +47,17 @@ function SectionCard({ icon: Icon, title, children }) {
 // the first time someone opens Settings.
 const DEFAULT_DARK_HUE = 43;
 const DEFAULT_LIGHT_HUE = 233;
+// Matches DEFAULT_DARK_HUE -- cards/sidebar (--paper-raised/--paper-sunken)
+// default to the same warm-white family as the page background, so the
+// slider starts at "no visible tint" instead of introducing a color shift
+// the app didn't have a moment ago.
+const DEFAULT_SURFACE_HUE = 43;
 
 const defaultSettings = {
   themeMode: "daylight",
   darkHue: DEFAULT_DARK_HUE,
   lightHue: DEFAULT_LIGHT_HUE,
+  surfaceHue: DEFAULT_SURFACE_HUE,
 };
 
 // h: 0-360, s/l: 0-100. Plain HSL->hex, no library needed for one conversion.
@@ -63,6 +69,22 @@ function hslToHex(h, s, l) {
   const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
   const toHex = (n) => Math.round(255 * f(n)).toString(16).padStart(2, "0");
   return `#${toHex(0)}${toHex(8)}${toHex(4)}`;
+}
+
+// Same math as hslToHex, but returns "R G B" (space-separated, no #) --
+// the format --paper-raised/--paper-sunken are already declared in
+// (index.css), which is what lets Tailwind's `bg-paper-raised` etc.
+// `<alpha-value>` opacity modifier work. hslToHex's hex string can't be
+// dropped into that format, so this is a separate conversion, not a
+// wrapper around it.
+function hslToRgbTriplet(h, s, l) {
+  s /= 100;
+  l /= 100;
+  const k = (n) => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  const toChannel = (n) => Math.round(255 * f(n));
+  return `${toChannel(0)} ${toChannel(8)} ${toChannel(4)}`;
 }
 
 function loadSettings() {
@@ -127,6 +149,7 @@ export default function SettingsPage() {
   // resets) on its own.
   const [hasCustomDarkHue, setHasCustomDarkHue] = useState(() => hasStoredHue("darkHue"));
   const [hasCustomLightHue, setHasCustomLightHue] = useState(() => hasStoredHue("lightHue"));
+  const [hasCustomSurfaceHue, setHasCustomSurfaceHue] = useState(() => hasStoredHue("surfaceHue"));
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutStatus, setLogoutStatus] = useState("");
   const { logout, user, setUser } = useAuth();
@@ -161,12 +184,13 @@ export default function SettingsPage() {
     // entirely, leaving hasStoredHue("darkHue") false on reload. themeMode
     // (light/dark mode itself, as opposed to the custom accent hues) is a
     // deliberate choice the instant it's touched, so it always persists.
-    const { darkHue, lightHue, ...rest } = settings;
+    const { darkHue, lightHue, surfaceHue, ...rest } = settings;
     const toSave = { ...rest };
     if (hasCustomDarkHue) toSave.darkHue = darkHue;
     if (hasCustomLightHue) toSave.lightHue = lightHue;
+    if (hasCustomSurfaceHue) toSave.surfaceHue = surfaceHue;
     localStorage.setItem("equoria-settings", JSON.stringify(toSave));
-  }, [settings, hasCustomDarkHue, hasCustomLightHue]);
+  }, [settings, hasCustomDarkHue, hasCustomLightHue, hasCustomSurfaceHue]);
 
   // Sets on <html> (not <body>) so the vars are visible to every stylesheet
   // rule regardless of specificity/ordering. Each slider only stores a hue
@@ -205,6 +229,37 @@ export default function SettingsPage() {
     root.style.setProperty("--user-light-soft", hslToHex(settings.lightHue, 67, 73));
     root.style.setProperty("--user-light-glow", `hsla(${settings.lightHue}, 62%, 53%, 0.28)`);
   }, [settings.lightHue, hasCustomLightHue]);
+
+  // Cards and the sidebar ("the brown part") read --paper-raised/
+  // --paper-sunken directly -- via `rgb(var(--paper-raised))` in index.css
+  // AND via Tailwind's `bg-paper-raised`/`bg-paper-sunken` classes used
+  // straight in JSX (AppShell's <aside>, mobile nav, etc) -- neither route
+  // has a var(--user-x, ...) fallback the way body's background does, so
+  // there's no separate --user-surface variable to introduce here. Instead
+  // this overrides --paper-raised/--paper-sunken themselves, in the same
+  // RGB-triplet format index.css already declares them in, which every
+  // existing consumer (both the raw CSS and the Tailwind classes) already
+  // reads with zero changes needed elsewhere.
+  //
+  // Set on document.BODY, not document.documentElement like the two effects
+  // above -- deliberately different. --paper-raised/--paper-sunken are
+  // declared by body[data-theme-mode="midnight"] (etc) selectors, which
+  // target the body element directly; a value declared directly on an
+  // element always wins over one merely inherited from an ancestor,
+  // regardless of the ancestor's specificity. So an override on <html>
+  // would lose to Midnight's/Organic's own body-level values every time.
+  // Only a declaration on body itself -- and inline style is the highest
+  // form of that -- can actually win.
+  useEffect(() => {
+    const body = document.body;
+    if (!hasCustomSurfaceHue) {
+      body.style.removeProperty("--paper-raised");
+      body.style.removeProperty("--paper-sunken");
+      return;
+    }
+    body.style.setProperty("--paper-raised", hslToRgbTriplet(settings.surfaceHue, 25, 97));
+    body.style.setProperty("--paper-sunken", hslToRgbTriplet(settings.surfaceHue, 25, 90));
+  }, [settings.surfaceHue, hasCustomSurfaceHue]);
 
   // Applying data-theme-mode instantly on toggle used to just snap between
   // the two palettes. A radial-gradient background (.page-gradient) can't be
@@ -307,8 +362,26 @@ export default function SettingsPage() {
                     setSettings((prev) => ({ ...prev, lightHue: DEFAULT_LIGHT_HUE }));
                   }}
                 />
+                <div className="sm:col-span-2">
+                  <HueSlider
+                    label="Surface color"
+                    detail="Cards, sidebar, and panels."
+                    hue={settings.surfaceHue}
+                    saturation={25}
+                    lightness={97}
+                    defaultHue={DEFAULT_SURFACE_HUE}
+                    onChange={(hue) => {
+                      setHasCustomSurfaceHue(true);
+                      setSettings((prev) => ({ ...prev, surfaceHue: hue }));
+                    }}
+                    onReset={() => {
+                      setHasCustomSurfaceHue(false);
+                      setSettings((prev) => ({ ...prev, surfaceHue: DEFAULT_SURFACE_HUE }));
+                    }}
+                  />
+                </div>
               </div>
-              <AppearancePreview darkHue={settings.darkHue} lightHue={settings.lightHue} />
+              <AppearancePreview darkHue={settings.darkHue} lightHue={settings.lightHue} surfaceHue={settings.surfaceHue} />
               <p className="text-xs text-ink/50 mt-2">Applies instantly across the whole app.</p>
             </SectionCard>
 
@@ -392,22 +465,28 @@ export default function SettingsPage() {
 // control -- computed directly from the live hue state (not the CSS custom
 // properties, which only update once the settings-change effect runs),
 // so dragging a slider updates this preview in the same render.
-function AppearancePreview({ darkHue, lightHue }) {
+function AppearancePreview({ darkHue, lightHue, surfaceHue }) {
   const bg = hslToHex(darkHue, 45, 92);
   const light = hslToHex(lightHue, 62, 53);
+  // Same 25/97 as the live --paper-raised override above, so this swatch
+  // matches what the Surface slider will actually produce, not an
+  // approximation of it.
+  const surface = hslToHex(surfaceHue, 25, 97);
   return (
     <div className="mt-3 rounded-xl p-3 border border-ink/10" style={{ background: bg }}>
-      <p className="text-[10px] uppercase tracking-wide" style={{ color: light, fontFamily: '"JetBrains Mono", monospace' }}>
-        Preview
-      </p>
-      <button
-        type="button"
-        tabIndex={-1}
-        className="mt-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold pointer-events-none"
-        style={{ background: light, color: "#FFFFFF" }}
-      >
-        Button
-      </button>
+      <div className="rounded-lg p-2 border border-ink/10" style={{ background: surface }}>
+        <p className="text-[10px] uppercase tracking-wide" style={{ color: light, fontFamily: '"JetBrains Mono", monospace' }}>
+          Preview
+        </p>
+        <button
+          type="button"
+          tabIndex={-1}
+          className="mt-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold pointer-events-none"
+          style={{ background: light, color: "#FFFFFF" }}
+        >
+          Button
+        </button>
+      </div>
     </div>
   );
 }
