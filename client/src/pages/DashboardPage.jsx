@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { ArrowRight, Flame, Gem } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, YAxis } from "recharts";
-import { apiFetch } from "../api";
+import { apiFetch, describeError } from "../api";
 import AnimatedNumber from "../components/AnimatedNumber";
 import MoodCalendar from "../components/MoodCalendar";
 import KeepsakesLauncher from "../components/MoodGlobeLauncher";
@@ -154,7 +154,7 @@ function relativeDay(dateStr) {
 // text) plus a one-line read on the numbers, not just the raw figures --
 // the point is to actually answer "how am I doing" without a click, not
 // just relocate the Health page's numbers one level up.
-function HealthSnapshotCard({ summary }) {
+function HealthSnapshotCard({ summary, onLogged }) {
   const hasData = summary && (summary.averageSleep || summary.averageSteps || summary.averageStress);
   const stressRead =
     summary?.averageStress == null
@@ -198,15 +198,102 @@ function HealthSnapshotCard({ summary }) {
           {stressRead && <p className="text-sm text-ink/70 mt-4 leading-snug">{stressRead}</p>}
         </>
       ) : (
-        <p className="text-sm text-ink/50 mt-3">
-          No health data yet.{" "}
-          <Link to="/health" className="text-ink/70 underline underline-offset-2 hover:text-ink">
-            Log today's numbers
-          </Link>{" "}
-          to see a real snapshot here.
-        </p>
+        <>
+          {/* Previously just a one-line "No health data yet" sentence,
+              which left this whole card mostly blank inside a two-up grid
+              (h-full stretches it to match the Retrospect card next to it,
+              which has real ranked-bar content filling that same height).
+              A quick-log form actually usable right here -- same POST
+              /api/health-data/manual-entry the full Health page's own form
+              hits -- turns that dead space into the one action that fixes
+              it: log a number, watch this card (and the wellness ring
+              above) fill in on the next load, no navigation required. */}
+          <p className="text-sm text-ink/50 mt-3">
+            No health data yet -- log today's numbers below, or head to the{" "}
+            <Link to="/health" className="text-ink/70 underline underline-offset-2 hover:text-ink">
+              full Health page
+            </Link>
+            .
+          </p>
+          <div className="mt-4 flex-1 flex flex-col justify-center">
+            <QuickLogHealthForm onSaved={onLogged} />
+          </div>
+        </>
       )}
     </div>
+  );
+}
+
+// Compact counterpart to HealthPage's own LogHealthDataForm -- same fields,
+// same endpoint, same "any single value is enough" behavior, just stacked
+// vertically to fit this card's narrower column instead of that page's
+// full-width four-up row. Existing purely so the empty state above has a
+// real action in it instead of only a link elsewhere.
+function QuickLogHealthForm({ onSaved }) {
+  const [steps, setSteps] = useState("");
+  const [sleepHours, setSleepHours] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState("");
+
+  async function save(e) {
+    e.preventDefault();
+    const body = {};
+    if (steps !== "") body.steps = Number(steps);
+    if (sleepHours !== "") body.sleepHours = Number(sleepHours);
+    if (Object.keys(body).length === 0) {
+      setStatus("Enter at least one value.");
+      return;
+    }
+    setSaving(true);
+    setStatus("");
+    try {
+      await apiFetch("/api/health-data/manual-entry", { method: "POST", body: JSON.stringify(body) });
+      setSteps("");
+      setSleepHours("");
+      setStatus("Saved");
+      onSaved?.();
+    } catch (err) {
+      setStatus(describeError(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={save} className="flex flex-col gap-2">
+      <div className="grid grid-cols-2 gap-2">
+        <label className="text-[11px] text-ink/60">
+          Steps
+          <input
+            type="number"
+            min="0"
+            className="ui-input mt-1 text-sm"
+            value={steps}
+            onChange={(e) => setSteps(e.target.value)}
+            placeholder="8000"
+          />
+        </label>
+        <label className="text-[11px] text-ink/60">
+          Sleep (hrs)
+          <input
+            type="number"
+            min="0"
+            max="24"
+            step="0.1"
+            className="ui-input mt-1 text-sm"
+            value={sleepHours}
+            onChange={(e) => setSleepHours(e.target.value)}
+            placeholder="7.5"
+          />
+        </label>
+      </div>
+      <button type="submit" disabled={saving} className="px-3 py-2 min-h-9 text-sm ui-button-primary whitespace-nowrap">
+        {saving ? "Saving..." : "Log today"}
+      </button>
+      {status && (
+        <p className={`text-xs ${status === "Saved" ? "text-ember-soft" : "text-red-300"}`}>{status}</p>
+      )}
+    </form>
   );
 }
 
@@ -509,7 +596,7 @@ export default function DashboardPage() {
             leaving Home. */}
         <div className="grid md:grid-cols-2 gap-4">
           <motion.div variants={iVariants} className="h-full">
-            <HealthSnapshotCard summary={data?.quickHealthSummary} />
+            <HealthSnapshotCard summary={data?.quickHealthSummary} onLogged={loadSummary} />
           </motion.div>
           <motion.div variants={iVariants} className="h-full">
             <RetrospectPreviewCard retro={retro} />
