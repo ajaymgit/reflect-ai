@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, ChevronLeft, ChevronRight, SlidersHorizontal, X } from "lucide-react";
+import { BookOpen, ChevronLeft, ChevronRight, Search, SlidersHorizontal, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { apiFetch, describeError } from "../api";
-import EntryModal from "../components/EntryModal";
+import EntryModal, { EntryModalById } from "../components/EntryModal";
 import { MOODS as moods, MOOD_LABELS, moodDotStyle } from "../utils/moodColors";
 import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
 
@@ -70,6 +70,21 @@ export default function JournalHistoryView() {
   const [showFilters, setShowFilters] = useState(false);
   const [showAllTags, setShowAllTags] = useState(false);
 
+  // Meaning-based search over this same archive -- previously the semantic
+  // search endpoint (GET /api/journal/search) was only reachable from the
+  // Write page's sidebar, nowhere near the actual "browse my past entries"
+  // page someone would naturally reach for it from. Kept as a self-contained
+  // block (its own query/results/mode state, not woven into the mood/tag
+  // filter's page-based `load()`) since search results aren't paginated the
+  // same way and the two shouldn't be combined into one query shape.
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchActive, setSearchActive] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchMode, setSearchMode] = useState("empty_query");
+  const [searchBusy, setSearchBusy] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const [openSearchEntryId, setOpenSearchEntryId] = useState(null);
+
   // Guards against out-of-order responses: clicking one mood pill then
   // another (or a filter change landing right as a page-change request was
   // already in flight) previously fired two overlapping GET requests with
@@ -103,6 +118,37 @@ export default function JournalHistoryView() {
       if (requestId === requestIdRef.current) setLoading(false);
     }
   }, []);
+
+  async function runSearch(e) {
+    e?.preventDefault();
+    const q = searchQuery.trim();
+    if (!q) {
+      setSearchActive(false);
+      setSearchResults([]);
+      setSearchMode("empty_query");
+      return;
+    }
+    setSearchActive(true);
+    setSearchBusy(true);
+    setSearchError("");
+    try {
+      const data = await apiFetch(`/api/journal/search?q=${encodeURIComponent(q)}`);
+      setSearchResults(data.results || []);
+      setSearchMode(data.mode);
+    } catch (err) {
+      setSearchError(describeError(err));
+    } finally {
+      setSearchBusy(false);
+    }
+  }
+
+  function clearSearch() {
+    setSearchQuery("");
+    setSearchActive(false);
+    setSearchResults([]);
+    setSearchMode("empty_query");
+    setSearchError("");
+  }
 
   // Tags the user has actually used, ranked by frequency -- backed by GET
   // /api/journal/tags (see server/src/modules/journal/routes.js). Fetched
@@ -169,6 +215,71 @@ export default function JournalHistoryView() {
           </button>
         </motion.div>
 
+        {/* Search by meaning, not exact words -- same GET /api/journal/search
+            this app already uses on the Write page's sidebar, now also
+            reachable from the actual archive it's meant to search. Search
+            and the mood/tag filter below are deliberately separate modes
+            (not combinable into one query) -- while a search is active it
+            replaces the filtered/paginated list entirely. */}
+        <motion.form variants={iVariants} onSubmit={runSearch} className="flex gap-2">
+          <div className="relative flex-1">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink/40" />
+            <input
+              className="ui-input w-full pl-9 pr-9"
+              placeholder="Search by meaning -- e.g. &quot;struggling to focus at work&quot;"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={clearSearch}
+                aria-label="Clear search"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink/40 hover:text-ink/70"
+              >
+                <X size={15} />
+              </button>
+            )}
+          </div>
+          <button type="submit" className="px-4 min-h-11 ui-button-primary shrink-0" disabled={searchBusy}>
+            {searchBusy ? "..." : "Search"}
+          </button>
+        </motion.form>
+
+        {searchActive ? (
+          <>
+            {searchError && <p className="text-sm text-red-300">{searchError}</p>}
+            {!searchError && searchMode === "unavailable" && (
+              <p className="text-xs text-ink/50">
+                Semantic search isn't set up for your entries yet -- run the embedding backfill on the server
+                (`npm run embed-journals`).
+              </p>
+            )}
+            {!searchError && searchMode === "no_match" && (
+              <p className="text-xs text-ink/50">No closely related entries found for that.</p>
+            )}
+            {searchResults.length > 0 && (
+              <div className="grid sm:grid-cols-2 gap-3">
+                {searchResults.map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => setOpenSearchEntryId(r.id)}
+                    className="ui-card rounded-2xl p-4 text-left hover:bg-ink/10 transition space-y-2"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-ink/50 ui-mono">{new Date(r.createdAt).toLocaleDateString()}</span>
+                      <span className="text-[10px] text-ink/55">{Math.round(r.score * 100)}% match</span>
+                    </div>
+                    <p className="font-medium text-sm">{r.title || truncateAtWord(r.excerpt, 90)}</p>
+                    {r.title && <p className="text-sm text-ink/70">{truncateAtWord(r.excerpt, 160)}</p>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+        <>
         {/* Active filters stay visible as removable chips even when the
             filter panel itself is collapsed, so "why is my list short" is
             always answerable at a glance. */}
@@ -381,6 +492,8 @@ export default function JournalHistoryView() {
             </button>
           </div>
         )}
+        </>
+        )}
       </motion.div>
 
       {openEntry && (
@@ -394,6 +507,18 @@ export default function JournalHistoryView() {
           onDeleted={(id) => {
             setEntries((prev) => prev.filter((e) => e._id !== id));
             setTotal((t) => Math.max(0, t - 1));
+          }}
+        />
+      )}
+
+      {openSearchEntryId && (
+        <EntryModalById
+          entryId={openSearchEntryId}
+          apiFetch={apiFetch}
+          onClose={() => setOpenSearchEntryId(null)}
+          onDeleted={() => {
+            setOpenSearchEntryId(null);
+            setSearchResults((prev) => prev.filter((r) => r.id !== openSearchEntryId));
           }}
         />
       )}

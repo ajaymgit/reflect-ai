@@ -123,15 +123,23 @@ export default function YearInReviewPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sharing, setSharing] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const reducedMotion = usePrefersReducedMotion();
   const cVariants = reducedMotion ? staticContainerVariants : containerVariants;
   const iVariants = reducedMotion ? staticItemVariants : itemVariants;
 
-  useEffect(() => {
+  function loadYearInReview() {
+    setLoading(true);
+    setLoadError(false);
     apiFetch("/api/year-in-review")
       .then(setData)
-      .catch(() => {})
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    loadYearInReview();
   }, []);
 
   if (loading) {
@@ -144,6 +152,26 @@ export default function YearInReviewPage() {
             <div className="skeleton h-28 w-full rounded-2xl" />
             <div className="skeleton h-28 w-full rounded-2xl" />
           </div>
+        </div>
+      </main>
+    );
+  }
+
+  // Previously a failed fetch left `data` null exactly like a genuine
+  // "not enough entries yet" empty account, so a network blip or a 500 was
+  // presented as "keep journaling and this'll fill in" -- indistinguishable
+  // from the honest empty state and with no way to retry. Same distinct
+  // error-vs-empty pattern already used on Dashboard/Health/Retrospect.
+  if (loadError) {
+    return (
+      <main className="ui-page">
+        <div className="max-w-2xl mx-auto ui-card rounded-2xl p-8 text-center">
+          <p className="ui-kicker">Year in review</p>
+          <h2 className="ui-title mt-2">Couldn't load your year in review</h2>
+          <p className="text-sm text-ink/70 mt-3">Something went wrong fetching your data. Please try again.</p>
+          <button type="button" onClick={loadYearInReview} className="inline-flex mt-5 px-4 py-2.5 min-h-11 text-sm ui-button-primary">
+            Retry
+          </button>
         </div>
       </main>
     );
