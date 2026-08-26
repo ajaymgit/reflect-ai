@@ -77,18 +77,25 @@ function loadSettings() {
 // Separate from loadSettings() on purpose: that function always returns a
 // numeric darkHue/lightHue (falling back to DEFAULT_DARK_HUE/LIGHT_HUE) so
 // the sliders always have a value to render, even for someone who has never
-// touched them. This one instead asks "did the user actually save a hue at
-// some point" by checking the raw persisted JSON for the key itself, not the
-// merged-with-defaults result. That distinction is what the --user-dark /
-// --user-light effect below needs: it must only override the page background
-// for someone who deliberately customized it, never merely because the
-// sliders happen to have *a* default position to display.
-function hasStoredHue() {
+// touched them. This one instead asks "did the user actually save THIS
+// specific hue at some point" by checking the raw persisted JSON for that
+// one key, not the merged-with-defaults result. That distinction is what the
+// --user-dark / --user-light effects below need: each must only override the
+// page background/accent for someone who deliberately customized THAT
+// slider, never merely because the sliders happen to have *a* default
+// position to display -- and never because the OTHER slider was touched.
+// Takes the key ("darkHue" or "lightHue") instead of checking both at once:
+// checking both together was the original bug -- dragging only the Light
+// slider set the single shared flag to true, which then also applied
+// --user-dark using whatever darkHue happened to be sitting in state
+// (untouched, so still DEFAULT_DARK_HUE), silently overriding the active
+// theme's background even though nobody asked to customize it.
+function hasStoredHue(key) {
   try {
     const raw = localStorage.getItem("equoria-settings");
     if (!raw) return false;
     const parsed = JSON.parse(raw);
-    return typeof parsed.darkHue === "number" || typeof parsed.lightHue === "number";
+    return typeof parsed[key] === "number";
   } catch {
     return false;
   }
@@ -107,18 +114,19 @@ export default function SettingsPage() {
   // otherwise trigger a jarring veil flash on every page load for anyone
   // whose saved theme isn't the default.
   const [settings, setSettings] = useState(loadSettings);
-  // Was previously not tracked at all -- the effect below just set
-  // --user-dark/--user-light unconditionally on every mount of this page,
-  // using DEFAULT_DARK_HUE/DEFAULT_LIGHT_HUE if nothing was ever saved. That
-  // silently pinned the ENTIRE app's background to a fixed pale-ivory shade
-  // (hslToHex(43, 45, 92)) the instant anyone opened Settings, overriding
-  // body[data-theme-mode="midnight"]'s dark palette everywhere for the rest
-  // of the browser session (since --user-dark lives as an inline style on
-  // <html>, which survives client-side navigation) -- confirmed live: on
-  // Midnight, opening Settings then clicking back to Home left the whole app
-  // washed out light with dark-tuned text now illegible against it. Gating
-  // the effect on "was a hue actually ever saved" fixes it at the source.
-  const [hasCustomTheme, setHasCustomTheme] = useState(hasStoredHue);
+  // Was previously a single shared `hasCustomTheme` flag -- the effect below
+  // just set --user-dark/--user-light together the instant EITHER slider was
+  // touched, using DEFAULT_DARK_HUE/DEFAULT_LIGHT_HUE for whichever one
+  // hadn't been. That silently pinned the whole app's background to a fixed
+  // pale-ivory shade (hslToHex(43, 45, 92)) the moment someone dragged only
+  // the Light color slider, overriding body[data-theme-mode="midnight"]'s
+  // (or Organic dark's) dark palette everywhere for the rest of the browser
+  // session -- confirmed live: on Midnight, touching only Light color left
+  // the whole app washed out light with dark-tuned text illegible against
+  // it. Two independent flags mean each slider's override applies (and
+  // resets) on its own.
+  const [hasCustomDarkHue, setHasCustomDarkHue] = useState(() => hasStoredHue("darkHue"));
+  const [hasCustomLightHue, setHasCustomLightHue] = useState(() => hasStoredHue("lightHue"));
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutStatus, setLogoutStatus] = useState("");
   const { logout, user, setUser } = useAuth();
@@ -147,14 +155,18 @@ export default function SettingsPage() {
     // which is exactly what made hasStoredHue() true for every account
     // forever after their very first visit to this page, defeating the fix
     // above the moment it looked at persisted data instead of live state.
-    // Only persist the hue keys once they're a real, user-made override;
-    // themeMode (light/dark mode itself, as opposed to the custom accent
-    // hues) is a deliberate choice the instant it's touched, so it always
-    // persists.
+    // Only persist each hue key once IT specifically is a real, user-made
+    // override -- independently of the other one -- so e.g. saving after
+    // only the Light slider was touched writes lightHue but omits darkHue
+    // entirely, leaving hasStoredHue("darkHue") false on reload. themeMode
+    // (light/dark mode itself, as opposed to the custom accent hues) is a
+    // deliberate choice the instant it's touched, so it always persists.
     const { darkHue, lightHue, ...rest } = settings;
-    const toSave = hasCustomTheme ? settings : rest;
+    const toSave = { ...rest };
+    if (hasCustomDarkHue) toSave.darkHue = darkHue;
+    if (hasCustomLightHue) toSave.lightHue = lightHue;
     localStorage.setItem("equoria-settings", JSON.stringify(toSave));
-  }, [settings, hasCustomTheme]);
+  }, [settings, hasCustomDarkHue, hasCustomLightHue]);
 
   // Sets on <html> (not <body>) so the vars are visible to every stylesheet
   // rule regardless of specificity/ordering. Each slider only stores a hue
@@ -164,24 +176,35 @@ export default function SettingsPage() {
   // var(--user-light, <original>) etc, so as long as this effect has run
   // once (it always has, since darkHue/lightHue are never null) the sliders'
   // current position is exactly what's rendered everywhere.
+  // Split into two independent effects (one per slider) instead of one
+  // effect gated on a single shared flag -- each now only touches the CSS
+  // variables it owns, so customizing Light color can never write
+  // --user-dark (and vice versa).
   useEffect(() => {
     const root = document.documentElement;
-    if (!hasCustomTheme) {
-      // Nothing saved yet -- make sure no stale override from earlier in
-      // this tab's session lingers, so CSS's own
+    if (!hasCustomDarkHue) {
+      // Nothing saved for this slider -- make sure no stale override from
+      // earlier in this tab's session lingers, so CSS's own
       // var(--user-dark, rgb(var(--paper))) fallback (the correct,
       // theme-mode-aware color) takes over.
       root.style.removeProperty("--user-dark");
+      return;
+    }
+    root.style.setProperty("--user-dark", hslToHex(settings.darkHue, 45, 92));
+  }, [settings.darkHue, hasCustomDarkHue]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (!hasCustomLightHue) {
       root.style.removeProperty("--user-light");
       root.style.removeProperty("--user-light-soft");
       root.style.removeProperty("--user-light-glow");
       return;
     }
-    root.style.setProperty("--user-dark", hslToHex(settings.darkHue, 45, 92));
     root.style.setProperty("--user-light", hslToHex(settings.lightHue, 62, 53));
     root.style.setProperty("--user-light-soft", hslToHex(settings.lightHue, 67, 73));
     root.style.setProperty("--user-light-glow", `hsla(${settings.lightHue}, 62%, 53%, 0.28)`);
-  }, [settings.darkHue, settings.lightHue, hasCustomTheme]);
+  }, [settings.lightHue, hasCustomLightHue]);
 
   // Applying data-theme-mode instantly on toggle used to just snap between
   // the two palettes. A radial-gradient background (.page-gradient) can't be
@@ -253,8 +276,19 @@ export default function SettingsPage() {
                   lightness={92}
                   defaultHue={DEFAULT_DARK_HUE}
                   onChange={(hue) => {
-                    setHasCustomTheme(true);
+                    setHasCustomDarkHue(true);
                     setSettings((prev) => ({ ...prev, darkHue: hue }));
+                  }}
+                  onReset={() => {
+                    // Clears the override entirely (not just resets the
+                    // slider position) so the active theme's own background
+                    // takes back over via CSS's var(--user-dark, ...)
+                    // fallback -- previously this called onChange(defaultHue)
+                    // too, which left hasCustomTheme (and thus the override)
+                    // permanently on, just pinned to a color that happened
+                    // to match Daylight and nothing else.
+                    setHasCustomDarkHue(false);
+                    setSettings((prev) => ({ ...prev, darkHue: DEFAULT_DARK_HUE }));
                   }}
                 />
                 <HueSlider
@@ -265,8 +299,12 @@ export default function SettingsPage() {
                   lightness={53}
                   defaultHue={DEFAULT_LIGHT_HUE}
                   onChange={(hue) => {
-                    setHasCustomTheme(true);
+                    setHasCustomLightHue(true);
                     setSettings((prev) => ({ ...prev, lightHue: hue }));
+                  }}
+                  onReset={() => {
+                    setHasCustomLightHue(false);
+                    setSettings((prev) => ({ ...prev, lightHue: DEFAULT_LIGHT_HUE }));
                   }}
                 />
               </div>
@@ -848,7 +886,7 @@ function TwoFactorSection({ user, setUser }) {
 // reaches the full hue spectrum, just dragged rather than picked from a
 // palette. saturation/lightness are fixed per slider (passed in) so "dark"
 // stays dark and "light" stays light regardless of which hue is chosen.
-function HueSlider({ label, detail, hue, saturation, lightness, defaultHue, onChange }) {
+function HueSlider({ label, detail, hue, saturation, lightness, defaultHue, onChange, onReset }) {
   const swatch = hslToHex(hue, saturation, lightness);
   return (
     <div className="surface p-3">
@@ -860,7 +898,7 @@ function HueSlider({ label, detail, hue, saturation, lightness, defaultHue, onCh
         {hue !== defaultHue && (
           <button
             type="button"
-            onClick={() => onChange(defaultHue)}
+            onClick={onReset}
             className="ui-button-ghost px-2.5 py-1.5 text-xs shrink-0"
           >
             Reset
