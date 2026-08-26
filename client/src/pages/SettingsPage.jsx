@@ -1,9 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Bell, Download, HeartPulse, LogOut, Palette, ShieldCheck, UserRound } from "lucide-react";
+import { motion } from "framer-motion";
 import { apiFetch, describeError } from "../api";
 import { useAuth } from "../context/AuthContext";
 import PasswordInput from "../components/PasswordInput";
+import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
+
+// Same stagger/entrance pattern the other main pages use -- Settings was
+// one of the last three destinations (with JournalHistory and More) still
+// rendering with a hard instant cut instead of a fade-and-rise entrance.
+const containerVariants = { hidden: {}, visible: { transition: { staggerChildren: 0.07 } } };
+const itemVariants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] } },
+};
+const staticContainerVariants = { hidden: {}, visible: {} };
+const staticItemVariants = { hidden: { opacity: 1, y: 0 }, visible: { opacity: 1, y: 0 } };
 
 // One icon-led card per section instead of a single vertical stack of
 // visually identical bordered boxes -- previously every section (Appearance,
@@ -82,6 +95,9 @@ function hasStoredHue() {
 }
 
 export default function SettingsPage() {
+  const reducedMotion = usePrefersReducedMotion();
+  const cVariants = reducedMotion ? staticContainerVariants : containerVariants;
+  const iVariants = reducedMotion ? staticItemVariants : itemVariants;
   // Reading localStorage in the lazy useState initializer (rather than in a
   // separate mount effect that calls setSettings after the fact) means
   // `settings` is correct from the very first render -- no
@@ -204,18 +220,18 @@ export default function SettingsPage() {
 
   return (
     <main className="ui-page">
-      <div className="max-w-5xl mx-auto space-y-4">
-        <div className="ui-card rounded-2xl p-5">
+      <motion.div variants={cVariants} initial="hidden" animate="visible" className="max-w-5xl mx-auto space-y-4">
+        <motion.div variants={iVariants} className="ui-card rounded-2xl p-5">
           <p className="ui-kicker">Settings</p>
           <h2 className="ui-title mt-1">Preferences</h2>
-        </div>
+        </motion.div>
 
         {/* Two columns on desktop instead of one long vertical stack --
             matching the card-grid pattern Dashboard already uses for its
             Health/Retrospect preview row, so each section reads as its own
             card rather than one more box in an undifferentiated list. */}
         <div className="grid md:grid-cols-2 gap-4 items-start">
-          <div className="space-y-4">
+          <motion.div variants={iVariants} className="space-y-4">
             {/* Theme mode + the two hue sliders used to be two separate,
                 visually unrelated boxes even though they're the same
                 "how the app looks" concern -- one card now, plus a live
@@ -278,9 +294,9 @@ export default function SettingsPage() {
             <SectionCard icon={Bell} title="Reminders">
               <ReminderSection user={user} setUser={setUser} />
             </SectionCard>
-          </div>
+          </motion.div>
 
-          <div className="space-y-4">
+          <motion.div variants={iVariants} className="space-y-4">
             <SectionCard icon={LogOut} title="Security">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div>
@@ -317,10 +333,10 @@ export default function SettingsPage() {
             <SectionCard icon={Download} title="Your data">
               <ExportSection />
             </SectionCard>
-          </div>
+          </motion.div>
         </div>
 
-        <p className="text-xs text-ink/50 text-center pt-2">
+        <motion.p variants={iVariants} className="text-xs text-ink/50 text-center pt-2">
           <Link to="/privacy" className="underline hover:text-ink/75">
             Privacy Policy
           </Link>
@@ -328,8 +344,8 @@ export default function SettingsPage() {
           <Link to="/terms" className="underline hover:text-ink/75">
             Terms of Service
           </Link>
-        </p>
-      </div>
+        </motion.p>
+      </motion.div>
     </main>
   );
 }

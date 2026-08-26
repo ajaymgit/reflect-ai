@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 import { ChevronRight, HeartPulse, LineChart, PartyPopper, Settings } from "lucide-react";
+import { motion } from "framer-motion";
+import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
 
 // Mobile-only overflow destination -- see AppShell.jsx's mobilePrimaryItems.
 // The bottom tab bar only has room for 5 icons before it turns into a
@@ -38,16 +40,28 @@ const items = [
   },
 ];
 
+const containerVariants = { hidden: {}, visible: { transition: { staggerChildren: 0.06 } } };
+const itemVariants = {
+  hidden: { opacity: 0, y: 10 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.16, 1, 0.3, 1] } },
+};
+const staticContainerVariants = { hidden: {}, visible: {} };
+const staticItemVariants = { hidden: { opacity: 1, y: 0 }, visible: { opacity: 1, y: 0 } };
+
 export default function MorePage() {
+  const reducedMotion = usePrefersReducedMotion();
+  const cVariants = reducedMotion ? staticContainerVariants : containerVariants;
+  const iVariants = reducedMotion ? staticItemVariants : itemVariants;
+
   return (
     <main className="ui-page">
-      <div className="max-w-2xl mx-auto space-y-4">
-        <div>
+      <motion.div variants={cVariants} initial="hidden" animate="visible" className="max-w-2xl mx-auto space-y-4">
+        <motion.div variants={iVariants}>
           <p className="ui-kicker">Everything else</p>
           <h2 className="ui-title">More</h2>
-        </div>
+        </motion.div>
 
-        <div className="ui-card rounded-2xl divide-y divide-ink/8 overflow-hidden">
+        <motion.div variants={iVariants} className="ui-card rounded-2xl divide-y divide-ink/8 overflow-hidden">
           {items.map(({ to, label, desc, Icon }) => (
             <Link
               key={to}
@@ -62,8 +76,8 @@ export default function MorePage() {
               <ChevronRight size={16} className="text-ink/45 shrink-0" />
             </Link>
           ))}
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
     </main>
   );
 }

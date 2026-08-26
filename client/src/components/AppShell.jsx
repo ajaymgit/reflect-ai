@@ -1,9 +1,11 @@
 import { Flame, Home, MessageCircle, PenSquare, Settings, HeartPulse, LineChart, PartyPopper, MoreHorizontal } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
+import { motion } from "framer-motion";
 import { apiFetch } from "../api";
 import { useAuth } from "../context/AuthContext";
 import Onboarding from "./Onboarding";
+import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
 
 const pageTitles = {
   "/dashboard": "Home",
@@ -60,6 +62,7 @@ const mobilePrimaryItems = [
 const moreRoutes = new Set(["/retrospect", "/year-in-review", "/settings", "/more"]);
 
 export default function AppShell() {
+  const reducedMotion = usePrefersReducedMotion();
   const location = useLocation();
   const title = pageTitles[location.pathname] || "Home";
   const isMoreActive = moreRoutes.has(location.pathname);
@@ -164,7 +167,9 @@ export default function AppShell() {
                       }`}
                     >
                       {isActive && (
-                        <span
+                        <motion.span
+                          layoutId={reducedMotion ? undefined : "nav-active-indicator"}
+                          transition={{ type: "spring", stiffness: 500, damping: 40 }}
                           className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full"
                           style={{ background: "var(--user-light, rgb(var(--signal)))" }}
                         />
@@ -209,16 +214,19 @@ export default function AppShell() {
               <Link
                 key={to}
                 to={to}
-                className={`rounded-lg p-2 text-center text-[10px] ${isActive ? "text-ink" : "text-ink-muted"}`}
-                style={
-                  isActive
-                    ? {
-                        background: "color-mix(in srgb, var(--user-light, rgb(var(--signal))) 30%, transparent)",
-                        boxShadow: "0 0 18px color-mix(in srgb, var(--user-light, rgb(var(--signal-soft))) 30%, transparent)",
-                      }
-                    : undefined
-                }
+                className={`relative rounded-lg p-2 text-center text-[10px] ${isActive ? "text-ink" : "text-ink-muted"}`}
               >
+                {isActive && (
+                  <motion.span
+                    layoutId={reducedMotion ? undefined : "mobile-nav-active"}
+                    transition={{ type: "spring", stiffness: 500, damping: 40 }}
+                    className="absolute inset-0 rounded-lg -z-10"
+                    style={{
+                      background: "color-mix(in srgb, var(--user-light, rgb(var(--signal))) 30%, transparent)",
+                      boxShadow: "0 0 18px color-mix(in srgb, var(--user-light, rgb(var(--signal-soft))) 30%, transparent)",
+                    }}
+                  />
+                )}
                 <span className="relative inline-block">
                   <Icon size={14} className="mx-auto mb-1" />
                   {to === "/journal/new" && streak > 0 && (

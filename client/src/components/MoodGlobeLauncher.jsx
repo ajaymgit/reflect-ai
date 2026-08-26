@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowRight, Gem, X } from "lucide-react";
+import { motion } from "framer-motion";
 import MemoryOrbGlobe from "./MemoryOrbGlobe";
 import DayEntryPreview from "./DayEntryPreview";
 import { apiFetch } from "../api";
 import { MOOD_HEX } from "../utils/moodColors";
+import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
 
 // Renamed from "Core Memories" to "Keepsakes" (filename unchanged to avoid a
 // risky rename-on-disk of a file with 3D/graphics dependencies; the export
@@ -39,6 +41,7 @@ function buildKeepsakeOrbs(days) {
 }
 
 export default function MoodGlobeLauncher({ variant = "card" }) {
+  const reducedMotion = usePrefersReducedMotion();
   const [open, setOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
   const [days, setDays] = useState(null);
@@ -133,11 +136,20 @@ export default function MoodGlobeLauncher({ variant = "card" }) {
           covering the viewport. */}
       {open &&
         createPortal(
-          <div
+          <motion.div
+            initial={reducedMotion ? undefined : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
             className="fixed inset-0 z-[200] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
             onClick={() => setOpen(false)}
           >
-            <div className="w-full max-w-3xl" onClick={(e) => e.stopPropagation()}>
+            <motion.div
+              initial={reducedMotion ? undefined : { opacity: 0, y: 12, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full max-w-3xl"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="flex items-center justify-between mb-3 gap-4">
                 <p className="text-sm text-ink/80">
                   Each glowing orb is a Keepsake you chose to save. Drag to explore, click one to reopen that entry.
@@ -157,8 +169,8 @@ export default function MoodGlobeLauncher({ variant = "card" }) {
                   <DayEntryPreview date={selectedDate} />
                 </div>
               )}
-            </div>
-          </div>,
+            </motion.div>
+          </motion.div>,
           document.body,
         )}
     </>

@@ -1,8 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BookOpen, ChevronLeft, ChevronRight, SlidersHorizontal, X } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { apiFetch, describeError } from "../api";
 import EntryModal from "../components/EntryModal";
 import { MOODS as moods, MOOD_LABELS, moodDotStyle } from "../utils/moodColors";
+import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
+
+// Same fade-and-rise entrance the other main pages use for the header, plus
+// a per-card reveal for the entries grid -- previously this was the third
+// (with Settings and More) of the app's main destinations still popping in
+// with a hard instant cut.
+const containerVariants = { hidden: {}, visible: { transition: { staggerChildren: 0.07 } } };
+const itemVariants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] } },
+};
+const staticContainerVariants = { hidden: {}, visible: {} };
+const staticItemVariants = { hidden: { opacity: 1, y: 0 }, visible: { opacity: 1, y: 0 } };
 
 // How many tags show by default before the cloud collapses behind "Show
 // more" -- previously all 20-30 tags a person accumulates rendered at once,
@@ -35,6 +49,9 @@ function truncateAtWord(text, maxLen) {
 }
 
 export default function JournalHistoryView() {
+  const reducedMotion = usePrefersReducedMotion();
+  const cVariants = reducedMotion ? staticContainerVariants : containerVariants;
+  const iVariants = reducedMotion ? staticItemVariants : itemVariants;
   const [entries, setEntries] = useState([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -101,8 +118,8 @@ export default function JournalHistoryView() {
 
   return (
     <>
-      <div className="max-w-4xl mx-auto space-y-4">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
+      <motion.div variants={cVariants} initial="hidden" animate="visible" className="max-w-4xl mx-auto space-y-4">
+        <motion.div variants={iVariants} className="flex items-start justify-between gap-3 flex-wrap">
           <div>
             <p className="ui-kicker">Your journal</p>
             <h2 className="ui-title flex items-center gap-2">
@@ -135,7 +152,7 @@ export default function JournalHistoryView() {
               </span>
             )}
           </button>
-        </div>
+        </motion.div>
 
         {/* Active filters stay visible as removable chips even when the
             filter panel itself is collapsed, so "why is my list short" is
@@ -166,7 +183,15 @@ export default function JournalHistoryView() {
           </div>
         )}
 
+        <AnimatePresence initial={false}>
         {showFilters && (
+          <motion.div
+            initial={reducedMotion ? undefined : { opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={reducedMotion ? undefined : { opacity: 0, height: 0 }}
+            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            className="overflow-hidden"
+          >
           <div className="ui-card rounded-2xl p-4 space-y-4">
             <div>
               <p className="ui-kicker mb-2">Mood</p>
@@ -252,7 +277,9 @@ export default function JournalHistoryView() {
               </div>
             )}
           </div>
+          </motion.div>
         )}
+        </AnimatePresence>
 
         {error && <p className="text-sm text-red-300">{error}</p>}
 
@@ -275,11 +302,14 @@ export default function JournalHistoryView() {
           </div>
         ) : (
           <div className="grid sm:grid-cols-2 gap-3">
-            {entries.map((entry) => (
-              <button
+            {entries.map((entry, i) => (
+              <motion.button
                 key={entry._id}
                 type="button"
                 onClick={() => setOpenEntry(entry)}
+                initial={reducedMotion ? undefined : { opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: Math.min(i, 8) * 0.03, ease: [0.16, 1, 0.3, 1] }}
                 className="ui-card rounded-2xl p-4 text-left hover:bg-ink/10 transition space-y-2"
               >
                 <div className="flex items-center justify-between gap-2">
@@ -306,7 +336,7 @@ export default function JournalHistoryView() {
                     ))}
                   </div>
                 )}
-              </button>
+              </motion.button>
             ))}
           </div>
         )}
@@ -336,7 +366,7 @@ export default function JournalHistoryView() {
             </button>
           </div>
         )}
-      </div>
+      </motion.div>
 
       {openEntry && (
         <EntryModal

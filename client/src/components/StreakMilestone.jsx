@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { Flame, X } from "lucide-react";
+import { motion } from "framer-motion";
+import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
 
 // Celebrates the moment a journaling streak actually crosses 7/30/100 days --
 // previously the streak-glow CSS tiers (see index.css's .streak-glow-1/2/3)
@@ -36,6 +38,7 @@ function markCelebrated(days) {
 }
 
 export default function StreakMilestone({ streak }) {
+  const reducedMotion = usePrefersReducedMotion();
   const [milestone, setMilestone] = useState(null);
 
   useEffect(() => {
@@ -54,8 +57,17 @@ export default function StreakMilestone({ streak }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40" onClick={dismiss}>
-      <div
+    <motion.div
+      initial={reducedMotion ? undefined : { opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.2, ease: "easeOut" }}
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40"
+      onClick={dismiss}
+    >
+      <motion.div
+        initial={reducedMotion ? undefined : { opacity: 0, y: 24, scale: 0.9 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={reducedMotion ? undefined : { type: "spring", stiffness: 340, damping: 22 }}
         className={`ui-card streak-glow-${milestone.tier} rounded-2xl p-6 max-w-sm w-full text-center relative`}
         onClick={(e) => e.stopPropagation()}
       >
@@ -67,16 +79,21 @@ export default function StreakMilestone({ streak }) {
         >
           <X size={15} className="text-ink/60" />
         </button>
-        <div className="mx-auto h-14 w-14 rounded-full bg-[#e8ab5f]/20 border border-[#e8ab5f]/40 flex items-center justify-center">
+        <motion.div
+          initial={reducedMotion ? undefined : { scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={reducedMotion ? undefined : { delay: 0.15, type: "spring", stiffness: 400, damping: 16 }}
+          className="mx-auto h-14 w-14 rounded-full bg-[#e8ab5f]/20 border border-[#e8ab5f]/40 flex items-center justify-center"
+        >
           <Flame size={26} className="text-[#e8ab5f]" />
-        </div>
+        </motion.div>
         <p className="ui-kicker mt-4">Streak milestone</p>
         <h3 className="ui-title text-2xl mt-1">{milestone.label}</h3>
         <p className="text-sm text-ink/70 mt-2 leading-6">{milestone.detail}</p>
         <button type="button" onClick={dismiss} className="mt-5 w-full px-4 py-2.5 min-h-11 ui-button-primary">
           Keep going
         </button>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

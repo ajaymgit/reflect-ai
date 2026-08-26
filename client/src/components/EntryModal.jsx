@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { X, Pencil, Trash2, Check, Undo2 } from "lucide-react";
+import { motion } from "framer-motion";
 import { apiFetch as sharedApiFetch, describeError } from "../api";
 import { MOODS, MOOD_LABELS, moodDotStyle } from "../utils/moodColors";
+import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
 
 // How long a delete stays undoable before it actually hits the server, in
 // seconds -- see the pendingDelete state machine below.
@@ -26,6 +28,7 @@ const DELETE_UNDO_SECONDS = 5;
 // (the modal just closes on delete, or shows the edited copy until closed,
 // without telling anyone else).
 export default function EntryModal({ entry, onClose, onUpdated, onDeleted }) {
+  const reducedMotion = usePrefersReducedMotion();
   const [current, setCurrent] = useState(entry);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(null);
@@ -178,11 +181,17 @@ export default function EntryModal({ entry, onClose, onUpdated, onDeleted }) {
   }
 
   return (
-    <div
+    <motion.div
+      initial={reducedMotion ? undefined : { opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.18, ease: "easeOut" }}
       className="fixed inset-0 z-[200] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
       onClick={requestClose}
     >
-      <div
+      <motion.div
+        initial={reducedMotion ? undefined : { opacity: 0, y: 12, scale: 0.97 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
         className="ui-card rounded-2xl p-5 md:p-6 w-full max-w-2xl max-h-[85vh] overflow-y-auto scroll-area"
         onClick={(e) => e.stopPropagation()}
       >
@@ -327,8 +336,8 @@ export default function EntryModal({ entry, onClose, onUpdated, onDeleted }) {
             )}
           </>
         )}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
