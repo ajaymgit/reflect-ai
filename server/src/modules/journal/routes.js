@@ -25,6 +25,18 @@ function visibleFilter(extra = {}) {
   return { ...extra, revealAt: { $not: { $gt: new Date() } } };
 }
 
+// /entries' ?mood filter (below) previously assigned req.query.mood straight
+// onto the Mongoose filter object with no validation. Express's query parser
+// (qs) turns ?mood[$ne]=null into { mood: { $ne: "null" } } -- so an
+// attacker could inject a Mongo operator into their own query (e.g.
+// mood[$exists]=false, mood[$regex]=...) instead of a plain string. Scoped
+// by userId already, so this couldn't reach another user's data, but it
+// could still let someone bypass the mood filter or attempt a blind-NoSQL
+// probe. Restricted to the same 6 values JournalEntry's own schema enum
+// allows, matching the ALLOWED_RANGES pattern dashboard/routes.js already
+// uses for the same class of problem.
+const ALLOWED_MOODS = new Set(["happy", "calm", "reflective", "sad", "stressed", "angry"]);
+
 function truncateAtWord(text, maxLen) {
   if (text.length <= maxLen) return text;
   const slice = text.slice(0, maxLen);
@@ -94,7 +106,8 @@ router.get(
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 12));
     const filter = visibleFilter({ userId: req.user._id });
-    if (req.query.mood) filter.mood = req.query.mood;
+    const rawMood = String(req.query.mood || "");
+    if (ALLOWED_MOODS.has(rawMood)) filter.mood = rawMood;
     const tagFilter = req.query.tag ? String(req.query.tag).trim().toLowerCase() : null;
 
     // Mood is a plain unencrypted enum field, so it filters at the DB level
