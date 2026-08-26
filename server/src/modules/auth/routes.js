@@ -17,6 +17,7 @@ import {
   twoFactorLoginSchema,
   twoFactorDisableSchema,
   reminderPreferencesSchema,
+  digestPreferencesSchema,
 } from "../../shared/validators/authSchemas.js";
 import { asyncHandler } from "../../shared/utils/asyncHandler.js";
 import { AppError } from "../../shared/utils/AppError.js";
@@ -75,6 +76,7 @@ async function issueLoginTokens(user) {
       email: user.email,
       reminderEnabled: user.reminderEnabled ?? true,
       reminderHour: user.reminderHour ?? 20,
+      weeklyDigestEnabled: user.weeklyDigestEnabled ?? false,
     },
   };
 }
@@ -194,6 +196,7 @@ router.post(
         email: user.email,
         reminderEnabled: user.reminderEnabled ?? true,
         reminderHour: user.reminderHour ?? 20,
+        weeklyDigestEnabled: user.weeklyDigestEnabled ?? false,
       },
     });
   }),
@@ -238,6 +241,7 @@ router.get(
       twoFactorEnabled: !!req.user.twoFactorEnabled,
       reminderEnabled: req.user.reminderEnabled ?? true,
       reminderHour: req.user.reminderHour ?? 20,
+      weeklyDigestEnabled: req.user.weeklyDigestEnabled ?? false,
     });
   }),
 );
@@ -255,6 +259,23 @@ router.patch(
     const { enabled, hour } = req.body;
     await User.findByIdAndUpdate(req.user._id, { reminderEnabled: enabled, reminderHour: hour });
     res.json({ reminderEnabled: enabled, reminderHour: hour });
+  }),
+);
+
+// Opt-in weekly recap email (7-day entry count, streak, dominant mood,
+// health averages) -- see scripts/sendWeeklyDigest.js, meant to run once a
+// week (unlike the reminder script's hourly cadence). Separate route/schema
+// from reminder-preferences above rather than folding a third field into
+// that one: different cadence, different opt-in default (off, not on), and
+// a genuinely different concern (a recap vs a same-day nudge).
+router.patch(
+  "/digest-preferences",
+  requireAuth,
+  validateRequest(digestPreferencesSchema),
+  asyncHandler(async (req, res) => {
+    const { enabled } = req.body;
+    await User.findByIdAndUpdate(req.user._id, { weeklyDigestEnabled: enabled });
+    res.json({ weeklyDigestEnabled: enabled });
   }),
 );
 

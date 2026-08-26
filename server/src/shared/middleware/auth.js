@@ -26,7 +26,21 @@ export async function requireAuth(req, _res, next) {
     if (decoded.type && decoded.type !== "access") {
       return next(new AppError("AUTH_INVALID", "Invalid authentication token", 401));
     }
-    const user = await User.findById(decoded.userId).select("_id name email tokenVersion twoFactorEnabled");
+    // Previously this select() omitted reminderEnabled/reminderHour (and now
+    // weeklyDigestEnabled) -- fields nowhere else in this middleware, but
+    // read directly off req.user by /me, issueLoginTokens, and both
+    // preference PATCH routes' handlers. Omitting them from the projection
+    // doesn't affect writes (PATCH .../preferences goes through
+    // findByIdAndUpdate, not req.user), but every READ of
+    // req.user.reminderEnabled etc. silently saw `undefined` and fell back
+    // to each call site's own `?? true`/`?? false` hardcoded default --
+    // so a saved preference change would appear to work (the PATCH
+    // response echoes back what was just sent) but "revert" to the default
+    // on the very next page load or login, even though the real value was
+    // correctly sitting in the database the whole time.
+    const user = await User.findById(decoded.userId).select(
+      "_id name email tokenVersion twoFactorEnabled reminderEnabled reminderHour weeklyDigestEnabled",
+    );
     if (!user) {
       return next(new AppError("AUTH_INVALID", "Invalid authentication token", 401));
     }

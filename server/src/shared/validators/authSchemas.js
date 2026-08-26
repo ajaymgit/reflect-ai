@@ -97,3 +97,11 @@ export const reminderPreferencesSchema = z.object({
   query: z.object({}).optional(),
 });
 
+export const digestPreferencesSchema = z.object({
+  body: z.object({
+    enabled: z.boolean(),
+  }),
+  params: z.object({}).optional(),
+  query: z.object({}).optional(),
+});
+

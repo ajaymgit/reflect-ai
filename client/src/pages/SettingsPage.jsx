@@ -420,6 +420,7 @@ export default function SettingsPage() {
 
             <SectionCard icon={Bell} title="Reminders">
               <ReminderSection user={user} setUser={setUser} />
+              <WeeklyDigestSection user={user} setUser={setUser} />
             </SectionCard>
           </motion.div>
 
@@ -680,6 +681,86 @@ function ReminderSection({ user, setUser }) {
           </AnimatePresence>
         </div>
       )}
+      {error && <p className="text-xs text-red-300 mt-2">{error}</p>}
+    </div>
+  );
+}
+
+// Sibling to ReminderSection above -- a separate opt-IN toggle (default
+// off, unlike the reminder's default-on) for a once-a-week recap email
+// (entries written, streak, dominant mood, health averages), backed by
+// PATCH /api/auth/digest-preferences and server/src/scripts/sendWeeklyDigest.js.
+// Kept as its own component/endpoint rather than folded into
+// ReminderSection: different cadence, different default, genuinely
+// different concern (a recap vs a same-day nudge).
+function WeeklyDigestSection({ user, setUser }) {
+  const [enabled, setEnabled] = useState(user?.weeklyDigestEnabled ?? false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setEnabled(user?.weeklyDigestEnabled ?? false);
+  }, [user?.weeklyDigestEnabled]);
+
+  async function save(nextEnabled) {
+    setBusy(true);
+    setError("");
+    setSaved(false);
+    try {
+      const data = await apiFetch("/api/auth/digest-preferences", {
+        method: "PATCH",
+        body: JSON.stringify({ enabled: nextEnabled }),
+      });
+      setUser((prev) => ({ ...prev, ...data }));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setError(describeError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 surface p-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <p className="text-sm font-medium">Weekly digest</p>
+          <p className="text-xs text-ink/70 mt-1 max-w-md">
+            A once-a-week email recap: entries written, your streak, dominant mood, and health averages.
+          </p>
+        </div>
+        <label className="inline-flex items-center gap-2 cursor-pointer shrink-0">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(e) => {
+              const next = e.target.checked;
+              setEnabled(next);
+              save(next);
+            }}
+            className="w-4 h-4"
+          />
+          <span className="text-xs text-ink/70">{enabled ? "On" : "Off"}</span>
+        </label>
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        {busy && <span className="text-xs text-ink/50">Saving...</span>}
+        <AnimatePresence>
+          {saved && !busy && (
+            <motion.span
+              initial={{ opacity: 0, scale: 0.85 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="text-xs text-emerald-300"
+            >
+              Saved
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </div>
       {error && <p className="text-xs text-red-300 mt-2">{error}</p>}
     </div>
   );

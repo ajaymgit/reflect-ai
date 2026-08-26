@@ -15,6 +15,13 @@ const userSchema = new mongoose.Schema(
     // timezone production userbase without adding one.
     reminderEnabled: { type: Boolean, default: true },
     reminderHour: { type: Number, default: 20, min: 0, max: 23 },
+    // Opt-IN (default false, unlike reminderEnabled's opt-out default) --
+    // a weekly summary email is a bigger inbox commitment than a daily
+    // nudge, so nobody gets signed up for it without explicitly turning it
+    // on in Settings. See PATCH /api/auth/digest-preferences and
+    // scripts/sendWeeklyDigest.js (meant to run once a week, e.g. Monday
+    // morning, unlike the reminder script's hourly cadence).
+    weeklyDigestEnabled: { type: Boolean, default: false },
     // Incremented by POST /api/auth/logout-all to invalidate every JWT issued
     // before that point (embedded in each token's "tv" claim and checked in
     // requireAuth). Tokens signed before this field existed have no "tv"
