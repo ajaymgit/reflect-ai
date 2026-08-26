@@ -95,6 +95,14 @@ router.get(
     const filter = visibleFilter({ userId: req.user._id });
     const rawMood = String(req.query.mood || "");
     if (ALLOWED_MOODS.has(rawMood)) filter.mood = rawMood;
+    // isKeepsake is a plain unencrypted boolean (unlike tags below), so this
+    // filters at the DB level same as mood -- no separate JS-side pass
+    // needed, and it composes cleanly with either the mood-only or
+    // tag-filter branch below since both start from this same `filter`
+    // object. Previously the archive had no way to browse "just my
+    // Keepsakes" at all -- the only place they were ever visible together
+    // was Dashboard's small globe launcher, which doesn't page or filter.
+    if (String(req.query.keepsake || "") === "true") filter.isKeepsake = true;
     const tagFilter = req.query.tag ? String(req.query.tag).trim().toLowerCase() : null;
 
     // Mood is a plain unencrypted enum field, so it filters at the DB level

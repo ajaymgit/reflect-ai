@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, Check, ChevronLeft, ChevronRight, Pencil, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { BookOpen, Check, ChevronLeft, ChevronRight, Gem, Pencil, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { apiFetch, describeError } from "../api";
 import EntryModal, { EntryModalById } from "../components/EntryModal";
@@ -58,6 +58,14 @@ export default function JournalHistoryView() {
   const [total, setTotal] = useState(0);
   const [moodFilter, setMoodFilter] = useState("");
   const [tagFilter, setTagFilter] = useState("");
+  // Keepsakes-only toggle -- previously the only places a Keepsake could be
+  // browsed at all were the small globe launcher on Dashboard (no paging, no
+  // way to combine with mood/tag) or by scrolling the full unfiltered
+  // archive looking for the flag. Backed by GET /api/journal/entries?keepsake=true
+  // (see server/src/modules/journal/routes.js), composes with mood/tag the
+  // same way they compose with each other since all three narrow the same
+  // underlying Mongo filter.
+  const [keepsakeOnly, setKeepsakeOnly] = useState(false);
   const [availableTags, setAvailableTags] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -111,7 +119,7 @@ export default function JournalHistoryView() {
   // the most recently issued request by the time it resolves.
   const requestIdRef = useRef(0);
 
-  const load = useCallback(async (targetPage, mood, tag) => {
+  const load = useCallback(async (targetPage, mood, tag, keepsake) => {
     const requestId = ++requestIdRef.current;
     setLoading(true);
     setError("");
@@ -119,6 +127,7 @@ export default function JournalHistoryView() {
       const params = new URLSearchParams({ page: String(targetPage), limit: "12" });
       if (mood) params.set("mood", mood);
       if (tag) params.set("tag", tag);
+      if (keepsake) params.set("keepsake", "true");
       const data = await apiFetch(`/api/journal/entries?${params.toString()}`);
       if (requestId !== requestIdRef.current) return; // superseded by a newer request
       setEntries(data.entries || []);
@@ -175,7 +184,7 @@ export default function JournalHistoryView() {
       const filterWasCleared = tagFilter === from;
       const [tagsData] = await Promise.all([
         apiFetch("/api/journal/tags"),
-        load(filterWasCleared ? 1 : page, moodFilter, filterWasCleared ? "" : tagFilter),
+        load(filterWasCleared ? 1 : page, moodFilter, filterWasCleared ? "" : tagFilter, keepsakeOnly),
       ]);
       setAvailableTags(tagsData.tags || []);
       // The active filter chip was pointing at the tag that just got
@@ -204,12 +213,12 @@ export default function JournalHistoryView() {
   }, []);
 
   useEffect(() => {
-    load(1, moodFilter, tagFilter);
+    load(1, moodFilter, tagFilter, keepsakeOnly);
     // Filter changes reset back to page 1 -- staying on e.g. page 3 of an
     // unfiltered list while switching to a mood with only 2 matching entries
     // would just show an empty page for no visible reason.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [moodFilter, tagFilter]);
+  }, [moodFilter, tagFilter, keepsakeOnly]);
 
   const rankedTags = useMemo(
     () => [...availableTags].sort((a, b) => b.count - a.count),
@@ -217,7 +226,7 @@ export default function JournalHistoryView() {
   );
   const visibleTags = showAllTags ? rankedTags : rankedTags.slice(0, VISIBLE_TAG_COUNT);
   const hiddenTagCount = rankedTags.length - visibleTags.length;
-  const activeFilterCount = (moodFilter ? 1 : 0) + (tagFilter ? 1 : 0);
+  const activeFilterCount = (moodFilter ? 1 : 0) + (tagFilter ? 1 : 0) + (keepsakeOnly ? 1 : 0);
 
   return (
     <>
@@ -327,6 +336,17 @@ export default function JournalHistoryView() {
             always answerable at a glance. */}
         {!showFilters && activeFilterCount > 0 && (
           <div className="flex items-center gap-2 flex-wrap -mt-2">
+            {keepsakeOnly && (
+              <button
+                type="button"
+                onClick={() => setKeepsakeOnly(false)}
+                className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full border border-ink/15 bg-ink/5 text-xs hover:bg-ink/10"
+              >
+                <Gem size={11} />
+                Keepsakes
+                <X size={12} className="text-ink/50" />
+              </button>
+            )}
             {moodFilter && (
               <button
                 type="button"
@@ -387,6 +407,23 @@ export default function JournalHistoryView() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Keepsakes-only toggle -- a single chip, not a whole labeled
+                section like Mood/Tags, since it's one binary switch rather
+                than a set of mutually exclusive options. */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setKeepsakeOnly((s) => !s)}
+                aria-pressed={keepsakeOnly}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs ${
+                  keepsakeOnly ? "border-signal/50 bg-signal/15 text-ink" : "border-ink/10 bg-ink/5 text-ink/70 hover:bg-ink/10"
+                }`}
+              >
+                <Gem size={13} />
+                Keepsakes only
+              </button>
             </div>
 
             {/* Tag filter -- previously the only way to narrow the archive
@@ -541,8 +578,8 @@ export default function JournalHistoryView() {
           </div>
         ) : entries.length === 0 ? (
           <div className="ui-card rounded-2xl p-6 text-center text-ink/60 text-sm">
-            {moodFilter || tagFilter
-              ? `No entries match ${[moodFilter && `mood "${moodFilter}"`, tagFilter && `tag "${tagFilter}"`].filter(Boolean).join(" and ")}.`
+            {moodFilter || tagFilter || keepsakeOnly
+              ? `No entries match ${[keepsakeOnly && "Keepsakes only", moodFilter && `mood "${moodFilter}"`, tagFilter && `tag "${tagFilter}"`].filter(Boolean).join(" and ")}.`
               : "Nothing here yet -- write your first entry to start building your archive."}
           </div>
         ) : (
@@ -591,7 +628,7 @@ export default function JournalHistoryView() {
             <button
               type="button"
               disabled={page <= 1 || loading}
-              onClick={() => load(page - 1, moodFilter, tagFilter)}
+              onClick={() => load(page - 1, moodFilter, tagFilter, keepsakeOnly)}
               className="p-2 rounded-lg border border-ink/15 bg-ink/5 hover:bg-ink/10 disabled:opacity-30 disabled:hover:bg-ink/5"
               aria-label="Previous page"
             >
@@ -603,7 +640,7 @@ export default function JournalHistoryView() {
             <button
               type="button"
               disabled={page >= totalPages || loading}
-              onClick={() => load(page + 1, moodFilter, tagFilter)}
+              onClick={() => load(page + 1, moodFilter, tagFilter, keepsakeOnly)}
               className="p-2 rounded-lg border border-ink/15 bg-ink/5 hover:bg-ink/10 disabled:opacity-30 disabled:hover:bg-ink/5"
               aria-label="Next page"
             >
