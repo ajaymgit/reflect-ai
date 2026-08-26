@@ -590,8 +590,14 @@ router.post(
       throw new AppError("AUTH_INVALID", "Invalid login attempt.", 401);
     }
 
+    // Same class of bug fixed in requireAuth (shared/middleware/auth.js):
+    // this select() feeds into issueLoginTokens(user) below, which reads
+    // user.reminderEnabled/reminderHour/weeklyDigestEnabled -- omitting them
+    // here meant a 2FA login response would report default preference
+    // values instead of whatever the account actually has saved, even
+    // though the DB itself was never wrong.
     const user = await User.findById(decoded.userId).select(
-      "_id name email tokenVersion twoFactorEnabled twoFactorSecret twoFactorBackupCodeHashes",
+      "_id name email tokenVersion twoFactorEnabled twoFactorSecret twoFactorBackupCodeHashes reminderEnabled reminderHour weeklyDigestEnabled",
     );
     if (!user || !user.twoFactorEnabled || (decoded.tv ?? 0) !== (user.tokenVersion ?? 0)) {
       throw new AppError("AUTH_INVALID", "This login attempt has expired. Please log in again.", 401);
