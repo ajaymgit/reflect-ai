@@ -1,7 +1,11 @@
-import { useEffect, useState } from "react";
-import { X, Pencil, Trash2, Check } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { X, Pencil, Trash2, Check, Undo2 } from "lucide-react";
 import { apiFetch as sharedApiFetch, describeError } from "../api";
 import { MOODS, MOOD_LABELS, moodDotStyle } from "../utils/moodColors";
+
+// How long a delete stays undoable before it actually hits the server, in
+// seconds -- see the pendingDelete state machine below.
+const DELETE_UNDO_SECONDS = 5;
 
 // Full-screen read view for one journal entry -- extracted out of
 // JournalHistoryPage.jsx so Dashboard's Recent Entries can reuse the exact
@@ -26,8 +30,36 @@ export default function EntryModal({ entry, onClose, onUpdated, onDeleted }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
+  // Was a plain window.confirm() -- functional, but "delete, no way back"
+  // is a harsh default for a journal (this is personal writing, not a
+  // draft comment), and a blocking native confirm() dialog also can't be
+  // scripted/automated cleanly. This replaces it with the same "deleted,
+  // undo?" pattern Gmail popularized: the delete only actually reaches the
+  // server after a few seconds with nothing else happening, and closing
+  // the modal during that window cancels it rather than committing it (see
+  // the cleanup effect below) -- so there's no way to lose an entry
+  // without either waiting through the countdown or explicitly navigating
+  // away mid-countdown and never coming back, both of which are much
+  // harder to do by accident than a single misclick on a confirm() button.
+  const [pendingDelete, setPendingDelete] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(DELETE_UNDO_SECONDS);
+  const deleteTickRef = useRef(null);
+
+  function clearDeleteTimer() {
+    if (deleteTickRef.current) {
+      clearInterval(deleteTickRef.current);
+      deleteTickRef.current = null;
+    }
+  }
+
+  // If the modal unmounts while a delete is still counting down (caller
+  // stopped rendering it, e.g. the user navigated away entirely), just drop
+  // the pending timer rather than letting a detached interval commit a
+  // delete the user can no longer see or cancel -- silently deleting
+  // something after someone has already moved on would be far more
+  // surprising than the entry simply surviving.
+  useEffect(() => () => clearDeleteTimer(), []);
 
   // Keep the locally-edited copy in sync if the caller ever hands this
   // component a genuinely different entry (e.g. History's page navigation
@@ -37,17 +69,70 @@ export default function EntryModal({ entry, onClose, onUpdated, onDeleted }) {
     setCurrent(entry);
     setEditing(false);
     setError("");
+    setPendingDelete(false);
+    clearDeleteTimer();
   }, [entry?._id]);
 
   useEffect(() => {
     function onKey(e) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") requestClose();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingDelete]);
 
   if (!current) return null;
+
+  // Closing while a delete is pending reads as "changed my mind" (see the
+  // comment above pendingDelete) -- everywhere in this file that used to
+  // call `onClose` directly now calls this instead, so Escape, the X
+  // button, and the backdrop all share the same cancel-if-pending behavior.
+  function requestClose() {
+    if (pendingDelete) {
+      cancelDelete();
+      return;
+    }
+    onClose();
+  }
+
+  function cancelDelete() {
+    clearDeleteTimer();
+    setPendingDelete(false);
+    setSecondsLeft(DELETE_UNDO_SECONDS);
+  }
+
+  function startDelete() {
+    setError("");
+    setSecondsLeft(DELETE_UNDO_SECONDS);
+    setPendingDelete(true);
+    clearDeleteTimer();
+    deleteTickRef.current = setInterval(() => {
+      setSecondsLeft((s) => {
+        if (s <= 1) {
+          clearDeleteTimer();
+          commitDelete();
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+  }
+
+  async function commitDelete() {
+    try {
+      await sharedApiFetch(`/api/journal/${current._id}`, { method: "DELETE" });
+      onDeleted?.(current._id);
+      onClose();
+    } catch (err) {
+      // The countdown already finished, so there's no "pending" UI left to
+      // show this in -- fall back to a plain alert rather than silently
+      // swallowing a failed delete (the entry is still there; the user
+      // should know the delete didn't actually go through).
+      window.alert(describeError(err) || "Couldn't delete that entry. Please try again.");
+      setPendingDelete(false);
+    }
+  }
 
   function startEditing() {
     setError("");
@@ -92,24 +177,10 @@ export default function EntryModal({ entry, onClose, onUpdated, onDeleted }) {
     }
   }
 
-  async function handleDelete() {
-    if (!window.confirm("Delete this entry? This can't be undone.")) return;
-    setDeleting(true);
-    setError("");
-    try {
-      await sharedApiFetch(`/api/journal/${current._id}`, { method: "DELETE" });
-      onDeleted?.(current._id);
-      onClose();
-    } catch (err) {
-      setError(describeError(err));
-      setDeleting(false);
-    }
-  }
-
   return (
     <div
       className="fixed inset-0 z-[200] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
-      onClick={onClose}
+      onClick={requestClose}
     >
       <div
         className="ui-card rounded-2xl p-5 md:p-6 w-full max-w-2xl max-h-[85vh] overflow-y-auto scroll-area"
@@ -129,10 +200,10 @@ export default function EntryModal({ entry, onClose, onUpdated, onDeleted }) {
                 })}
               </span>
             </span>
-            {!editing && <h3 className="text-lg font-semibold mt-1">{current.title || "Untitled entry"}</h3>}
+            {!editing && !pendingDelete && <h3 className="text-lg font-semibold mt-1">{current.title || "Untitled entry"}</h3>}
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            {!editing && (
+            {!editing && !pendingDelete && (
               <>
                 <button
                   type="button"
@@ -145,11 +216,10 @@ export default function EntryModal({ entry, onClose, onUpdated, onDeleted }) {
                 </button>
                 <button
                   type="button"
-                  onClick={handleDelete}
-                  disabled={deleting}
+                  onClick={startDelete}
                   aria-label="Delete entry"
                   title="Delete entry"
-                  className="p-1.5 rounded-lg hover:bg-red-500/10 text-ink/70 hover:text-red-300 transition disabled:opacity-50"
+                  className="p-1.5 rounded-lg hover:bg-red-500/10 text-ink/70 hover:text-red-300 transition"
                 >
                   <Trash2 size={16} />
                 </button>
@@ -157,7 +227,7 @@ export default function EntryModal({ entry, onClose, onUpdated, onDeleted }) {
             )}
             <button
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
               aria-label="Close entry"
               className="p-1.5 rounded-lg hover:bg-ink/10 text-ink/70 hover:text-ink transition"
             >
@@ -168,7 +238,22 @@ export default function EntryModal({ entry, onClose, onUpdated, onDeleted }) {
 
         {error && <p className="text-xs text-red-300 mt-3">{error}</p>}
 
-        {editing ? (
+        {pendingDelete ? (
+          <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3.5">
+            <p className="text-sm text-ink/85">
+              Deleting this entry in <span className="ui-mono">{secondsLeft}</span>
+              {secondsLeft === 1 ? " second" : " seconds"}...
+            </p>
+            <button
+              type="button"
+              onClick={cancelDelete}
+              className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-ink/20 bg-ink/5 hover:bg-ink/10 text-sm font-medium transition"
+            >
+              <Undo2 size={14} />
+              Undo
+            </button>
+          </div>
+        ) : editing ? (
           <div className="mt-4 space-y-3">
             <input
               type="text"
