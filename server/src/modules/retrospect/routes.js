@@ -40,6 +40,54 @@ router.get(
     }
     const moodHeatmap = Array.from(heatmapByDay.values()).sort((a, b) => a.date.localeCompare(b.date));
 
+    // Real, deterministic stats -- not an AI guess -- same "actual computed
+    // math, not a model's impression" principle as the Pearson correlation
+    // in health/routes.js. Reuses heatmapRows (already fetched above, up to
+    // 400 entries, mood+createdAt only) rather than a separate query: a
+    // meaningful "when do you actually write" pattern needs a much wider
+    // sample than the 20-entry `entries` list this route already caps
+    // everything else to.
+    const HOUR_BUCKETS = [
+      { id: "night", label: "Night", hours: [0, 1, 2, 3, 4, 5] },
+      { id: "morning", label: "Morning", hours: [6, 7, 8, 9, 10, 11] },
+      { id: "afternoon", label: "Afternoon", hours: [12, 13, 14, 15, 16, 17] },
+      { id: "evening", label: "Evening", hours: [18, 19, 20, 21, 22, 23] },
+    ];
+    const WEEKDAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const hourToBucket = new Map();
+    for (const bucket of HOUR_BUCKETS) {
+      for (const h of bucket.hours) hourToBucket.set(h, bucket.id);
+    }
+    const byBucket = { night: 0, morning: 0, afternoon: 0, evening: 0 };
+    const byWeekday = WEEKDAY_LABELS.map(() => 0);
+    for (const row of heatmapRows) {
+      const d = new Date(row.createdAt);
+      byBucket[hourToBucket.get(d.getHours())] += 1;
+      byWeekday[d.getDay()] += 1;
+    }
+    const totalForRhythm = heatmapRows.length;
+    // Same MIN_ENTRIES_FOR_AI-style honesty bar as everything else here --
+    // a handful of entries isn't enough to call something a "rhythm" without
+    // it just being noise dressed up as a pattern.
+    const rhythmEligible = totalForRhythm >= 5;
+    const dominantBucket = rhythmEligible
+      ? HOUR_BUCKETS.map((b) => ({ id: b.id, label: b.label, count: byBucket[b.id] })).sort(
+          (a, b) => b.count - a.count,
+        )[0]
+      : null;
+    const dominantWeekdayIndex = rhythmEligible
+      ? byWeekday.reduce((best, count, i) => (count > byWeekday[best] ? i : best), 0)
+      : null;
+    const writingRhythm = {
+      eligible: rhythmEligible,
+      total: totalForRhythm,
+      byBucket: HOUR_BUCKETS.map((b) => ({ id: b.id, label: b.label, count: byBucket[b.id] })),
+      byWeekday: WEEKDAY_LABELS.map((label, i) => ({ label, count: byWeekday[i] })),
+      dominantBucket: dominantBucket?.label || null,
+      dominantWeekday:
+        rhythmEligible && byWeekday[dominantWeekdayIndex] > 0 ? WEEKDAY_LABELS[dominantWeekdayIndex] : null,
+    };
+
     const moodCounts = entries.reduce((acc, entry) => {
       acc[entry.mood] = (acc[entry.mood] || 0) + 1;
       return acc;
@@ -100,6 +148,7 @@ router.get(
         .reverse()
         .map((e) => ({ date: e.createdAt, mood: e.mood, excerpt: e.content.slice(0, 80) })),
       moodHeatmap,
+      writingRhythm,
       confidence: latest?.confidence ?? 0,
       analysisSource: latest?.source || "none",
     });

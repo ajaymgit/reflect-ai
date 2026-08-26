@@ -208,6 +208,16 @@ export default function RetrospectPage() {
                 )}
               </div>
             </div>
+
+            {/* Purely computed from entry timestamps (see writingRhythm in
+                server/src/modules/retrospect/routes.js) -- no AI involved,
+                same "real math, not a model's impression" principle as the
+                health correlation elsewhere on this page. */}
+            <div className="ui-card rounded-2xl p-4">
+              <h3 className="font-medium">Writing rhythm</h3>
+              <p className="text-xs text-ink/60 mt-1">When you actually tend to write.</p>
+              <WritingRhythm rhythm={data?.writingRhythm} />
+            </div>
           </div>
         </motion.div>
 
@@ -390,6 +400,49 @@ function MoodBalance({ distribution }) {
               />
             </div>
             <span className="w-9 shrink-0 text-right text-xs text-ink/55 ui-mono">{d.pct}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Four bars (Night/Morning/Afternoon/Evening) rather than a 24-hour
+// histogram -- a full hourly breakdown is more precision than "when do you
+// write" actually needs and would read as noisy at this card's size; the
+// dominant bucket also gets called out in a sentence above the bars so the
+// headline answer doesn't require reading the chart at all, same pattern as
+// MoodBalance's top-mood callout above.
+function WritingRhythm({ rhythm }) {
+  if (!rhythm?.eligible) {
+    return <p className="text-xs text-ink/50 mt-4">Not enough entries yet to show a writing rhythm.</p>;
+  }
+  const max = Math.max(1, ...rhythm.byBucket.map((b) => b.count));
+  return (
+    <div className="mt-3">
+      <p className="text-sm text-ink/80">
+        Mostly in the <span className="font-medium text-ink">{rhythm.dominantBucket?.toLowerCase()}</span>
+        {rhythm.dominantWeekday && (
+          <>
+            , especially on <span className="font-medium text-ink">{rhythm.dominantWeekday}s</span>
+          </>
+        )}
+        .
+      </p>
+      <div className="mt-4 grid grid-cols-4 gap-2">
+        {rhythm.byBucket.map((b) => (
+          <div key={b.id} className="text-center">
+            <div className="h-14 flex items-end justify-center">
+              <div
+                className="w-full max-w-[28px] rounded-t-md transition-all"
+                style={{
+                  height: `${Math.max(8, (b.count / max) * 100)}%`,
+                  background: b.label === rhythm.dominantBucket ? "rgb(var(--signal))" : "rgb(var(--ink) / 0.15)",
+                }}
+                title={`${b.label}: ${b.count} ${b.count === 1 ? "entry" : "entries"}`}
+              />
+            </div>
+            <p className="text-[10px] text-ink/55 mt-1.5">{b.label}</p>
           </div>
         ))}
       </div>
