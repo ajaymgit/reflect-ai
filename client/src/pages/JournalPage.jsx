@@ -1,11 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { motion } from "framer-motion";
 import { BookOpen, Clock, Lightbulb, Mail, Sparkles } from "lucide-react";
 import { apiFetch, describeError } from "../api";
 import EntryModal, { EntryModalById } from "../components/EntryModal";
 import FirstTimeTip from "../components/FirstTimeTip";
 import JournalHistoryView from "./JournalHistoryPage";
 import { suggestMoodFromText } from "../utils/moodSuggestion";
+import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
+
+// Same stagger/entrance pattern Dashboard, Retrospect, Health, and Year in
+// Review all use -- Journal (the single most-visited page in the app, and
+// the only one of the five main nav destinations still missing it) previously
+// rendered with a hard instant cut, the one page that felt static next to
+// every other page's fade-and-rise entrance.
+const containerVariants = { hidden: {}, visible: { transition: { staggerChildren: 0.08 } } };
+const itemVariants = {
+  hidden: { opacity: 0, y: 14 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: [0.16, 1, 0.3, 1] } },
+};
+const staticContainerVariants = { hidden: {}, visible: {} };
+const staticItemVariants = { hidden: { opacity: 1, y: 0 }, visible: { opacity: 1, y: 0 } };
 
 // Local-storage draft key. Previously there was zero autosave -- a refresh,
 // an accidental back-navigation, or the tab just crashing lost whatever was
@@ -166,6 +181,9 @@ function EntryAura({ mood, keepsake, capsule }) {
 
 export default function JournalPage() {
   const [searchParams] = useSearchParams();
+  const reducedMotion = usePrefersReducedMotion();
+  const cVariants = reducedMotion ? staticContainerVariants : containerVariants;
+  const iVariants = reducedMotion ? staticItemVariants : itemVariants;
   // Write and History used to be two separate pages/nav destinations --
   // this is now one Journal section with two tabs instead, so there's no
   // separate "History" entry in the nav at all (see AppShell.jsx). Reads
@@ -419,8 +437,13 @@ export default function JournalPage() {
 
       {view === "write" && (
       <>
-      <div className="max-w-6xl mx-auto grid xl:grid-cols-[1fr_320px] gap-4">
-        <section className="ui-card rounded-2xl p-4 md:p-5 space-y-3">
+      <motion.div
+        variants={cVariants}
+        initial="hidden"
+        animate="visible"
+        className="max-w-6xl mx-auto grid xl:grid-cols-[1fr_320px] gap-4"
+      >
+        <motion.section variants={iVariants} className="ui-card rounded-2xl p-4 md:p-5 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <p className="ui-kicker">New journal entry</p>
             {/* Real autosave, not decoration -- see the DRAFT_KEY comment
@@ -584,19 +607,22 @@ export default function JournalPage() {
             <EntryAura mood={suggestedMood || mood} keepsake={isKeepsake} capsule={isCapsule} />
             <div className="flex flex-wrap gap-2 mt-2">
               {moods.map((m) => (
-                <button
+                <motion.button
                   key={m}
                   type="button"
                   onClick={() => setMood(m)}
                   aria-pressed={mood === m}
                   style={mood === m ? selectedMoodStyle(m) : undefined}
+                  whileTap={reducedMotion ? undefined : { scale: 0.92 }}
+                  animate={reducedMotion ? undefined : mood === m ? { scale: [1, 1.08, 1] } : { scale: 1 }}
+                  transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
                   className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm capitalize ${
                     mood === m ? "" : "bg-ink/5 border-ink/10 hover:border-ink/20"
                   }`}
                 >
                   <span className="h-2.5 w-2.5 rounded-full" style={moodDotStyle(m)} />
                   {m}
-                </button>
+                </motion.button>
               ))}
             </div>
           </div>
@@ -616,9 +642,9 @@ export default function JournalPage() {
               is no autosave -- saving only happens when the button above is
               clicked. Also stayed blank ("Idle") until the first save. */}
           {status && <p className="text-xs text-ink/60">Status: {status}</p>}
-        </section>
+        </motion.section>
 
-        <aside className="ui-card rounded-2xl p-4 space-y-3 h-fit">
+        <motion.aside variants={iVariants} className="ui-card rounded-2xl p-4 space-y-3 h-fit">
           {/* "On This Day" -- entries from this exact calendar date in past
               years (GET /api/journal/on-this-day). Day One's single
               most-cited feature, and it costs nothing to build here since
@@ -776,8 +802,8 @@ export default function JournalPage() {
               </button>
             )}
           </div>
-        </aside>
-      </div>
+        </motion.aside>
+      </motion.div>
 
       {/* Theme cloud -- full width, its own section below the composer, so
           it gets real room to breathe rather than being squeezed into the
