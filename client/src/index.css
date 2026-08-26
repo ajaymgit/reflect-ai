@@ -427,6 +427,24 @@ a.ui-card:active {
   transform: none;
 }
 
+/* Keyboard-focus ring -- .ui-input already gets a theme-tinted focus ring
+   (see .ui-input:focus above), but buttons and clickable cards had no
+   focus-visible treatment of their own and fell back to the browser's
+   plain default outline, which doesn't match this app's accent language
+   and can be hard to see against a colored button fill. `outline` (not
+   another box-shadow layer) so this stacks cleanly with each element's own
+   hover/active box-shadow instead of having to duplicate it here.
+   :focus-visible (not :focus) so this only appears for real keyboard
+   navigation, not after an ordinary mouse click. */
+.ui-button-primary:focus-visible,
+.ui-button-ghost:focus-visible,
+.ui-button-danger:focus-visible,
+button.ui-card:focus-visible,
+a.ui-card:focus-visible {
+  outline: 2px solid rgb(var(--signal));
+  outline-offset: 2px;
+}
+
 /* ---- Page chrome ---- */
 
 .ui-page {
