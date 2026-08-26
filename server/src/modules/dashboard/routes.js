@@ -3,7 +3,7 @@ import HealthData from "../../models/HealthData.js";
 import JournalEntry from "../../models/JournalEntry.js";
 import { requireAuth } from "../../shared/middleware/auth.js";
 import { asyncHandler } from "../../shared/utils/asyncHandler.js";
-import { getStreakDays } from "../../shared/utils/streak.js";
+import { getStreakDays, localDayKey } from "../../shared/utils/streak.js";
 
 const router = Router();
 
@@ -88,6 +88,19 @@ function visibleFilter(extra = {}) {
   return { ...extra, revealAt: { $not: { $gt: new Date() } } };
 }
 
+// ?tzOffset is the browser's own Date.prototype.getTimezoneOffset() value
+// (minutes to add to local time to reach UTC, e.g. +480 for PST), sent by
+// the client so the streak and mood-calendar day-bucketing below match the
+// calendar day the person actually experienced instead of whatever
+// timezone this server process happens to be running in. Clamped to the
+// real range of UTC offsets (-14h to +12h) and defaults to 0 (UTC) for any
+// request that doesn't send one, matching the previous behavior exactly.
+function parseTzOffset(req) {
+  const raw = Number(req.query.tzOffset);
+  if (!Number.isFinite(raw)) return 0;
+  return Math.max(-840, Math.min(720, Math.round(raw)));
+}
+
 router.get(
   "/summary",
   requireAuth,
@@ -99,6 +112,7 @@ router.get(
     const rawRange = String(req.query.range || "week").toLowerCase();
     const range = ALLOWED_RANGES.has(rawRange) ? rawRange : "week";
     const rangeStart = getRangeStart(range);
+    const tzOffsetMinutes = parseTzOffset(req);
     const trendStart = new Date();
     trendStart.setDate(trendStart.getDate() - 13);
     trendStart.setHours(0, 0, 0, 0);
@@ -128,7 +142,7 @@ router.get(
     ]);
 
     const recentJournals = rangeJournals.slice(0, 8);
-    const streak = getStreakDays(streakJournals);
+    const streak = getStreakDays(streakJournals, { tzOffsetMinutes });
     const avgStress = healthRows.length
       ? Math.round(healthRows.reduce((sum, item) => sum + (item.stressScore || 0), 0) / healthRows.length)
       : 0;
@@ -229,6 +243,7 @@ router.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const days = Math.min(365, Math.max(7, Number(req.query.days) || 126));
+    const tzOffsetMinutes = parseTzOffset(req);
     const start = new Date();
     start.setDate(start.getDate() - (days - 1));
     start.setHours(0, 0, 0, 0);
@@ -249,8 +264,16 @@ router.get(
     // just passes it through rather than deriving a heuristic here.
     const byDay = new Map();
     for (const entry of entries) {
-      const d = new Date(entry.createdAt);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      // localDayKey (tz-shifted, unpadded "Y-M-0M" internal form) isn't the
+      // format this endpoint returns to the client -- reuse its Y/M/D
+      // components (via the same shift) but keep the existing zero-padded
+      // "YYYY-MM-DD" wire format so MoodCalendar.jsx's date matching is
+      // unaffected. Fixes the same bug as the streak counter: without the
+      // shift, an entry written late at night could land on the wrong
+      // calendar cell for anyone whose local day doesn't line up with the
+      // server's.
+      const [y, m, dNum] = localDayKey(new Date(entry.createdAt), tzOffsetMinutes).split("-");
+      const key = `${y}-${String(Number(m) + 1).padStart(2, "0")}-${String(dNum).padStart(2, "0")}`;
       byDay.set(key, {
         mood: entry.mood,
         title: entry.title || "",

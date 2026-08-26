@@ -47,7 +47,7 @@ export default function MoodGlobeLauncher({ variant = "card" }) {
   const [days, setDays] = useState(null);
 
   useEffect(() => {
-    apiFetch("/api/dashboard/mood-calendar?days=365")
+    apiFetch(`/api/dashboard/mood-calendar?days=365&tzOffset=${new Date().getTimezoneOffset()}`)
       .then((data) => setDays(data?.days || []))
       .catch(() => setDays([]));
   }, []);

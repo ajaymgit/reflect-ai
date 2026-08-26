@@ -292,7 +292,11 @@ export default function DashboardPage() {
   const iVariants = reducedMotion ? staticItemVariants : itemVariants;
 
   useEffect(() => {
-    apiFetch(`/api/dashboard/summary?range=${range}`)
+    // tzOffset: the browser's own getTimezoneOffset() (minutes to add to
+    // local time to reach UTC) -- lets the server bucket the streak and
+    // "today" by this person's actual calendar day instead of the
+    // server's, which previously could disagree near midnight.
+    apiFetch(`/api/dashboard/summary?range=${range}&tzOffset=${new Date().getTimezoneOffset()}`)
       .then(setData)
       .catch(() => {});
   }, [range]);

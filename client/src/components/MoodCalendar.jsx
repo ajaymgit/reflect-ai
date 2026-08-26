@@ -53,7 +53,7 @@ export default function MoodCalendar() {
   const [selectedDate, setSelectedDate] = useState(null);
 
   useEffect(() => {
-    apiFetch(`/api/dashboard/mood-calendar?days=${FETCH_DAYS}`)
+    apiFetch(`/api/dashboard/mood-calendar?days=${FETCH_DAYS}&tzOffset=${new Date().getTimezoneOffset()}`)
       .then((data) => {
         const byDate = {};
         for (const item of data?.days || []) {

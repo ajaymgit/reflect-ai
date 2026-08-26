@@ -87,7 +87,7 @@ export default function AppShell() {
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
-    apiFetch("/api/dashboard/summary")
+    apiFetch(`/api/dashboard/summary?tzOffset=${new Date().getTimezoneOffset()}`)
       .then((data) => setStreak(data.journalingStreak || 0))
       .catch(() => {});
   }, []);

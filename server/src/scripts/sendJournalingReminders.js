@@ -67,6 +67,12 @@ async function run() {
       // truncates the streak for anyone journaling more than once a day.
       // Already select()-ed down to just createdAt, so a much higher limit
       // (~10 years of entries) is still a cheap query.
+      //
+      // Note: unlike the dashboard's live /summary endpoint (which now takes
+      // a ?tzOffset from the browser), this cron script has no per-request
+      // timezone to work with -- User has no stored IANA timezone field --
+      // so getStreakDays() below falls back to its UTC default here. Same
+      // limitation this script always had; not a regression.
       JournalEntry.find({ userId: user._id }).sort({ createdAt: -1 }).limit(3650).select("createdAt"),
     ]);
     if (hasToday) {
