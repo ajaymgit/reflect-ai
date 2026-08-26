@@ -79,4 +79,55 @@ router.get(
   }),
 );
 
+// CSV-formatted companion to /all, journal entries only -- the JSON export
+// above is the complete, structured "everything" download, but a raw JSON
+// blob isn't something most people can actually open and skim; a plain
+// spreadsheet-importable CSV of just the entries (the data someone doing
+// "let me look back through what I wrote" actually wants) is a friendlier
+// second option, not a replacement.
+function csvEscape(value) {
+  const str = String(value ?? "");
+  // Quote-and-double-up any field containing a comma, quote, or newline --
+  // the standard CSV escaping rule (RFC 4180). Every field gets wrapped
+  // regardless, simpler and still fully valid than only quoting when
+  // "necessary".
+  return `"${str.replace(/"/g, '""')}"`;
+}
+
+router.get(
+  "/journal.csv",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    // Same visibility guard as /all -- a sealed time capsule stays out of
+    // this export too, for the same reason.
+    const journals = await JournalEntry.find(visibleJournalFilter({ userId: req.user._id })).sort({
+      createdAt: 1,
+    });
+
+    const header = ["Date", "Title", "Mood", "Tags", "Content"].map(csvEscape).join(",");
+    const rows = journals.map((j) =>
+      [
+        new Date(j.createdAt).toISOString().slice(0, 10),
+        j.title || "",
+        j.mood,
+        (j.tags || []).join("; "),
+        j.content,
+      ]
+        .map(csvEscape)
+        .join(","),
+    );
+    // \r\n line endings (not just \n) -- the CSV spec's own recommended
+    // terminator, and what makes Excel on Windows treat this as one row per
+    // line reliably rather than occasionally mis-parsing bare \n exports.
+    const csv = [header, ...rows].join("\r\n");
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="reflectai-journal-${Date.now()}.csv"`);
+    // A leading UTF-8 BOM so Excel (which otherwise guesses an unlabeled
+    // CSV's encoding as the system locale's default, mangling any non-ASCII
+    // character someone actually wrote) opens this as UTF-8 correctly.
+    res.status(200).send(`﻿${csv}`);
+  }),
+);
+
 export default router;

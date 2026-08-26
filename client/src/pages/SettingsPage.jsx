@@ -519,16 +519,25 @@ function AppearancePreview({ darkHue, darkToneValue, lightHue, lightToneValue, s
 // raw response as a Blob so the browser can trigger an actual file download
 // via a temporary object URL, not just hand back a JS object.
 function ExportSection() {
-  const [busy, setBusy] = useState(false);
+  // Two independent busy flags -- previously a single shared `busy` would
+  // disable BOTH buttons the moment either download started, which reads as
+  // "the whole export feature is doing something" when really only one of
+  // two genuinely separate requests is in flight.
+  const [busyAll, setBusyAll] = useState(false);
+  const [busyCsv, setBusyCsv] = useState(false);
   const [error, setError] = useState("");
 
-  async function exportData() {
+  // Shared by both downloads -- fetched manually (not via the shared
+  // apiFetch helper) since that helper always calls res.json() and returns
+  // parsed data; this needs the raw response as a Blob so the browser can
+  // trigger an actual file download via a temporary object URL.
+  async function downloadFile(path, filename, setBusy) {
     setBusy(true);
     setError("");
     try {
       const apiBase = import.meta.env.VITE_API_URL || "http://localhost:5000";
       const token = localStorage.getItem("reflectai_token");
-      const res = await fetch(`${apiBase}/api/export/all`, {
+      const res = await fetch(`${apiBase}${path}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) throw new Error("Export failed. Please try again.");
@@ -536,7 +545,7 @@ function ExportSection() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `reflectai-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -547,6 +556,8 @@ function ExportSection() {
       setBusy(false);
     }
   }
+
+  const today = new Date().toISOString().slice(0, 10);
 
   return (
     <div>
@@ -559,11 +570,33 @@ function ExportSection() {
         </div>
         <button
           type="button"
-          onClick={exportData}
-          disabled={busy}
+          onClick={() => downloadFile("/api/export/all", `reflectai-export-${today}.json`, setBusyAll)}
+          disabled={busyAll}
           className="ui-button-ghost px-4 py-2.5 min-h-11 text-sm disabled:opacity-60"
         >
-          {busy ? "Preparing..." : "Download my data"}
+          {busyAll ? "Preparing..." : "Download my data"}
+        </button>
+      </div>
+      {/* CSV of just the journal entries -- a raw JSON blob isn't something
+          most people can actually open and skim; a spreadsheet-importable
+          CSV of the entries themselves (the data someone doing "let me look
+          back through what I wrote" actually wants) is a friendlier second
+          option, not a replacement for the complete structured export above. */}
+      <div className="flex items-center justify-between gap-3 flex-wrap mt-3 pt-3 border-t border-ink/10">
+        <div>
+          <p className="text-sm font-medium">Journal entries as a spreadsheet</p>
+          <p className="text-xs text-ink/70 mt-1 max-w-md">
+            Just your entries -- date, title, mood, tags, and content -- as a CSV you can open directly in Excel,
+            Numbers, or Sheets.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => downloadFile("/api/export/journal.csv", `reflectai-journal-${today}.csv`, setBusyCsv)}
+          disabled={busyCsv}
+          className="ui-button-ghost px-4 py-2.5 min-h-11 text-sm disabled:opacity-60"
+        >
+          {busyCsv ? "Preparing..." : "Download as CSV"}
         </button>
       </div>
       {error && <p className="text-xs text-red-300 mt-2">{error}</p>}
