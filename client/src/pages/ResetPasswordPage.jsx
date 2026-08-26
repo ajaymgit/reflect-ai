@@ -37,7 +37,7 @@ export default function ResetPasswordPage() {
   if (!token) {
     return (
       <div className="min-h-screen page-gradient living-bg mood-calm text-ink flex items-center justify-center p-4">
-        <div className="w-full max-w-md ui-card rounded-3xl p-6 md:p-8 space-y-4">
+        <div className="w-full max-w-md ui-card rounded-2xl p-6 md:p-8 space-y-4">
           <p className="ui-kicker">Reset password</p>
           <h2 className="ui-title mt-1">Missing reset link</h2>
           <p className="text-sm text-ink/70">
@@ -54,7 +54,7 @@ export default function ResetPasswordPage() {
   return (
     <div className="min-h-screen page-gradient living-bg mood-calm text-ink flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <form onSubmit={handleSubmit} className="ui-card rounded-3xl p-6 md:p-8 space-y-4">
+        <form onSubmit={handleSubmit} className="ui-card rounded-2xl p-6 md:p-8 space-y-4">
           <div>
             <p className="ui-kicker">Reset password</p>
             <h2 className="ui-title mt-1">Choose a new password</h2>

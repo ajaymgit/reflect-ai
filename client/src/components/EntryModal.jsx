@@ -304,7 +304,7 @@ export default function EntryModal({ entry, onClose, onUpdated, onDeleted }) {
                 type="button"
                 onClick={saveEdit}
                 disabled={saving}
-                className="inline-flex items-center gap-1.5 px-4 py-2 ui-button-primary text-sm disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 px-4 py-2 min-h-11 ui-button-primary text-sm disabled:opacity-60"
               >
                 <Check size={14} />
                 {saving ? "Saving..." : "Save changes"}
@@ -316,7 +316,7 @@ export default function EntryModal({ entry, onClose, onUpdated, onDeleted }) {
                   setError("");
                 }}
                 disabled={saving}
-                className="px-4 py-2 ui-button-ghost text-sm disabled:opacity-60"
+                className="px-4 py-2 min-h-11 ui-button-ghost text-sm disabled:opacity-60"
               >
                 Cancel
               </button>

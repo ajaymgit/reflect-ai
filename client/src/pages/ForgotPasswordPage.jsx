@@ -33,7 +33,7 @@ export default function ForgotPasswordPage() {
   return (
     <div className="min-h-screen page-gradient living-bg mood-calm text-ink flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <form onSubmit={handleSubmit} className="ui-card rounded-3xl p-6 md:p-8 space-y-4">
+        <form onSubmit={handleSubmit} className="ui-card rounded-2xl p-6 md:p-8 space-y-4">
           <div>
             <p className="ui-kicker">Reset password</p>
             <h2 className="ui-title mt-1">Forgot your password?</h2>

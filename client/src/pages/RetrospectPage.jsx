@@ -284,7 +284,7 @@ export default function RetrospectPage() {
               </p>
               <button
                 type="button"
-                className="mt-3 px-4 py-2 ui-button-primary"
+                className="mt-3 px-4 py-2 min-h-11 ui-button-primary"
                 onClick={() => navigate("/chat", { state: { prefill: data?.socraticQuestion } })}
               >
                 Continue reflection

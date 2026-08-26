@@ -386,10 +386,10 @@ export default function DashboardPage() {
               <p className="text-sm text-ink/70 mt-4 mb-4">{data?.cumulativeInsight || "Building your insight..."}</p>
 
               <div className="flex gap-2 flex-wrap">
-                <Link to="/journal/new" className="inline-flex px-4 py-2.5 text-sm ui-button-primary">
+                <Link to="/journal/new" className="inline-flex px-4 py-2.5 min-h-11 text-sm ui-button-primary">
                   Write journal
                 </Link>
-                <Link to="/chat" className="inline-flex px-5 py-3 text-base ui-button-ghost">
+                <Link to="/chat" className="inline-flex px-5 py-3 min-h-11 text-base ui-button-ghost">
                   Continue reflection
                 </Link>
               </div>

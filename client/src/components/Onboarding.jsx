@@ -49,7 +49,7 @@ export default function Onboarding({ onDone }) {
           stat/kicker/timestamp in the app marks "this is metadata") instead
           of a generic dot strip -- same information, in this app's own
           typographic language rather than a borrowed one. */}
-      <div className="ui-card rounded-3xl p-8 max-w-md w-full relative">
+      <div className="ui-card rounded-2xl p-8 max-w-md w-full relative">
         <div className="flex items-center justify-between">
           <p className="ui-mono text-xs text-ink/45">
             {String(step + 1).padStart(2, "0")} / {String(SLIDES.length).padStart(2, "0")}

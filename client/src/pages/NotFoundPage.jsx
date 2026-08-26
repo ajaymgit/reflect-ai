@@ -17,7 +17,7 @@ export default function NotFoundPage() {
         <p className="text-sm text-ink/70 mt-3">
           The link might be old, or the address was typed wrong. Nothing's broken on your account.
         </p>
-        <Link to={user ? "/dashboard" : "/login"} className="inline-flex mt-6 px-5 py-2.5 ui-button-primary">
+        <Link to={user ? "/dashboard" : "/login"} className="inline-flex mt-6 px-5 py-2.5 min-h-11 ui-button-primary">
           {user ? "Back to Home" : "Back to login"}
         </Link>
       </div>

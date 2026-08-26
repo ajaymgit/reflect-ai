@@ -158,7 +158,7 @@ export default function YearInReviewPage() {
           <p className="text-sm text-ink/70 mt-3">
             Keep journaling and this page will fill in with your own highlights -- moods, streaks, themes, and more.
           </p>
-          <Link to="/journal/new" className="inline-flex mt-5 px-4 py-2.5 text-sm ui-button-primary">
+          <Link to="/journal/new" className="inline-flex mt-5 px-4 py-2.5 min-h-11 text-sm ui-button-primary">
             Write an entry
           </Link>
         </div>
