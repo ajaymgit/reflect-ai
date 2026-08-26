@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
-import { MOOD_BG_CLASS as moodDotColors } from "../utils/moodColors";
+import { moodDotStyle } from "../utils/moodColors";
 
 // Full-screen read view for one journal entry -- extracted out of
 // JournalHistoryPage.jsx so Dashboard's Recent Entries can reuse the exact
@@ -34,8 +34,8 @@ export default function EntryModal({ entry, onClose }) {
       >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <span className="inline-flex items-center gap-1.5 text-xs text-white/60 capitalize">
-              <span className={`h-2 w-2 rounded-full ${moodDotColors[entry.mood] || "bg-white/40"}`} />
+            <span className="inline-flex items-center gap-1.5 text-xs text-ink/60 capitalize">
+              <span className="h-2 w-2 rounded-full" style={moodDotStyle(entry.mood)} />
               {entry.mood} ·{" "}
               <span className="ui-mono">
                 {new Date(entry.createdAt).toLocaleDateString(undefined, {
@@ -52,16 +52,16 @@ export default function EntryModal({ entry, onClose }) {
             type="button"
             onClick={onClose}
             aria-label="Close entry"
-            className="p-1.5 rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition shrink-0"
+            className="p-1.5 rounded-lg hover:bg-ink/10 text-ink/70 hover:text-ink transition shrink-0"
           >
             <X size={18} />
           </button>
         </div>
-        <p className="text-sm text-white/85 whitespace-pre-wrap leading-relaxed mt-4">{entry.content}</p>
+        <p className="text-sm text-ink/85 whitespace-pre-wrap leading-relaxed mt-4">{entry.content}</p>
         {entry.tags?.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 pt-4 mt-4 border-t border-white/10">
+          <div className="flex flex-wrap gap-1.5 pt-4 mt-4 border-t border-ink/10">
             {entry.tags.map((t) => (
-              <span key={t} className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-white/60 ui-mono">
+              <span key={t} className="text-[10px] px-2 py-0.5 rounded-full bg-ink/10 text-ink/60 ui-mono">
                 {t}
               </span>
             ))}
@@ -104,7 +104,7 @@ export function EntryModalById({ entryId, onClose, apiFetch }) {
         className="fixed inset-0 z-[200] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
         onClick={onClose}
       >
-        <div className="ui-card rounded-2xl p-6 text-sm text-white/70" onClick={(e) => e.stopPropagation()}>
+        <div className="ui-card rounded-2xl p-6 text-sm text-ink/70" onClick={(e) => e.stopPropagation()}>
           {error}
         </div>
       </div>
@@ -117,7 +117,7 @@ export function EntryModalById({ entryId, onClose, apiFetch }) {
         className="fixed inset-0 z-[200] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
         onClick={onClose}
       >
-        <div className="ui-card rounded-2xl p-6 text-sm text-white/60" onClick={(e) => e.stopPropagation()}>
+        <div className="ui-card rounded-2xl p-6 text-sm text-ink/60" onClick={(e) => e.stopPropagation()}>
           Loading entry...
         </div>
       </div>

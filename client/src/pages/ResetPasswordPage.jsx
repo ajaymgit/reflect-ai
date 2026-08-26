@@ -36,14 +36,14 @@ export default function ResetPasswordPage() {
 
   if (!token) {
     return (
-      <div className="min-h-screen page-gradient living-bg mood-calm text-white flex items-center justify-center p-4">
+      <div className="min-h-screen page-gradient living-bg mood-calm text-ink flex items-center justify-center p-4">
         <div className="w-full max-w-md ui-card rounded-3xl p-6 md:p-8 space-y-4">
           <p className="ui-kicker">Reset password</p>
           <h2 className="ui-title mt-1">Missing reset link</h2>
-          <p className="text-sm text-white/70">
+          <p className="text-sm text-ink/70">
             This page needs a reset token from the link in your email.
           </p>
-          <Link className="text-[#d9d2b0] hover:text-[#ede5c4] text-sm" to="/forgot-password">
+          <Link className="text-signal hover:text-signal-soft text-sm" to="/forgot-password">
             Request a new reset link
           </Link>
         </div>
@@ -52,7 +52,7 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen page-gradient living-bg mood-calm text-white flex items-center justify-center p-4">
+    <div className="min-h-screen page-gradient living-bg mood-calm text-ink flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <form onSubmit={handleSubmit} className="ui-card rounded-3xl p-6 md:p-8 space-y-4">
           <div>
@@ -63,12 +63,14 @@ export default function ResetPasswordPage() {
             <>
               <PasswordInput
                 placeholder="New password"
+                autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
               <PasswordInput
                 placeholder="Confirm new password"
+                autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
@@ -81,7 +83,7 @@ export default function ResetPasswordPage() {
           )}
           {done && (
             <div className="space-y-3">
-              <p className="text-sm text-[#c5d7a6]">
+              <p className="text-sm text-ember-soft">
                 Your password has been updated. You've been signed out everywhere for security -- please log in
                 again with your new password.
               </p>

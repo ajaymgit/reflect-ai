@@ -11,7 +11,13 @@
     "send-reminders": "node src/scripts/sendJournalingReminders.js",
     "embed-journals": "node src/scripts/embedJournalEntries.js",
     "seed-demo-journal": "node src/scripts/seedDemoJournal.js",
-    "clear-retrospect-cache": "node src/scripts/clearRetrospectCache.js"
+    "clear-retrospect-cache": "node src/scripts/clearRetrospectCache.js",
+    "recompute-themes": "node src/scripts/recomputeThemes.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "eval-chat-engine": "node src/scripts/evalChatEngine.js",
+    "eval-ablation": "node src/scripts/evalAblation.js",
+    "capture-transcripts": "node src/scripts/captureExampleTranscripts.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -24,5 +30,9 @@
     "mongoose": "^8.18.1",
     "openai": "^6.34.0",
     "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4",
+    "mongodb-memory-server": "^10.1.4"
   }
 }

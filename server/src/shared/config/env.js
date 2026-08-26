@@ -77,6 +77,21 @@ const envSchema = z.object({
   OLLAMA_BASE_URL: z.string().optional(),
   OLLAMA_MODEL: z.string().optional(),
   USE_OLLAMA: z.string().optional(),
+  // Only needed when OLLAMA_BASE_URL points at Ollama's hosted API
+  // (https://ollama.com) instead of a local/self-hosted instance -- direct
+  // access to ollama.com's API requires this as a Bearer token (see
+  // chat/service.js, retrospect/service.js, and shared/services/embeddings.js,
+  // which all add it to their Ollama requests when it's set). Get one at
+  // https://ollama.com/settings/keys. Left unset, every Ollama call omits
+  // the Authorization header entirely -- exactly what a local Ollama
+  // instance expects, since it doesn't check for one.
+  OLLAMA_API_KEY: z.string().optional(),
+  // Comma-separated if there's more than one legitimate web origin (e.g. a
+  // staging URL alongside production) -- see index.js's CORS setup, which
+  // splits this on commas and also always allows the fixed origins the
+  // Capacitor Android app's WebView actually sends (https://localhost /
+  // capacitor://localhost), so packaging the client as a native app doesn't
+  // require touching this value.
   CLIENT_URL: z.string().min(1),
   DEMO_EMAIL: z.string().default("demo@reflectai.com"),
   DEMO_PASSWORD: z.string().default("Demo@123"),

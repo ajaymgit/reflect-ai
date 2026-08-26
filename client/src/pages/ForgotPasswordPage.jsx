@@ -31,13 +31,13 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen page-gradient living-bg mood-calm text-white flex items-center justify-center p-4">
+    <div className="min-h-screen page-gradient living-bg mood-calm text-ink flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <form onSubmit={handleSubmit} className="ui-card rounded-3xl p-6 md:p-8 space-y-4">
           <div>
             <p className="ui-kicker">Reset password</p>
             <h2 className="ui-title mt-1">Forgot your password?</h2>
-            <p className="text-sm text-white/70 mt-2">
+            <p className="text-sm text-ink/70 mt-2">
               Enter your account email and we'll send you a link to reset your password.
             </p>
           </div>
@@ -47,6 +47,7 @@ export default function ForgotPasswordPage() {
                 className="ui-input"
                 placeholder="Email"
                 type="email"
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -57,9 +58,9 @@ export default function ForgotPasswordPage() {
               </button>
             </>
           )}
-          {submitted && <p className="text-sm text-[#c5d7a6]">{status}</p>}
-          <p className="text-sm text-white/70">
-            <Link className="text-[#d9d2b0] hover:text-[#ede5c4]" to="/login">
+          {submitted && <p className="text-sm text-ember-soft">{status}</p>}
+          <p className="text-sm text-ink/70">
+            <Link className="text-signal hover:text-signal-soft" to="/login">
               Back to login
             </Link>
           </p>

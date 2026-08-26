@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { BookOpen, Clock, Mail, Sparkles } from "lucide-react";
+import { BookOpen, Clock, Lightbulb, Mail, Sparkles } from "lucide-react";
 import { apiFetch, describeError } from "../api";
 import EntryModal from "../components/EntryModal";
 import FirstTimeTip from "../components/FirstTimeTip";
@@ -44,7 +44,7 @@ function truncateAtWord(text, maxLen) {
   return `${clean}…`;
 }
 
-import { MOODS as moods, MOOD_HEX, MOOD_BG_CLASS as moodDotColors } from "../utils/moodColors";
+import { MOODS as moods, MOOD_HEX, moodDotStyle } from "../utils/moodColors";
 
 // Same per-mood colors used on Dashboard/Chat (shared utils/moodColors.js),
 // so the selected mood button actually reflects that mood's color everywhere
@@ -55,9 +55,22 @@ import { MOODS as moods, MOOD_HEX, MOOD_BG_CLASS as moodDotColors } from "../uti
 // color language used everywhere else in the app (calendar, emotion pills,
 // chat). A solid dot now marks every option regardless of selection state,
 // same as ChatPage's mood picker.
-const moodColors = Object.fromEntries(
-  Object.entries(MOOD_HEX).map(([mood, hex]) => [mood, `bg-[${hex}]/25 border-[${hex}]/50`])
-);
+// Same runtime-arbitrary-value problem as MOOD_BG_CLASS used to have --
+// `bg-[${hex}]/25` is assembled at runtime so Tailwind's JIT scanner never
+// sees it and generates no CSS for it. Selected mood buttons were rendering
+// with zero background/border tint, indistinguishable from unselected ones
+// except by the aria-pressed state. Fixed with an inline-style helper.
+function selectedMoodStyle(mood) {
+  const hex = MOOD_HEX[mood];
+  if (!hex) return {};
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return {
+    backgroundColor: `rgba(${r}, ${g}, ${b}, 0.25)`,
+    borderColor: `rgba(${r}, ${g}, ${b}, 0.5)`,
+  };
+}
 
 // Lightweight local keyword heuristic, not a network call -- runs entirely
 // client-side on every keystroke, so it has to be cheap. Researched against
@@ -71,8 +84,13 @@ const moodColors = Object.fromEntries(
 // ../utils/moodSuggestion so ChatPage's quick-journal composer can offer the
 // exact same suggestion instead of a second, drifting copy.
 
+// "Prompt" used to be a third tab here, sharing sidebar space with
+// Health/Last entry -- meaning the actual writing prompt was often one tap
+// away and invisible by default, on the one page whose entire job is to get
+// someone to start writing. Moved into the composer itself (see the banner
+// right above the title field) where it's the first thing anyone sees when
+// they land on a blank page, instead of a tab they might never click.
 const supportTabs = [
-  { id: "prompt", label: "Prompt" },
   { id: "health", label: "Health" },
   { id: "entry", label: "Last entry" },
 ];
@@ -120,7 +138,7 @@ const templates = [
 // (same warm glow language, same mood colors) sized for sitting inline in a
 // form, not a second 3D scene competing with the one already on Dashboard.
 function EntryAura({ mood, keepsake, capsule }) {
-  const hex = MOOD_HEX[mood] || "#8fae73";
+  const hex = MOOD_HEX[mood] || "rgb(var(--signal))";
   return (
     <div className="flex items-center gap-3 py-1">
       <div
@@ -131,14 +149,14 @@ function EntryAura({ mood, keepsake, capsule }) {
         }}
       >
         {capsule && (
-          <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-[#161f19] border border-white/25 flex items-center justify-center">
-            <Clock size={9} className="text-white/70" />
+          <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-[#161f19] border border-ink/25 flex items-center justify-center">
+            <Clock size={9} className="text-ink/70" />
           </span>
         )}
       </div>
       <div className="text-xs leading-tight">
-        <p className="text-white/55">This entry, as a memory</p>
-        <p className="text-white/50 capitalize">
+        <p className="text-ink/55">This entry, as a memory</p>
+        <p className="text-ink/50 capitalize">
           {capsule ? "Sealed until it opens" : keepsake ? "A Keepsake" : `Feeling ${mood}`}
         </p>
       </div>
@@ -175,11 +193,12 @@ export default function JournalPage() {
   const [status, setStatus] = useState("");
   const [health, setHealth] = useState(null);
   const [relatedEntry, setRelatedEntry] = useState(null);
-  const [supportTab, setSupportTab] = useState("prompt");
+  const [supportTab, setSupportTab] = useState("health");
   const [draftRestoredAt, setDraftRestoredAt] = useState(null);
   const [onThisDay, setOnThisDay] = useState([]);
   const [openMemory, setOpenMemory] = useState(null);
   const [themeCloud, setThemeCloud] = useState([]);
+  const [rebuildingThemes, setRebuildingThemes] = useState(false);
   const [searchPreset, setSearchPreset] = useState(null);
   const hydratedFromDraft = useRef(false);
   const draftSaveTimer = useRef(null);
@@ -277,6 +296,25 @@ export default function JournalPage() {
     setDraftRestoredAt(null);
   }
 
+  // Rebuilds theme extraction for every existing entry against the current
+  // (fixed) stopword list -- see server/src/shared/utils/extractThemes.js.
+  // Older entries were tagged before filler/hedge words ("actually",
+  // "instead", "think", "month"...) were excluded, so this cloud showed
+  // those instead of real topics until re-run. Self-scoped, idempotent,
+  // POST /api/journal/recompute-themes.
+  async function rebuildThemes() {
+    setRebuildingThemes(true);
+    try {
+      await apiFetch("/api/journal/recompute-themes", { method: "POST" });
+      const data = await apiFetch("/api/journal/theme-cloud");
+      setThemeCloud(data?.themes || []);
+    } catch {
+      // Best-effort -- the cloud just stays as it was if this fails.
+    } finally {
+      setRebuildingThemes(false);
+    }
+  }
+
   function toggleCapsule() {
     setIsCapsule((v) => {
       const next = !v;
@@ -357,7 +395,7 @@ export default function JournalPage() {
           entries; now one Journal section, so there's exactly one place in
           the nav for "journaling" instead of two. See AppShell.jsx. */}
       <div className="max-w-6xl mx-auto mb-4">
-        <div className="inline-flex gap-1 rounded-xl bg-black/20 p-1">
+        <div className="inline-flex gap-1 rounded-xl bg-paper-sunken p-1">
           {[
             { id: "write", label: "Write" },
             { id: "history", label: "History" },
@@ -368,7 +406,7 @@ export default function JournalPage() {
               onClick={() => setView(t.id)}
               aria-pressed={view === t.id}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                view === t.id ? "bg-[#8fae73] text-[#16210f]" : "text-white/60 hover:text-white/85"
+                view === t.id ? "bg-signal text-white" : "text-ink/60 hover:text-ink/85"
               }`}
             >
               {t.label}
@@ -389,16 +427,45 @@ export default function JournalPage() {
                 and the debounced-save effect above. Only shown once there's
                 actually something saved to point to. */}
             {draftRestoredAt && content.trim() && (
-              <button type="button" onClick={discardDraft} className="text-[11px] text-white/55 hover:text-white/70">
+              <button type="button" onClick={discardDraft} className="text-[11px] text-ink/55 hover:text-ink/70">
                 Discard draft
               </button>
             )}
           </div>
           {draftRestoredAt && (
-            <p className="text-xs text-white/60 -mt-1">
+            <p className="text-xs text-ink/60 -mt-1">
               Draft autosaved {new Date(draftRestoredAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
             </p>
           )}
+
+          {/* Today's writing prompt, front and center -- previously this
+              lived behind a "Prompt" tab in the sidebar's Writing Support
+              widget, easy to never notice on the one page whose entire job
+              is getting someone to actually start writing. A blank title
+              field and an empty textarea right below a nav bar read as a
+              stark, empty page (the "typewriter" feeling); this gives the
+              page something to say before you've written anything. */}
+          {!content.trim() && (
+            <div className="rounded-xl border border-signal/25 bg-signal/[0.07] px-4 py-3.5 flex items-start gap-3">
+              {/* Lightbulb, not Sparkles -- this is a plain rotating prompt
+                  (todaysPrompt() below), not an AI-generated suggestion, so
+                  the icon shouldn't imply "AI magic" for something that
+                  isn't. */}
+              <Lightbulb size={16} className="text-signal shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="ui-kicker text-ink-faint">Today's prompt</p>
+                <p className="text-[15px] font-display italic text-ink/90 mt-1 leading-snug">{todaysPrompt()}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setContent((c) => (c.trim() ? c : `${todaysPrompt()}\n\n`))}
+                className="shrink-0 ml-auto text-xs text-signal hover:text-signal-soft underline underline-offset-2 self-center"
+              >
+                Start here
+              </button>
+            </div>
+          )}
+
           {/* Guided templates -- see the `templates` array above. Plain text
               chips, not another colored badge row, consistent with the rest
               of the app's restrained styling. */}
@@ -408,7 +475,7 @@ export default function JournalPage() {
                 key={t.id}
                 type="button"
                 onClick={() => applyTemplate(t)}
-                className="px-3 py-1.5 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 text-xs"
+                className="px-3 py-1.5 rounded-lg border border-ink/15 bg-ink/5 hover:bg-ink/10 text-xs"
               >
                 {t.label}
               </button>
@@ -431,7 +498,7 @@ export default function JournalPage() {
                 the textarea itself rather than a separate row, so it doesn't
                 compete for attention with anything else on the page. */}
             {wordCount > 0 && (
-              <span className="absolute bottom-2.5 right-3 text-[11px] text-white/50 ui-mono pointer-events-none">
+              <span className="absolute bottom-2.5 right-3 text-[11px] text-ink/50 ui-mono pointer-events-none">
                 {wordCount} {wordCount === 1 ? "word" : "words"}
               </span>
             )}
@@ -442,43 +509,40 @@ export default function JournalPage() {
             each other.
           </FirstTimeTip>
 
-          {/* Opt-in, off by default -- see the isKeepsake state comment
-              above. Not every entry needs to be one; this only applies when
-              someone actually turns it on for this specific entry. */}
-          <button
-            type="button"
-            onClick={() => setIsKeepsake((v) => !v)}
-            aria-pressed={isKeepsake}
-            className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm transition ${
-              isKeepsake
-                ? "border-[#e8ab5f]/60 bg-[#e8ab5f]/15 text-white"
-                : "border-white/15 bg-white/5 text-white/60 hover:border-white/25 hover:text-white/85"
-            }`}
-          >
-            <Sparkles size={14} className={isKeepsake ? "text-[#e8ab5f]" : "text-white/55"} />
-            {isKeepsake ? "Saving as a Keepsake" : "Save as a Keepsake"}
-          </button>
-
-          {/* Time Capsule -- a letter to a future version of yourself. See
-              the isCapsule state comment above and GET/POST revealAt in
-              journal/routes.js. Off by default, and independent of
-              Keepsake -- an entry can be neither, either, or both. */}
+          {/* Keepsake and Time Capsule -- both opt-in, off by default, and
+              independent of each other. Previously two full-width stacked
+              rows sitting between the content and the actual mood/save
+              controls; now one compact row so they read as secondary,
+              optional flags rather than competing with the primary flow. */}
           <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setIsKeepsake((v) => !v)}
+              aria-pressed={isKeepsake}
+              className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm transition ${
+                isKeepsake
+                  ? "border-[#e8ab5f]/60 bg-[#e8ab5f]/15 text-ink"
+                  : "border-ink/15 bg-ink/5 text-ink/60 hover:border-ink/25 hover:text-ink/85"
+              }`}
+            >
+              <Sparkles size={14} className={isKeepsake ? "text-[#e8ab5f]" : "text-ink/55"} />
+              {isKeepsake ? "Saving as a Keepsake" : "Save as a Keepsake"}
+            </button>
             <button
               type="button"
               onClick={toggleCapsule}
               aria-pressed={isCapsule}
               className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm transition ${
                 isCapsule
-                  ? "border-[#a989b2]/60 bg-[#a989b2]/15 text-white"
-                  : "border-white/15 bg-white/5 text-white/60 hover:border-white/25 hover:text-white/85"
+                  ? "border-[#a989b2]/60 bg-[#a989b2]/15 text-ink"
+                  : "border-ink/15 bg-ink/5 text-ink/60 hover:border-ink/25 hover:text-ink/85"
               }`}
             >
-              <Clock size={14} className={isCapsule ? "text-[#a989b2]" : "text-white/55"} />
+              <Clock size={14} className={isCapsule ? "text-[#a989b2]" : "text-ink/55"} />
               {isCapsule ? "Sealed as a Time Capsule" : "Write it as a Time Capsule"}
             </button>
             {isCapsule && (
-              <label className="inline-flex items-center gap-2 text-xs text-white/60">
+              <label className="inline-flex items-center gap-2 text-xs text-ink/60">
                 Reveal on
                 <input
                   type="date"
@@ -491,10 +555,51 @@ export default function JournalPage() {
             )}
           </div>
           {isCapsule && (
-            <p className="text-xs text-white/55 -mt-1">
+            <p className="text-xs text-ink/55 -mt-1">
               This entry won't appear anywhere in your journal -- not even to you -- until that date.
             </p>
           )}
+
+          {/* Mood now comes right before Save, not after it -- previously
+              this whole block (suggestion, preview, picker) sat BELOW the
+              Save button, so the form's most important decision (how this
+              entry actually feels) was answered after the "done" action
+              already appeared, out of natural reading/tab order. */}
+          <div>
+            <p className="ui-kicker mb-2">How does this feel?</p>
+            {suggestedMood && suggestedMood !== mood && (
+              <div className="flex items-center gap-2 mb-2">
+                <p className="text-xs text-ink/50">
+                  This reads as <span className="capitalize text-ink/80">{suggestedMood}</span> to me.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setMood(suggestedMood)}
+                  className="text-xs text-signal hover:text-signal-soft underline underline-offset-2"
+                >
+                  Use it
+                </button>
+              </div>
+            )}
+            <EntryAura mood={suggestedMood || mood} keepsake={isKeepsake} capsule={isCapsule} />
+            <div className="flex flex-wrap gap-2 mt-2">
+              {moods.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setMood(m)}
+                  aria-pressed={mood === m}
+                  style={mood === m ? selectedMoodStyle(m) : undefined}
+                  className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm capitalize ${
+                    mood === m ? "" : "bg-ink/5 border-ink/10 hover:border-ink/20"
+                  }`}
+                >
+                  <span className="h-2.5 w-2.5 rounded-full" style={moodDotStyle(m)} />
+                  {m}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <div className="grid sm:grid-cols-[1fr_auto] gap-3">
             <input
@@ -510,44 +615,7 @@ export default function JournalPage() {
           {/* Was previously mislabeled "Autosave status" even though there
               is no autosave -- saving only happens when the button above is
               clicked. Also stayed blank ("Idle") until the first save. */}
-          {status && <p className="text-xs text-white/60">Status: {status}</p>}
-          {/* Local, keyword-based mood suggestion -- see MOOD_KEYWORDS /
-              suggestMoodFromText above. Entirely client-side (no network
-              call per keystroke), and only ever a suggestion someone can
-              accept or dismiss -- picking your own mood is the point,
-              this just makes it faster when what you wrote clearly leans
-              one way. */}
-          {suggestedMood && suggestedMood !== mood && (
-            <div className="flex items-center gap-2 -mb-1">
-              <p className="text-xs text-white/50">
-                This reads as <span className="capitalize text-white/80">{suggestedMood}</span> to me.
-              </p>
-              <button
-                type="button"
-                onClick={() => setMood(suggestedMood)}
-                className="text-xs text-[#8fae73] hover:text-[#a3c98d] underline underline-offset-2"
-              >
-                Use it
-              </button>
-            </div>
-          )}
-          <EntryAura mood={suggestedMood || mood} keepsake={isKeepsake} capsule={isCapsule} />
-          <div className="flex flex-wrap gap-2">
-            {moods.map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setMood(m)}
-                aria-pressed={mood === m}
-                className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm capitalize ${
-                  mood === m ? moodColors[m] : "bg-white/5 border-white/10 hover:border-white/20"
-                }`}
-              >
-                <span className={`h-2.5 w-2.5 rounded-full ${moodDotColors[m]}`} />
-                {m}
-              </button>
-            ))}
-          </div>
+          {status && <p className="text-xs text-ink/60">Status: {status}</p>}
         </section>
 
         <aside className="ui-card rounded-2xl p-4 space-y-3 h-fit">
@@ -559,20 +627,20 @@ export default function JournalPage() {
               young account honestly shows nothing rather than an empty
               placeholder card. */}
           {onThisDay.length > 0 && (
-            <div className="pb-3 border-b border-white/10 space-y-2">
+            <div className="pb-3 border-b border-ink/10 space-y-2">
               <h3 className="font-medium flex items-center gap-1.5">On this day</h3>
               {onThisDay.map((entry) => (
                 <button
                   key={entry._id}
                   type="button"
                   onClick={() => setOpenMemory(entry)}
-                  className="w-full text-left surface p-2.5 hover:bg-white/10 transition"
+                  className="w-full text-left surface p-2.5 hover:bg-ink/10 transition"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] text-white/50">
+                    <span className="text-[11px] text-ink/50">
                       {entry.yearsAgo} {entry.yearsAgo === 1 ? "year" : "years"} ago
                     </span>
-                    <span className={`h-1.5 w-1.5 rounded-full ${moodDotColors[entry.mood] || "bg-white/30"}`} />
+                    <span className="h-1.5 w-1.5 rounded-full" style={moodDotStyle(entry.mood)} />
                   </div>
                   <p className="text-sm mt-1">{entry.title || truncateAtWord(entry.content, 70)}</p>
                 </button>
@@ -585,9 +653,9 @@ export default function JournalPage() {
               Only rendered once there's actually at least one, same honest
               "nothing to show yet" pattern as On This Day above. */}
           {(capsules.waiting.length > 0 || capsules.ready.length > 0) && (
-            <div className="pb-3 border-b border-white/10 space-y-2">
+            <div className="pb-3 border-b border-ink/10 space-y-2">
               <h3 className="font-medium flex items-center gap-1.5">
-                <Mail size={14} className="text-white/50" />
+                <Mail size={14} className="text-ink/50" />
                 Time capsules
               </h3>
               {capsules.ready.map((entry) => (
@@ -595,11 +663,11 @@ export default function JournalPage() {
                   key={entry._id}
                   type="button"
                   onClick={() => setOpenMemory(entry)}
-                  className="w-full text-left surface p-2.5 hover:bg-white/10 transition"
+                  className="w-full text-left surface p-2.5 hover:bg-ink/10 transition"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] text-[#8fae73]">Ready to open</span>
-                    <span className={`h-1.5 w-1.5 rounded-full ${moodDotColors[entry.mood] || "bg-white/30"}`} />
+                    <span className="text-[11px] text-signal">Ready to open</span>
+                    <span className="h-1.5 w-1.5 rounded-full" style={moodDotStyle(entry.mood)} />
                   </div>
                   <p className="text-sm mt-1">{entry.title || "A sealed entry, now open"}</p>
                 </button>
@@ -607,13 +675,13 @@ export default function JournalPage() {
               {capsules.waiting.map((c) => (
                 <div key={c._id} className="surface p-2.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] text-white/50">
+                    <span className="text-[11px] text-ink/50">
                       Opens{" "}
                       {new Date(c.revealAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
                     </span>
-                    <span className={`h-1.5 w-1.5 rounded-full ${moodDotColors[c.mood] || "bg-white/30"}`} />
+                    <span className="h-1.5 w-1.5 rounded-full" style={moodDotStyle(c.mood)} />
                   </div>
-                  <p className="text-sm mt-1 text-white/50">Still sealed</p>
+                  <p className="text-sm mt-1 text-ink/50">Still sealed</p>
                 </div>
               ))}
             </div>
@@ -627,13 +695,13 @@ export default function JournalPage() {
           <button
             type="button"
             onClick={() => setView("history")}
-            className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 transition text-sm"
+            className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border border-ink/15 bg-ink/5 hover:bg-ink/10 transition text-sm"
           >
             <span className="inline-flex items-center gap-2">
               <BookOpen size={15} />
               Browse all entries
             </span>
-            <span className="text-white/55">&rarr;</span>
+            <span className="text-ink/55">&rarr;</span>
           </button>
 
           <MemorySearch presetQuery={searchPreset} />
@@ -645,12 +713,12 @@ export default function JournalPage() {
               three compact icon tabs pick which single card shows below,
               same "focus on one thing at a time" pattern as Health page's
               new tabs. */}
-          <div className="pt-4 border-t border-white/10">
+          <div className="pt-4 border-t border-ink/10">
             <h3 className="font-medium mb-3">Writing support</h3>
             {/* Plain text tabs (underline for the active one) instead of
                 colored, bordered, tinted buttons -- one accent color used
                 once (the active underline), not a different color per tab. */}
-            <div className="flex gap-4 border-b border-white/10">
+            <div className="flex gap-4 border-b border-ink/10">
               {supportTabs.map((t) => {
                 const active = supportTab === t.id;
                 return (
@@ -660,7 +728,7 @@ export default function JournalPage() {
                     onClick={() => setSupportTab(t.id)}
                     aria-pressed={active}
                     className={`pb-2 text-xs border-b-2 -mb-px transition ${
-                      active ? "border-[#8fae73] text-white" : "border-transparent text-white/60 hover:text-white/70"
+                      active ? "border-signal text-ink" : "border-transparent text-ink/60 hover:text-ink/70"
                     }`}
                   >
                     {t.label}
@@ -669,34 +737,38 @@ export default function JournalPage() {
               })}
             </div>
 
-            {supportTab === "prompt" && <p className="text-sm text-white/75 mt-3">{todaysPrompt()}</p>}
-
             {supportTab === "health" && (
               <div className="mt-3">
+                {/* gap-x-3 -- this sidebar column is even narrower than
+                    Dashboard's Health Snapshot card, and shows the exact
+                    same steps/stress fields that proved to collide there
+                    (e.g. a real 4-digit steps average like 8200 sitting
+                    right against the stress score with zero gap). Same
+                    fix, same reason. */}
                 {health ? (
-                  <div className="grid grid-cols-3">
+                  <div className="grid grid-cols-3 gap-x-3">
                     <div>
                       <p className="text-lg font-medium">{health.sleepHours ?? "--"}h</p>
-                      <p className="text-xs text-white/60 mt-0.5">Sleep</p>
+                      <p className="text-xs text-ink/60 mt-0.5">Sleep</p>
                     </div>
-                    <div className="border-l border-white/10 pl-3">
+                    <div className="border-l border-ink/10 pl-3">
                       <p className="text-lg font-medium">{health.steps ?? "--"}</p>
-                      <p className="text-xs text-white/60 mt-0.5">Steps</p>
+                      <p className="text-xs text-ink/60 mt-0.5">Steps</p>
                     </div>
-                    <div className="border-l border-white/10 pl-3">
+                    <div className="border-l border-ink/10 pl-3">
                       <p className="text-lg font-medium">{health.stressScore ?? "--"}</p>
-                      <p className="text-xs text-white/60 mt-0.5">Stress</p>
+                      <p className="text-xs text-ink/60 mt-0.5">Stress</p>
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-white/60">No health data logged yet.</p>
+                  <p className="text-sm text-ink/60">No health data logged yet.</p>
                 )}
               </div>
             )}
 
             {supportTab === "entry" && (
               <button type="button" onClick={() => setView("history")} className="block w-full text-left mt-3 group">
-                <p className="text-sm text-white/75 group-hover:text-white/95">
+                <p className="text-sm text-ink/75 group-hover:text-ink/95">
                   {relatedEntry
                     ? `${new Date(relatedEntry.createdAt).toDateString()}: ${relatedEntry.title || truncateAtWord(relatedEntry.content, 60) || "Untitled entry"}`
                     : "No previous entries yet."}
@@ -715,36 +787,48 @@ export default function JournalPage() {
           writing fuel ("what do you tend to write about"), and clicking one
           runs it through the semantic search in the sidebar above rather
           than just sitting there as decoration. Only rendered once there's
-          real data. */}
+          real data.
+          Previously each word rendered at a font size scaled 12px-28px by
+          frequency with no legend explaining why -- a real "why is 'work'
+          huge and 'gym' tiny" confusion, the classic problem with word
+          clouds as a data-viz choice. Same chip treatment History's tag
+          filter uses instead: one consistent size, frequency shown as an
+          actual number in a badge rather than implied by font size. */}
       {themeCloud.length > 0 && (
         <div className="max-w-6xl mx-auto mt-4">
           <div className="ui-card rounded-2xl p-5">
-            <p className="ui-kicker">What you write about</p>
-            <p className="text-xs text-white/50 mt-1">
-              Every recurring theme across your whole journal, sized by how often it shows up. Click one to search
-              for it.
-            </p>
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2 mt-4">
-              {themeCloud.map((t, i) => {
-                const max = themeCloud[0]?.count || 1;
-                const min = themeCloud[themeCloud.length - 1]?.count || 1;
-                const range = Math.max(1, max - min);
-                const scale = (t.count - min) / range; // 0..1
-                const size = 12 + Math.round(scale * 16); // 12px..28px
-                const opacity = 0.45 + scale * 0.5;
-                return (
-                  <button
-                    key={t.theme}
-                    type="button"
-                    onClick={() => setSearchPreset({ query: t.theme, token: Date.now() })}
-                    className="capitalize hover:text-white transition leading-none"
-                    style={{ fontSize: `${size}px`, color: `rgba(255,255,255,${opacity})` }}
-                    title={`${t.count} ${t.count === 1 ? "entry" : "entries"}`}
-                  >
-                    {t.theme.replace(/_/g, " ")}
-                  </button>
-                );
-              })}
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="ui-kicker">What you write about</p>
+                <p className="text-xs text-ink/50 mt-1">
+                  Your most recurring journal themes, most-written-about first. Click one to search for it.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={rebuildThemes}
+                disabled={rebuildingThemes}
+                title="Re-scan entries for themes using the current filter rules"
+                className="shrink-0 text-[11px] text-ink/45 hover:text-ink/75 disabled:opacity-50 whitespace-nowrap"
+              >
+                {rebuildingThemes ? "Rebuilding…" : "Rebuild"}
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2 mt-4">
+              {themeCloud.map((t) => (
+                <button
+                  key={t.theme}
+                  type="button"
+                  onClick={() => setSearchPreset({ query: t.theme, token: Date.now() })}
+                  className="inline-flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-lg border border-ink/10 bg-ink/5 hover:bg-ink/10 hover:border-ink/20 transition text-sm capitalize"
+                  title={`${t.count} ${t.count === 1 ? "entry" : "entries"}`}
+                >
+                  {t.theme.replace(/_/g, " ")}
+                  <span className="ui-mono text-[10px] leading-none px-1.5 py-0.5 rounded-full bg-ink/10 text-ink/50">
+                    {t.count}
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -807,7 +891,7 @@ function MemorySearch({ presetQuery }) {
   return (
     <div className="space-y-3">
       <h3 className="font-medium">Search your memories</h3>
-      <p className="text-xs text-white/60">
+      <p className="text-xs text-ink/60">
         Search by meaning, not exact words -- "struggling to focus at work" can find entries that never say those
         words.
       </p>
@@ -825,23 +909,23 @@ function MemorySearch({ presetQuery }) {
 
       {error && <p className="text-xs text-red-300">{error}</p>}
       {mode === "unavailable" && (
-        <p className="text-xs text-white/50">
+        <p className="text-xs text-ink/50">
           Semantic search isn't set up for your entries yet -- run the embedding backfill on the server
           (`npm run embed-journals`).
         </p>
       )}
-      {mode === "no_match" && <p className="text-xs text-white/50">No closely related entries found for that.</p>}
+      {mode === "no_match" && <p className="text-xs text-ink/50">No closely related entries found for that.</p>}
 
       {results.length > 0 && (
         <div className="space-y-2">
           {results.map((r) => (
             <div key={r.id} className="surface p-2.5">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-[11px] text-white/50">{new Date(r.createdAt).toLocaleDateString()}</p>
-                <span className="text-[10px] text-white/55">{Math.round(r.score * 100)}% match</span>
+                <p className="text-[11px] text-ink/50">{new Date(r.createdAt).toLocaleDateString()}</p>
+                <span className="text-[10px] text-ink/55">{Math.round(r.score * 100)}% match</span>
               </div>
               <p className="text-sm mt-1">{r.title || truncateAtWord(r.excerpt, 90)}</p>
-              {r.title && <p className="text-xs text-white/60 mt-0.5">{truncateAtWord(r.excerpt, 90)}</p>}
+              {r.title && <p className="text-xs text-ink/60 mt-0.5">{truncateAtWord(r.excerpt, 90)}</p>}
             </div>
           ))}
         </div>

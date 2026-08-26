@@ -7,7 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import FirstTimeTip from "../components/FirstTimeTip";
 import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
 import { suggestMoodFromText } from "../utils/moodSuggestion";
-import { MOODS as moodOptions, MOOD_BG_CLASS } from "../utils/moodColors";
+import { MOODS as moodOptions, moodDotStyle } from "../utils/moodColors";
 
 // Quick-journal draft autosave -- same pattern JournalPage's composer uses
 // (see DRAFT_KEY there), so switching away from Chat mid-thought doesn't
@@ -62,9 +62,9 @@ const quickPrompts = [
 // (#a989b2 / #84689d) used on Dashboard, the mood calendar, and the memory
 // globe for those exact two moods. Now pulled from the same shared
 // utils/moodColors.js every other page uses, one source of truth.
-const moodColor = Object.fromEntries(
-  Object.keys(MOOD_BG_CLASS).map((mood) => [mood, `${MOOD_BG_CLASS[mood]}/80`])
-);
+// (moodDotStyle imported above -- inline style, not a runtime-built Tailwind
+// class string, since Tailwind can't generate CSS for classes assembled at
+// runtime.)
 export default function ChatPage() {
   const { user } = useAuth();
   const location = useLocation();
@@ -331,22 +331,47 @@ export default function ChatPage() {
 
   return (
     <div
-      className={`text-white flex flex-col theme-${themeMode} ${
+      className={`text-ink flex flex-col theme-${themeMode} ${
         ambientOn ? "living-bg" : ""
       }`}
     >
       <main className="p-3 md:p-6">
         <motion.div
-          className="max-w-7xl mx-auto grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4 h-full"
+          // Was CSS Grid with an implicit auto row -- an item that asks to
+          // fill its row via h-full (the chat section) still gets the ROW
+          // sized to the tallest column's natural content height first
+          // (the sidebar, easily 1000px+ with a full emotional-timeline
+          // list), THEN stretches to match -- so the "fixed height" section
+          // was actually inheriting the sidebar's full content height and
+          // rendering ~1800px tall with the composer pushed off past the
+          // bottom of the visible page, invisible and unreachable. Flexbox
+          // doesn't have that content-driven row-sizing step: a flex
+          // container with a definite height stretches its children to
+          // exactly that height, full stop. Fixed height (and therefore
+          // internal scrolling) is xl+ only -- below that the two columns
+          // stack and behave like a normal page instead of fighting a
+          // forced viewport height on a narrow screen.
+          className="max-w-7xl mx-auto flex flex-col xl:flex-row gap-4 xl:h-[calc(100vh-3.5rem)]"
           variants={reducedMotion ? staticPageVariants : pageVariants}
           initial="hidden"
           animate="visible"
         >
-          <section className={`glass rounded-2xl flex flex-col min-h-[70vh] ${toneClass}`}>
-            <div className="p-4 md:p-5 border-b border-white/10 flex items-center justify-between gap-3">
+          {/* Was min-h-[70vh] -- a FLOOR, not a ceiling, so the section just
+              kept growing taller as the transcript grew instead of ever
+              actually using its own scrollbar. A long-running conversation
+              (the "I had like a hundred chats with the bot and then I
+              could not scroll it" case) turned the whole page into one
+              enormous column, with the composer drifting further and
+              further down instead of staying put. Now a real chat-app
+              layout: this pane is height-capped to the viewport and
+              overflow-hidden, so only the transcript below scrolls --
+              header and composer stay fixed in place no matter how long
+              the conversation gets. */}
+          <section className={`glass rounded-2xl flex flex-col overflow-hidden xl:h-full xl:flex-1 xl:min-w-0 ${toneClass}`}>
+            <div className="p-4 md:p-5 border-b border-ink/10 flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm text-white/80">{heroGreeting}, {user?.name}</p>
-                <p className="text-xs text-white/60 mt-1">{smartPrompt}</p>
+                <p className="text-base text-ink/85">{heroGreeting}, {user?.name}</p>
+                <p className="text-sm text-ink/60 mt-1">{smartPrompt}</p>
               </div>
               <div className="flex items-center gap-2">
                 {/* Was a raw "Confidence 73%" badge -- reads like exposed
@@ -355,7 +380,7 @@ export default function ChatPage() {
                     before you'd even sent a message. Now a plain-language
                     label, shown only once there's an actual response. */}
                 {turns.length > 0 && (
-                  <span className="text-xs px-3 py-1 rounded-full bg-[#8fae73]/25 border border-[#c5d7a6]/35">
+                  <span className="text-xs px-3 py-1 rounded-full bg-signal/25 border border-ember-soft/35">
                     {confidenceLabel(meta.confidence)}
                   </span>
                 )}
@@ -365,13 +390,13 @@ export default function ChatPage() {
                     onClick={newChat}
                     disabled={resettingChat}
                     title="Clear this conversation and start fresh"
-                    className="text-xs px-3 py-1 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 inline-flex items-center gap-1.5 disabled:opacity-50"
+                    className="text-xs px-3 py-1 rounded-full bg-ink/5 border border-ink/10 hover:bg-ink/10 inline-flex items-center gap-1.5 disabled:opacity-50"
                   >
                     <RotateCcw size={11} />
                     New chat
                   </button>
                 )}
-                <Link to="/dashboard" className="text-xs px-3 py-1 rounded-full bg-white/5 border border-white/10 hover:bg-white/10">
+                <Link to="/dashboard" className="text-xs px-3 py-1 rounded-full bg-ink/5 border border-ink/10 hover:bg-ink/10">
                   Home
                 </Link>
               </div>
@@ -381,18 +406,18 @@ export default function ChatPage() {
                 sit above the composer before a single message was even
                 sent. Expanding reveals the exact same controls this used to
                 show unconditionally. */}
-            <div className="px-4 md:px-5 py-2.5 border-b border-white/10">
+            <div className="px-4 md:px-5 py-2.5 border-b border-ink/10">
               <button
                 type="button"
                 onClick={() => setSettingsOpen((v) => !v)}
                 aria-expanded={settingsOpen}
-                className="w-full flex items-center justify-between gap-2 text-xs text-white/70 hover:text-white transition"
+                className="w-full flex items-center justify-between gap-2 text-sm text-ink/75 hover:text-ink transition"
               >
                 <span className="inline-flex items-center gap-2">
-                  <SlidersHorizontal size={13} className="text-white/55" />
+                  <SlidersHorizontal size={14} className="text-ink/55" />
                   {activeModeLabel} · {activePersonaLabel}
                 </span>
-                <ChevronDown size={14} className={`text-white/55 transition-transform ${settingsOpen ? "rotate-180" : ""}`} />
+                <ChevronDown size={14} className={`text-ink/55 transition-transform ${settingsOpen ? "rotate-180" : ""}`} />
               </button>
 
               {settingsOpen && (
@@ -408,10 +433,10 @@ export default function ChatPage() {
                         type="button"
                         onClick={() => setChatMode(item.id)}
                         aria-pressed={chatMode === item.id}
-                        className={`text-xs px-3 py-2 rounded-full border ${
+                        className={`text-sm px-3 py-2 rounded-full border ${
                           chatMode === item.id
-                            ? "bg-[#8fae73]/30 border-[#c5d7a6]"
-                            : "bg-white/5 border-white/10 hover:bg-white/10"
+                            ? "bg-signal/30 border-ember-soft"
+                            : "bg-ink/5 border-ink/10 hover:bg-ink/10"
                         }`}
                       >
                         {item.label}
@@ -430,10 +455,10 @@ export default function ChatPage() {
                         onClick={() => setPersona(p.id)}
                         aria-pressed={persona === p.id}
                         title={p.detail}
-                        className={`text-xs px-3 py-2 rounded-full border ${
+                        className={`text-sm px-3 py-2 rounded-full border ${
                           persona === p.id
                             ? "bg-[#a989b2]/25 border-[#a989b2]/60"
-                            : "bg-white/5 border-white/10 hover:bg-white/10"
+                            : "bg-ink/5 border-ink/10 hover:bg-ink/10"
                         }`}
                       >
                         {p.label}
@@ -441,16 +466,16 @@ export default function ChatPage() {
                     ))}
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-3 items-center">
-                    <label className="text-xs text-white/70 flex items-center gap-2">
+                    <label className="text-sm text-ink/70 flex items-center gap-2">
                       <input
                         type="checkbox"
                         checked={useMemory}
                         onChange={(e) => setUseMemory(e.target.checked)}
-                        className="accent-[#8fae73]"
+                        className="accent-signal"
                       />
                       Use journal memory
                     </label>
-                    <label className="text-xs text-white/70 flex items-center gap-2">
+                    <label className="text-sm text-ink/70 flex items-center gap-2">
                       <span className="shrink-0">Response style</span>
                       <input
                         className="w-full"
@@ -460,7 +485,7 @@ export default function ChatPage() {
                         value={responseStyle}
                         onChange={(e) => setResponseStyle(Number(e.target.value))}
                       />
-                      <span className="text-[11px] text-white/55 shrink-0">
+                      <span className="text-xs text-ink/55 shrink-0">
                         {responseStyle < 35 ? "Very gentle" : responseStyle < 70 ? "Balanced" : "Analytical"}
                       </span>
                     </label>
@@ -474,9 +499,9 @@ export default function ChatPage() {
                 of the conversation so far rather than competing with any
                 single message. */}
             {conversationTopics.length > 0 && (
-              <div className="px-4 md:px-5 py-2 border-b border-white/10">
-                <p className="text-[11px] text-white/60">
-                  So far: <span className="text-white/70">{conversationTopics.join(", ")}</span>
+              <div className="px-4 md:px-5 py-2 border-b border-ink/10">
+                <p className="text-xs text-ink/60">
+                  So far: <span className="text-ink/70">{conversationTopics.join(", ")}</span>
                 </p>
               </div>
             )}
@@ -486,7 +511,7 @@ export default function ChatPage() {
                 <button
                   type="button"
                   onClick={() => setMessage(lastUserThread)}
-                  className="w-full text-left text-xs rounded-xl px-3 py-2 bg-white/5 border border-white/10 hover:bg-white/10"
+                  className="w-full text-left text-sm rounded-xl px-3 py-2 bg-ink/5 border border-ink/10 hover:bg-ink/10"
                 >
                   Continue thread: "{lastUserThread.slice(0, 90)}{lastUserThread.length > 90 ? "..." : ""}"
                 </button>
@@ -495,30 +520,30 @@ export default function ChatPage() {
 
             <div ref={listRef} className="flex-1 overflow-y-auto scroll-area p-4 md:p-6 space-y-4">
               {turns.length === 0 && (
-                <div className="text-sm text-white/75 glass rounded-2xl p-4 max-w-2xl">
+                <div className="text-[15px] leading-7 text-ink/75 glass rounded-2xl p-4 max-w-2xl">
                   Start with anything. ReflectAI will respond like a normal chat and adapt as your topic changes.
                 </div>
               )}
 
               {turns.map((turn, idx) => (
                 <motion.div key={idx} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2">
-                  <div className="rounded-2xl p-3 max-w-2xl ml-auto bg-[#8fae73]/30 soft-border">
-                    <p className="text-[11px] text-[#d9d2b0] mb-1">You</p>
-                    <p className="text-sm leading-6">{turn.userMessage}</p>
+                  <div className="rounded-2xl p-3 max-w-2xl ml-auto bg-signal/30 soft-border">
+                    <p className="text-xs text-signal mb-1">You</p>
+                    <p className="text-[15px] leading-7">{turn.userMessage}</p>
                   </div>
                   <div className="glass rounded-2xl p-4 max-w-2xl">
-                    <p className="text-[11px] text-[#d9d2b0] mb-1">ReflectAI</p>
-                    <p className="text-sm leading-6">{turn.aiResponse}</p>
+                    <p className="text-xs text-signal mb-1">ReflectAI</p>
+                    <p className="text-[15px] leading-7">{turn.aiResponse}</p>
                     {turn.evidence?.length > 0 && (
-                      <details className="mt-3 rounded-lg bg-black/30 p-2 border border-white/10 text-xs">
-                        <summary className="cursor-pointer text-[#d9d2b0]">Why this response</summary>
+                      <details className="mt-3 rounded-lg bg-paper-sunken p-2 border border-ink/10 text-sm">
+                        <summary className="cursor-pointer text-signal">Why this response</summary>
                         <div className="mt-2 grid gap-2">
                           {turn.evidence.map((ev, i) => (
-                            <div key={i} className="rounded-lg bg-white/5 p-2 border border-white/10">
-                              <p className="text-[#d9d2b0]">
+                            <div key={i} className="rounded-lg bg-ink/5 p-2 border border-ink/10">
+                              <p className="text-signal text-xs">
                                 {ev.date ? new Date(ev.date).toDateString() : "Journal evidence"}
                               </p>
-                              <p className="text-white/80">{ev.quote || "Related journal reference."}</p>
+                              <p className="text-ink/80">{ev.quote || "Related journal reference."}</p>
                             </div>
                           ))}
                         </div>
@@ -529,16 +554,16 @@ export default function ChatPage() {
               ))}
               {loading && (
                 <div className="glass rounded-2xl p-3 max-w-2xl">
-                  <p className="text-[11px] text-[#d9d2b0] mb-1">ReflectAI</p>
+                  <p className="text-xs text-signal mb-1">ReflectAI</p>
                   {/* Was a static "Thinking..." line -- an animated indicator
                       reads as more alive while an actual response is being
                       generated. */}
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-white/70">{statusText || "Thinking"}</span>
+                    <span className="text-sm text-ink/70">{statusText || "Thinking"}</span>
                     <span className="flex items-center gap-1">
-                      <span className="typing-dot h-1.5 w-1.5 rounded-full bg-[#c5d7a6]" />
-                      <span className="typing-dot h-1.5 w-1.5 rounded-full bg-[#c5d7a6]" />
-                      <span className="typing-dot h-1.5 w-1.5 rounded-full bg-[#c5d7a6]" />
+                      <span className="typing-dot h-1.5 w-1.5 rounded-full bg-ember-soft" />
+                      <span className="typing-dot h-1.5 w-1.5 rounded-full bg-ember-soft" />
+                      <span className="typing-dot h-1.5 w-1.5 rounded-full bg-ember-soft" />
                     </span>
                   </div>
                 </div>
@@ -546,14 +571,14 @@ export default function ChatPage() {
               <div ref={endRef} />
             </div>
 
-            <div className="border-t border-white/10 p-4 md:p-5 space-y-3">
+            <div className="border-t border-ink/10 p-4 md:p-5 space-y-3">
               <div className="flex flex-wrap gap-2">
                 {quickPrompts.map((prompt) => (
                   <button
                     key={prompt}
                     type="button"
                     onClick={() => useQuickPrompt(prompt)}
-                    className="text-xs px-3 py-2 rounded-full bg-white/5 border border-white/10 hover:bg-[#8fae73]/20"
+                    className="text-sm px-3 py-2 rounded-full bg-ink/5 border border-ink/10 hover:bg-signal/20"
                   >
                     {prompt}
                   </button>
@@ -564,7 +589,7 @@ export default function ChatPage() {
                   rows={2}
                   // .ui-input -- same composer treatment JournalPage's
                   // textarea uses, instead of a one-off hardcoded
-                  // bg-[#1f2a22]/border-white/10 combo that looked like a
+                  // bg-[#1f2a22]/border-ink/10 combo that looked like a
                   // different, unstyled input next to the rest of the app.
                   className={`ui-input flex-1 resize-none min-h-11 ${
                     writingMode === "typewriter" ? "text-lg leading-8" : ""
@@ -581,16 +606,21 @@ export default function ChatPage() {
                   Send
                 </button>
               </form>
-              <p className="text-xs text-white/60">
+              <p className="text-xs text-ink/60">
                 ReflectAI supports self-reflection and is not a medical service.
               </p>
             </div>
           </section>
 
-          <aside className="glass rounded-2xl p-4 md:p-5 h-fit xl:sticky xl:top-6 space-y-4">
+          {/* Own independent scroll, same as the section -- previously
+              sticky/h-fit (fine when the page scrolled normally, but that
+              was the whole problem). At xl this is a fixed-width column
+              that scrolls internally rather than pushing the section's
+              height around. */}
+          <aside className="glass rounded-2xl p-4 md:p-5 space-y-4 xl:w-80 xl:shrink-0 xl:h-full xl:overflow-y-auto scroll-area">
             <div className="flex items-center gap-2">
-              <PenSquare size={15} className="text-white/50" />
-              <p className="text-sm font-medium">Quick journal</p>
+              <PenSquare size={16} className="text-ink/50" />
+              <p className="text-base font-medium">Quick journal</p>
             </div>
             <FirstTimeTip id="chat-quickjournal-keepsake">
               This composer now supports Keepsakes too -- flag an entry here the same way you can from Write.
@@ -608,9 +638,9 @@ export default function ChatPage() {
               <button
                 type="button"
                 onClick={() => setMood(suggestedQuickMood)}
-                className="w-full text-left text-xs rounded-lg px-3 py-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white/70"
+                className="w-full text-left text-sm rounded-lg px-3 py-2 bg-ink/5 border border-ink/10 hover:bg-ink/10 text-ink/70"
               >
-                This reads as <span className="capitalize text-white">{suggestedQuickMood}</span> to me. Use it?
+                This reads as <span className="capitalize text-ink">{suggestedQuickMood}</span> to me. Use it?
               </button>
             )}
             {/* Compact circle row instead of a 2-col grid of full-width
@@ -628,13 +658,14 @@ export default function ChatPage() {
                     onClick={() => setMood(m)}
                     aria-pressed={mood === m}
                     title={moodMeta[m]?.label || m}
+                    style={moodDotStyle(m, 0.8)}
                     className={`h-9 w-9 rounded-full flex items-center justify-center border-2 transition ${
-                      mood === m ? "border-white/70 scale-110" : "border-transparent opacity-70 hover:opacity-100"
-                    } ${moodColor[m] || "bg-white/40"}`}
+                      mood === m ? "border-ink/70 scale-110" : "border-transparent opacity-70 hover:opacity-100"
+                    }`}
                   />
                 ))}
               </div>
-              <p className="text-xs text-white/60 text-center mt-2 capitalize">{moodMeta[mood]?.label || mood}</p>
+              <p className="text-sm text-ink/65 text-center mt-2 capitalize">{moodMeta[mood]?.label || mood}</p>
             </div>
             {/* Same opt-in Keepsake flag Write's composer has -- previously
                 saving from here always produced a plain entry with no way
@@ -643,13 +674,13 @@ export default function ChatPage() {
               type="button"
               onClick={() => setIsKeepsake((v) => !v)}
               aria-pressed={isKeepsake}
-              className={`w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl border text-xs transition ${
+              className={`w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl border text-sm transition ${
                 isKeepsake
-                  ? "border-[#e8ab5f]/60 bg-[#e8ab5f]/15 text-white"
-                  : "border-white/15 bg-white/5 text-white/60 hover:border-white/25 hover:text-white/85"
+                  ? "border-[#e8ab5f]/60 bg-[#e8ab5f]/15 text-ink"
+                  : "border-ink/15 bg-ink/5 text-ink/60 hover:border-ink/25 hover:text-ink/85"
               }`}
             >
-              <Sparkles size={12} className={isKeepsake ? "text-[#e8ab5f]" : "text-white/55"} />
+              <Sparkles size={12} className={isKeepsake ? "text-[#e8ab5f]" : "text-ink/55"} />
               {isKeepsake ? "Saving as a Keepsake" : "Save as a Keepsake"}
             </button>
             <button
@@ -661,15 +692,15 @@ export default function ChatPage() {
               {savingQuickEntry ? "Saving..." : "Save journal entry"}
             </button>
             {quickEntryStatus && (
-              <p className={`text-xs ${quickEntryStatus.startsWith("Saved") ? "text-[#c5d7a6]" : "text-red-300"}`}>
+              <p className={`text-sm ${quickEntryStatus.startsWith("Saved") ? "text-ember-soft" : "text-red-300"}`}>
                 {quickEntryStatus}
               </p>
             )}
 
-            <div className="border-t border-white/10 pt-4 space-y-3">
+            <div className="border-t border-ink/10 pt-4 space-y-3">
               <div className="flex items-center gap-2">
-                <Feather size={15} className="text-white/50" />
-                <p className="text-sm font-medium">Emotional timeline</p>
+                <Feather size={16} className="text-ink/50" />
+                <p className="text-base font-medium">Emotional timeline</p>
               </div>
               {/* One horizontal scrollable strip instead of two separate
                   elements (a bar-chart sparkline, then a whole separate
@@ -687,26 +718,26 @@ export default function ChatPage() {
                       title={`${new Date(entry.createdAt).toDateString()} • ${entry.mood}`}
                       onClick={() => setSelectedEntryId(entry._id)}
                       className={`shrink-0 flex flex-col items-center gap-1.5 rounded-lg px-2.5 py-2 transition ${
-                        active ? "bg-white/10" : "hover:bg-white/5"
+                        active ? "bg-ink/10" : "hover:bg-ink/5"
                       }`}
                     >
-                      <span className={`h-1.5 w-1.5 rounded-full ${moodColor[entry.mood] || "bg-white/40"}`} />
-                      <span className="text-[10px] text-white/50 whitespace-nowrap">
+                      <span className="h-1.5 w-1.5 rounded-full" style={moodDotStyle(entry.mood, 0.8)} />
+                      <span className="text-xs text-ink/55 whitespace-nowrap">
                         {new Date(entry.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                       </span>
                     </button>
                   );
                 })}
                 {recentEntries.length === 0 && (
-                  <p className="text-xs text-white/55 py-2 italic">Nothing here yet -- your first entry will show up as a chip.</p>
+                  <p className="text-sm text-ink/55 py-2 italic">Nothing here yet -- your first entry will show up as a chip.</p>
                 )}
               </div>
               {selectedEntry && (
-                <div className="rounded-xl p-3 bg-black/30 border border-white/10">
-                  <p className="text-[11px] text-[#d9d2b0]">
+                <div className="rounded-xl p-3 bg-paper-sunken border border-ink/10">
+                  <p className="text-xs text-signal">
                     {new Date(selectedEntry.createdAt).toDateString()} • {selectedEntry.mood}
                   </p>
-                  <p className="text-sm text-white/85 mt-1">{selectedEntry.content}</p>
+                  <p className="text-sm text-ink/85 mt-1">{selectedEntry.content}</p>
                 </div>
               )}
             </div>

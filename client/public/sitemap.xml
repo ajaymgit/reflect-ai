@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Only the routes that are actually reachable without an account --
+     everything else lives behind auth and has no business being indexed
+     or crawled (see robots.txt, which disallows the whole site anyway).
+     Kept present rather than omitted so an explicit "nothing to see here"
+     beats a 404 for any tooling that checks for one. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>__SITE_URL__/login</loc>
+  </url>
+  <url>
+    <loc>__SITE_URL__/register</loc>
+  </url>
+</urlset>

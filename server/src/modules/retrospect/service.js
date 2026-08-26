@@ -17,6 +17,10 @@ import { logError, logInfo } from "../../shared/utils/logger.js";
 const useOllama = String(env.USE_OLLAMA || "true").toLowerCase() !== "false";
 const ollamaBaseUrl = env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
 const ollamaModel = env.OLLAMA_MODEL || "llama3.2:3b";
+// See chat/service.js's identical constant -- only set when OLLAMA_BASE_URL
+// points at Ollama's hosted API (https://ollama.com) rather than a local
+// instance.
+const ollamaAuthHeaders = env.OLLAMA_API_KEY ? { Authorization: `Bearer ${env.OLLAMA_API_KEY}` } : {};
 
 // How long a generated analysis stays "fresh" before the next page load
 // triggers a regeneration. Keeps Retrospect responsive to new journal
@@ -67,7 +71,7 @@ function validatePayload(payload) {
 async function callOllama(prompt) {
   const response = await fetchWithTimeout(`${ollamaBaseUrl}/api/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...ollamaAuthHeaders },
     body: JSON.stringify({
       model: ollamaModel,
       stream: false,

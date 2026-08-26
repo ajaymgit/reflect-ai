@@ -2,28 +2,75 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   DESIGN SYSTEM -- v3
+   Warm ivory paper base, cobalt "signal" as the primary/action
+   accent, coral "ember" reserved for emphasis. This deliberately
+   replaces the earlier dark near-black + clay/gold system: base,
+   accent, type, AND shape language all change together here so the
+   app reads as a genuinely different build, not a recolored one.
+   Shapes are sharp and flat -- small radii, solid 1-2px borders,
+   real drop shadows instead of blur/glow -- see tailwind.config.js
+   for the color/font/radius tokens this references, and the CSS
+   variables below for the parts Settings -> Appearance still needs
+   to override live (--user-dark/--user-light).
+   ============================================================ */
+
+/* ---- Theme tokens ----
+   RGB-triplet custom properties (not hex) so Tailwind's `<alpha-value>`
+   opacity-modifier mechanism works on them (see tailwind.config.js). Every
+   `bg-paper`, `text-ink`, `bg-signal`, `text-ember`, etc. class in the app,
+   plus every hardcoded `rgb(var(--x))` reference in this file, resolves
+   through these -- so the single override block below (midnight mode) is
+   enough to re-theme cards, buttons, inputs, and page chrome everywhere at
+   once, no `dark:` variant needed on individual components. */
+:root {
+  --paper: 244 239 226; /* #F4EFE2 warm ivory */
+  --paper-raised: 255 255 255; /* #FFFFFF */
+  --paper-sunken: 232 224 203; /* #E8E0CB */
+  --ink: 23 20 15; /* #17140F */
+  --signal: 61 79 209; /* #3D4FD1 */
+  --signal-soft: 139 149 232; /* #8B95E8 */
+  --signal-deep: 37 47 143; /* #252F8F */
+  --ember: 225 80 44; /* #E1502C */
+  --ember-soft: 244 169 138; /* #F4A98A */
+}
+
+/* Midnight -- a deep forest-green dark mode, not the generic near-black
+   "invert the ivory" swap this used to be. Only the 9 tokens above change;
+   every surface/text/accent in the app inherits from them. Signal and
+   ember both shift a step brighter/softer than their light-mode values --
+   the light-mode hexes read muddy against a dark green base rather than
+   the warm ivory they were tuned for. */
+body[data-theme-mode="midnight"] {
+  --paper: 14 26 20; /* #0E1A14 */
+  --paper-raised: 20 36 28; /* #14241C */
+  --paper-sunken: 9 18 14; /* #09120E */
+  --ink: 232 237 226; /* #E8EDE2 */
+  --signal: 129 145 240; /* #8191F0 */
+  --signal-soft: 178 188 245; /* #B2BCF5 */
+  --signal-deep: 82 96 214; /* #5260D6 */
+  --ember: 237 137 103; /* #ED8967 */
+  --ember-soft: 247 189 163; /* #F7BDA3 */
+}
+
 body {
-  /* --user-dark/--user-light (+ derived --user-light-soft/--user-light-glow)
-     are only ever set (via inline style on <html>) once someone actually
-     drags a slider in Settings -> Appearance -- until then these vars are
-     unset and the var() fallbacks below keep the original look exactly as
-     it was. */
-  background: var(--user-dark, #0f172a);
-  color: #f8fafc;
-  font-family: Manrope, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  /* --user-dark/--user-light (+ derived soft/glow variants) are only ever
+     set (via inline style on <html>, see SettingsPage.jsx) once someone
+     actually drags the Appearance hue slider -- until then these fall back
+     to the current theme's own paper/ink tokens above. */
+  background: var(--user-dark, rgb(var(--paper)));
+  color: rgb(var(--ink));
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   margin: 0;
 }
 
-/* Every heading tag, not just .ui-title -- a lot of card headers in this app
-   use plain <h3 className="font-medium"> rather than the .ui-title class, so
-   scoping this to element selectors (rather than only .ui-title below) gives
-   the whole app a consistent typographic identity instead of just the page
-   titles. */
 h1,
 h2,
 h3,
 h4 {
-  font-family: Fraunces, Georgia, serif;
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  font-weight: 700;
 }
 
 #root {
@@ -34,98 +81,185 @@ h4 {
   box-sizing: border-box;
 }
 
-.glass {
-  background: rgba(32, 45, 38, 0.58);
-  border: 1px solid rgba(168, 184, 156, 0.24);
-  backdrop-filter: blur(12px);
+/* ---- Surfaces ---- */
+
+/* color set explicitly (not inherited) -- these surfaces are always a light
+   ivory/white card even when body[data-theme-mode="midnight"] switches the
+   page background dark and sets body's own text color light for the areas
+   outside cards, so text inside a card never silently inherits an
+   illegible light-on-light color from its ancestor. */
+.ui-card {
+  border-radius: 0.375rem;
+  border: 1px solid rgb(var(--ink) / 0.12);
+  background: rgb(var(--paper-raised));
+  color: rgb(var(--ink));
+  box-shadow: 0 1px 0 rgb(var(--ink) / 0.04);
+}
+
+/* Hierarchy signal for the single "main event" card per page is now a
+   thick colored left border, not a bigger radius -- a completely different
+   mechanism than the old soft-glass system, and one that reads clearly at
+   a glance even in a screenshot thumbnail. */
+.ui-card-hero {
+  border-radius: 0.375rem;
+  border: 1px solid rgb(var(--ink) / 0.12);
+  border-left: 5px solid var(--user-light, rgb(var(--signal)));
+  background: rgb(var(--paper-raised));
+  color: rgb(var(--ink));
+  box-shadow: 0 4px 16px rgb(var(--ink) / 0.08);
+}
+
+.ui-strip {
+  border-radius: 0.125rem;
+  border-top: 1px solid rgb(var(--ink) / 0.1);
 }
 
 .surface {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 1rem;
+  background: rgb(var(--ink) / 0.03);
+  border: 1px solid rgb(var(--ink) / 0.12);
+  border-radius: 0.375rem;
 }
 
-.ui-card {
-  border-radius: 1rem;
-  border: 1px solid rgba(168, 184, 156, 0.24);
-  background: rgba(32, 45, 38, 0.54);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 8px 30px rgba(8, 14, 10, 0.25);
-}
+/* ---- Typography ---- */
 
-.ui-title {
-  font-size: clamp(1.35rem, 2.4vw, 2rem);
-  line-height: 1.2;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+/* @layer components (not raw/unlayered) -- these two are meant to be
+   overridable by a Tailwind text-size utility on the same element (e.g.
+   `ui-hero-number text-3xl` throughout Dashboard/Retrospect/Health, or
+   `ui-title text-xl` in Onboarding/StreakMilestone/Year in Review) whenever
+   the default clamp() scale isn't the right fit for a smaller/denser
+   layout. That never actually worked: every custom class in this file is
+   plain, unlayered CSS, and CSS Cascade Layers rules put unlayered styles
+   ABOVE every `@layer`-wrapped style -- including Tailwind's own utilities,
+   which Tailwind wraps in `@layer utilities` internally -- regardless of
+   which one comes later in the file. So `text-3xl` (1.875rem) was silently
+   always losing to this class's own clamp(3rem, 8vw, 5rem) (48-80px),
+   everywhere in the app, no matter the source order. Concretely: Dashboard's
+   Health Snapshot card rendered "avg steps" (8200) and "stress score" (43)
+   at ~80px instead of the intended ~30px, wide enough to visually overflow
+   into each other and read as one number, "820043". Wrapping just these two
+   classes in @layer components (not the rest of this file, to keep the fix
+   scoped to the confirmed, reproduced bug) makes Tailwind's utility layer
+   correctly outrank them again, matching how every call site already
+   assumed this worked. Anywhere these classes are used alone, with no
+   competing text-size utility, this changes nothing -- the clamp() default
+   still applies exactly as before. */
+@layer components {
+  .ui-title {
+    font-family: "Space Grotesk", system-ui, sans-serif;
+    font-size: clamp(1.35rem, 2.4vw, 2rem);
+    line-height: 1.15;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  /* The single most important number on a given page -- much wider scale
+     than any other text tier. Space Grotesk numerals are tabular/geometric,
+     so this reads as a stamped headline figure instead of an airy serif
+     display numeral -- a different visual effect from the old
+     .ui-hero-number. */
+  .ui-hero-number {
+    font-family: "Space Grotesk", system-ui, sans-serif;
+    font-size: clamp(3rem, 8vw, 5rem);
+    line-height: 0.92;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+  }
 }
 
 .ui-kicker {
-  color: #d9d2b0;
+  color: var(--user-light, rgb(var(--signal)));
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 0.72rem;
-  /* Monospace rather than Manrope -- kickers are always metadata ("Your
-     journal", "Year in review", stat labels), and a monospace face is the
-     established editorial convention for signaling "this is data/label
-     text" at a glance, distinct from both the serif headings and the
-     sans-serif body copy that follow it. One CSS change, applies everywhere
-     .ui-kicker is already used. */
-  font-family: "IBM Plex Mono", ui-monospace, "SF Mono", monospace;
+  letter-spacing: 0.1em;
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-family: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
 }
 
-/* For dates, counts, and other small data values sprinkled through cards
-   (entry timestamps, stat numbers' units, tag chips) -- same rationale as
-   .ui-kicker above, offered as a standalone utility for spots that aren't
-   already a kicker. */
 .ui-mono {
-  font-family: "IBM Plex Mono", ui-monospace, "SF Mono", monospace;
+  font-family: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
   letter-spacing: -0.01em;
 }
 
+/* Editorial pull-quote -- left rule + oversized display quote mark, used for
+   the one generated-finding sentence on a page instead of boxing it in
+   another identical card. */
+.ui-quote {
+  position: relative;
+  padding: 0.15rem 0 0.15rem 1.4rem;
+  border-left: 3px solid var(--user-light, rgb(var(--signal)));
+}
+
+.ui-quote::before {
+  content: "\201C";
+  position: absolute;
+  left: -0.15rem;
+  top: -1.6rem;
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  font-size: 3.5rem;
+  line-height: 1;
+  color: var(--user-light, rgb(var(--signal)));
+  opacity: 0.35;
+}
+
+.ui-quote-text {
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  font-style: italic;
+  font-weight: 500;
+}
+
+:root {
+  --accent-ember: rgb(var(--ember));
+}
+
+.text-accent-ember {
+  color: var(--accent-ember);
+}
+
+.bg-accent-ember {
+  background: var(--accent-ember);
+}
+
+/* ---- Inputs ---- */
+
 .ui-input {
   width: 100%;
-  border-radius: 0.8rem;
-  background: rgba(16, 24, 20, 0.86);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  color: #f8fafc;
+  border-radius: 0.25rem;
+  background: rgb(var(--paper-raised));
+  border: 1.5px solid rgb(var(--ink) / 0.18);
+  color: rgb(var(--ink));
   padding: 0.78rem 0.9rem;
   outline: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
 .ui-input::placeholder {
-  color: rgba(248, 250, 252, 0.45);
+  color: rgb(var(--ink) / 0.4);
 }
 
 .ui-input:focus {
-  border-color: rgba(197, 215, 166, 0.9);
-  box-shadow: 0 0 0 3px rgba(143, 174, 115, 0.2);
+  border-color: rgb(var(--signal) / 0.9);
+  box-shadow: 0 0 0 3px rgb(var(--signal) / 0.16);
 }
 
-/* Chunky, pressable buttons -- a flat fill with a solid darker "lip" on the
-   bottom edge that compresses on click, instead of the previous subtle
-   gradient + hover-lift. This is the one change that upgrades every primary
-   button across the whole app at once (Dashboard's CTAs, Journal's save,
-   Chat's send, Settings' save, auth forms) without touching each page,
-   since they all already share these two classes. color-mix keeps the
-   pressed-edge shade tied to --user-light (the Settings -> Appearance hue
-   slider), same pattern already used for the active nav pill in
-   AppShell.jsx, so a custom accent color still gets a correctly-darkened
-   edge instead of a hardcoded one. */
+/* ---- Buttons ----
+   Flat fill, solid darker "lip" on the bottom edge that compresses on
+   click -- chunky and pressable, but with hard edges (no radius softness,
+   no gradient) so it reads as a distinct mechanism from the old system.
+   color-mix keeps the pressed-edge shade tied to --user-light (the
+   Appearance hue slider), so a custom accent still gets a correctly
+   darkened edge instead of a hardcoded one. */
 .ui-button-primary {
-  border-radius: 1rem;
+  border-radius: 0.25rem;
   border: none;
-  border-bottom: 4px solid color-mix(in srgb, var(--user-light, #8fae73) 55%, #0e1509 45%);
-  background: var(--user-light, #8fae73);
-  color: #16210f;
+  border-bottom: 4px solid color-mix(in srgb, var(--user-light, rgb(var(--signal))) 55%, #000 45%);
+  background: var(--user-light, rgb(var(--signal)));
+  color: #ffffff;
   font-weight: 700;
   transition: transform 0.08s ease, border-bottom-width 0.08s ease, filter 0.15s ease;
 }
 
 .ui-button-primary:hover {
-  filter: brightness(1.04);
+  filter: brightness(1.08);
 }
 
 .ui-button-primary:active {
@@ -139,41 +273,38 @@ h4 {
 }
 
 .ui-button-ghost {
-  border-radius: 1rem;
-  border: 2px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(248, 250, 252, 0.95);
+  border-radius: 0.25rem;
+  border: 1.5px solid rgb(var(--ink) / 0.22);
+  background: rgb(var(--ink) / 0.02);
+  color: rgb(var(--ink) / 0.85);
   font-weight: 600;
-  transition: transform 0.08s ease, border-color 0.15s ease;
+  transition: transform 0.08s ease, border-color 0.15s ease, background 0.15s ease;
 }
 
 .ui-button-ghost:hover {
-  border-color: rgba(255, 255, 255, 0.32);
+  border-color: rgb(var(--ink) / 0.4);
+  background: rgb(var(--ink) / 0.05);
 }
 
 .ui-button-ghost:active {
   transform: translateY(2px);
 }
 
-/* Same shape/press behavior as .ui-button-ghost, but rust-tinted for
-   destructive actions (log out everywhere, disable 2FA) -- previously these
-   used raw Tailwind red-400/red-500 (border-red-400/40 bg-red-500/10
-   text-red-200), a saturated red with no relationship to the rest of the
-   app's muted earth-tone palette. Uses the same rust (#c2574a) as
-   MOOD_HEX.angry, so "this is a warning" reads in the app's own color
-   language instead of a generic Bootstrap-style danger red. */
+/* Same shape/press behavior, rust-tinted for destructive actions -- ties to
+   MOOD_HEX.angry so "this is a warning" reads in the app's own color
+   language instead of a generic Bootstrap danger red. */
 .ui-button-danger {
-  border-radius: 1rem;
-  border: 2px solid rgba(194, 87, 74, 0.45);
-  background: rgba(194, 87, 74, 0.12);
-  color: #e2a89c;
+  border-radius: 0.25rem;
+  border: 1.5px solid rgba(194, 87, 74, 0.5);
+  background: rgba(194, 87, 74, 0.08);
+  color: #a3392e;
   font-weight: 600;
   transition: transform 0.08s ease, border-color 0.15s ease, background 0.15s ease;
 }
 
 .ui-button-danger:hover {
-  border-color: rgba(194, 87, 74, 0.7);
-  background: rgba(194, 87, 74, 0.2);
+  border-color: rgba(194, 87, 74, 0.8);
+  background: rgba(194, 87, 74, 0.14);
 }
 
 .ui-button-danger:active {
@@ -184,6 +315,8 @@ h4 {
   filter: grayscale(0.2);
   transform: none;
 }
+
+/* ---- Page chrome ---- */
 
 .ui-page {
   padding: 1rem;
@@ -196,23 +329,19 @@ h4 {
 }
 
 .soft-border {
-  border: 1px solid rgba(168, 184, 156, 0.32);
+  border: 1px solid rgb(var(--ink) / 0.16);
 }
 
-/* "Refined aurora": previously three overlapping, roughly-centered blobs
-   (coral/olive/purple) -- a very common AI-template background pattern, and
-   on top of that, Dashboard/Journal/Chat ALSO layer .living-bg's own two
-   mood blobs on top of this same background, so those three pages were
-   showing five blobs at once ("blob soup"). Down to two, placed in opposite
-   corners from .living-bg's blobs (which sit near the top) so color spreads
-   across the whole page instead of clustering, plus a faint grain layer so
-   it reads as a considered surface rather than a flat CSS gradient. */
+/* Flat paper texture instead of glowing corner blobs -- a faint grain layer
+   over the base surface only, no radial gradients. Reads as printed matter,
+   the opposite effect of the old system's ambient glow background. Uses the
+   same --paper token as everything else, so it automatically follows
+   whichever theme is active (see the `body[data-theme-mode="midnight"]`
+   variable override near the top of this file -- no separate dark-mode
+   rule needed here anymore). */
 .page-gradient {
   position: relative;
-  background:
-    radial-gradient(760px 640px at 105% 90%, rgba(210, 126, 86, 0.2), transparent 62%),
-    radial-gradient(700px 560px at -8% 105%, rgba(139, 167, 109, 0.16), transparent 65%),
-    var(--user-dark, #1b241f);
+  background: var(--user-dark, rgb(var(--paper)));
 }
 
 .page-gradient::after {
@@ -220,35 +349,14 @@ h4 {
   position: absolute;
   inset: 0;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  opacity: 0.05;
-  mix-blend-mode: overlay;
+  opacity: 0.035;
+  mix-blend-mode: multiply;
   pointer-events: none;
 }
 
-body[data-theme-mode="midnight"] {
-  background: #0f172a;
-  color: #f8fafc;
-}
-
-body[data-theme-mode="midnight"] .glass {
-  background: rgba(20, 28, 24, 0.66);
-  border: 1px solid rgba(146, 166, 139, 0.22);
-}
-
-body[data-theme-mode="midnight"] .page-gradient {
-  background:
-    radial-gradient(700px 600px at 105% 90%, rgba(210, 126, 86, 0.15), transparent 62%),
-    radial-gradient(660px 520px at -8% 105%, rgba(110, 145, 88, 0.12), transparent 65%),
-    var(--user-dark, #121a16);
-}
-
-.theme-daylight {
-  --ui-bg: #0f172a;
-}
-
-.theme-midnight {
-  --ui-bg: #09090b;
-}
+/* ---- Mood palette (functional -- these six map 1:1 to the app's mood enum
+   everywhere: dots, charts, heatmaps -- so they stay legible/distinct rather
+   than chasing the new base palette's hue) ---- */
 
 .mood-happy {
   --mood-primary: rgba(232, 171, 95, 0.28);
@@ -256,12 +364,12 @@ body[data-theme-mode="midnight"] .page-gradient {
 }
 
 .mood-calm {
-  --mood-primary: rgba(142, 177, 132, 0.26);
-  --mood-secondary: rgba(191, 213, 170, 0.2);
+  --mood-primary: rgba(122, 158, 132, 0.26);
+  --mood-secondary: rgba(178, 205, 170, 0.2);
 }
 
 .mood-sad {
-  --mood-primary: rgba(167, 139, 250, 0.24);
+  --mood-primary: rgba(132, 104, 157, 0.24);
   --mood-secondary: rgba(196, 181, 253, 0.2);
 }
 
@@ -271,9 +379,6 @@ body[data-theme-mode="midnight"] .page-gradient {
 }
 
 .mood-angry {
-  /* Muted brick-red (#c2574a), matching MOOD_HEX.angry in moodColors.js --
-     was a raw saturated red-400/300 that read as an error state rather than
-     a mood, jarring against the other five desaturated earth-tone moods. */
   --mood-primary: rgba(194, 87, 74, 0.26);
   --mood-secondary: rgba(214, 130, 118, 0.2);
 }
@@ -283,6 +388,9 @@ body[data-theme-mode="midnight"] .page-gradient {
   --mood-secondary: rgba(216, 195, 224, 0.2);
 }
 
+/* Flat colored panel instead of a blurred drifting glow blob -- same slot
+   (ChatPage's ambient mood background) but a completely different visual
+   mechanism: a static soft-tint wash, sharp-edged, no blur/no motion. */
 .living-bg {
   position: relative;
   overflow: hidden;
@@ -291,29 +399,17 @@ body[data-theme-mode="midnight"] .page-gradient {
 .living-bg::before {
   content: "";
   position: absolute;
-  inset: -30% -10%;
-  background:
-    radial-gradient(500px 220px at 15% 15%, var(--mood-primary, rgba(139, 92, 246, 0.22)), transparent 70%),
-    radial-gradient(520px 250px at 80% 10%, var(--mood-secondary, rgba(6, 182, 212, 0.2)), transparent 72%);
-  filter: blur(8px);
-  animation: drift 14s ease-in-out infinite alternate;
+  inset: 0;
+  background: linear-gradient(
+    150deg,
+    var(--mood-primary, rgba(61, 79, 209, 0.08)) 0%,
+    transparent 55%
+  );
   pointer-events: none;
 }
 
-@keyframes drift {
-  0% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  100% {
-    transform: translate3d(0, 18px, 0) scale(1.03);
-  }
-}
+/* ---- Motion ---- */
 
-/* Subtle per-page entrance -- previously navigating between pages was an
-   instant hard cut, which reads as less considered than even a small
-   transition. Applied once, at the AppShell level around <Outlet/> (see
-   AppShell.jsx), so every page gets it for free instead of each page having
-   to opt in individually. Respects prefers-reduced-motion. */
 @keyframes page-fade-in {
   from {
     opacity: 0;
@@ -333,9 +429,6 @@ body[data-theme-mode="midnight"] .page-gradient {
   }
 }
 
-/* Pulsing placeholder bar for loading states -- previously most async pages
-   just showed plain "Loading..." text with no visual weight, which felt
-   flatter/less finished than the rest of the app's polish level. */
 @keyframes skeleton-pulse {
   0%,
   100% {
@@ -346,8 +439,8 @@ body[data-theme-mode="midnight"] .page-gradient {
   }
 }
 .skeleton {
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 0.5rem;
+  background: rgb(var(--ink) / 0.08);
+  border-radius: 0.25rem;
   animation: skeleton-pulse 1.4s ease-in-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -361,24 +454,23 @@ body[data-theme-mode="midnight"] .page-gradient {
 }
 
 .scroll-area::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgb(var(--ink) / 0.2);
   border-radius: 999px;
 }
 
-/* Streak glow tiers -- the journaling-streak stat card gets a stronger,
-   warmer glow the longer an actual real streak runs, instead of a single
-   fixed highlight regardless of whether the streak is 1 day or 60. */
+/* Solid colored ring instead of a blurred box-shadow glow -- flat/sharp
+   equivalent of the old streak-glow treatment. */
 .streak-glow-1 {
-  box-shadow: 0 0 24px var(--user-light-glow, rgba(143, 174, 115, 0.28));
+  box-shadow: 0 0 0 3px var(--user-light-glow, rgb(var(--signal) / 0.22));
 }
 
 .streak-glow-2 {
-  box-shadow: 0 0 30px rgba(232, 171, 95, 0.4);
+  box-shadow: 0 0 0 4px rgba(225, 80, 44, 0.3);
   animation: streak-pulse 3s ease-in-out infinite;
 }
 
 .streak-glow-3 {
-  box-shadow: 0 0 40px rgba(232, 171, 95, 0.6);
+  box-shadow: 0 0 0 5px rgba(225, 80, 44, 0.42);
   animation: streak-pulse 2.4s ease-in-out infinite;
 }
 
@@ -388,12 +480,10 @@ body[data-theme-mode="midnight"] .page-gradient {
     filter: brightness(1);
   }
   50% {
-    filter: brightness(1.12);
+    filter: brightness(1.08);
   }
 }
 
-/* Chat "thinking" indicator -- three dots bouncing in sequence, replacing a
-   static "Thinking..." line. */
 .typing-dot {
   animation: typing-bounce 1.1s ease-in-out infinite;
 }
@@ -419,17 +509,11 @@ body[data-theme-mode="midnight"] .page-gradient {
   }
 }
 
-/* Full-viewport overlay used to mask the instant color swap when toggling
-   Daylight/Midnight theme -- fades to opaque, the theme attribute flips
-   underneath it at the peak, then it fades back out, reading as a smooth
-   crossfade instead of a snap. Radial-gradient backgrounds like
-   .page-gradient can't be reliably CSS-transitioned across browsers, so this
-   is a simpler, more consistent way to get the same felt effect. */
 .theme-transition-veil {
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: #0b0f0d;
+  background: rgb(var(--paper));
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.28s ease;
@@ -439,17 +523,12 @@ body[data-theme-mode="midnight"] .page-gradient {
   opacity: 1;
 }
 
-/* Rainbow hue slider used by Settings -> Appearance. A plain <input
-   type="range"> painted with a hue-spectrum gradient track instead of a
-   native color-swatch picker -- dragging it still reaches the full range of
-   hues (a lot of color options), it's just a literal slider rather than a
-   palette/swatch popup. */
 .hue-slider {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
   height: 12px;
-  border-radius: 999px;
+  border-radius: 2px;
   background: linear-gradient(
     to right,
     #ff0000 0%,
@@ -462,26 +541,25 @@ body[data-theme-mode="midnight"] .page-gradient {
   );
   cursor: pointer;
   outline: none;
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  border: 1px solid rgb(var(--ink) / 0.25);
 }
 
 .hue-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  border-radius: 2px;
   background: var(--thumb-color, #fff);
   border: 3px solid #fff;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
 .hue-slider::-moz-range-thumb {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  border-radius: 2px;
   background: var(--thumb-color, #fff);
   border: 3px solid #fff;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.4);
 }
-

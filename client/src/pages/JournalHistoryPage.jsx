@@ -1,8 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
-import { BookOpen, ChevronLeft, ChevronRight } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { BookOpen, ChevronLeft, ChevronRight, SlidersHorizontal, X } from "lucide-react";
 import { apiFetch, describeError } from "../api";
 import EntryModal from "../components/EntryModal";
-import { MOODS as moods, MOOD_BG_CLASS as moodDotColors } from "../utils/moodColors";
+import { MOODS as moods, MOOD_LABELS, moodDotStyle } from "../utils/moodColors";
+
+// How many tags show by default before the cloud collapses behind "Show
+// more" -- previously all 20-30 tags a person accumulates rendered at once,
+// at equal visual weight, ahead of any actual journal content. Ranked by
+// frequency (the count the API already returns) so the tags that actually
+// matter surface first instead of an alphabetical-ish wall.
+const VISIBLE_TAG_COUNT = 8;
 
 // The archive view that was previously missing entirely from the app --
 // every other place an old entry could be glimpsed (Dashboard's title-only
@@ -38,6 +45,13 @@ export default function JournalHistoryView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [openEntry, setOpenEntry] = useState(null);
+  // Filters start collapsed -- previously the mood-pill row and the full tag
+  // cloud rendered open by default, every time, pushing the actual entry
+  // list below the fold before you'd even touched a filter. Now they're
+  // tucked behind one "Filter" button, and only take up space once you
+  // actually want to narrow something down.
+  const [showFilters, setShowFilters] = useState(false);
+  const [showAllTags, setShowAllTags] = useState(false);
 
   const load = useCallback(async (targetPage, mood, tag) => {
     setLoading(true);
@@ -77,74 +91,166 @@ export default function JournalHistoryView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moodFilter, tagFilter]);
 
+  const rankedTags = useMemo(
+    () => [...availableTags].sort((a, b) => b.count - a.count),
+    [availableTags],
+  );
+  const visibleTags = showAllTags ? rankedTags : rankedTags.slice(0, VISIBLE_TAG_COUNT);
+  const hiddenTagCount = rankedTags.length - visibleTags.length;
+  const activeFilterCount = (moodFilter ? 1 : 0) + (tagFilter ? 1 : 0);
+
   return (
     <>
       <div className="max-w-4xl mx-auto space-y-4">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
             <p className="ui-kicker">Your journal</p>
             <h2 className="ui-title flex items-center gap-2">
               <BookOpen size={22} />
               All entries
             </h2>
-            <p className="text-sm text-white/60 mt-1">
+            <p className="text-sm text-ink/60 mt-1">
               {total > 0 ? `${total} ${total === 1 ? "entry" : "entries"}` : "No entries yet."}
             </p>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => setMoodFilter("")}
-              className={`px-3 py-1.5 rounded-lg border text-xs capitalize ${
-                moodFilter === "" ? "border-white/40 bg-white/10" : "border-white/10 bg-white/5 hover:bg-white/10"
-              }`}
-            >
-              All moods
-            </button>
-            {moods.map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setMoodFilter(m)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs capitalize ${
-                  moodFilter === m ? "border-white/40 bg-white/10" : "border-white/10 bg-white/5 hover:bg-white/10"
-                }`}
-              >
-                <span className={`h-2 w-2 rounded-full ${moodDotColors[m]}`} />
-                {m}
-              </button>
-            ))}
-          </div>
+
+          {/* Single filter trigger instead of a permanently-open mood row +
+              tag cloud. Badge shows how many filters are active so state is
+              still visible even while collapsed. */}
+          <button
+            type="button"
+            onClick={() => setShowFilters((s) => !s)}
+            aria-expanded={showFilters}
+            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border text-sm transition ${
+              showFilters || activeFilterCount > 0
+                ? "border-signal/50 bg-signal/15 text-ink"
+                : "border-ink/12 bg-ink/5 text-ink/70 hover:bg-ink/10"
+            }`}
+          >
+            <SlidersHorizontal size={15} />
+            Filter
+            {activeFilterCount > 0 && (
+              <span className="ui-mono text-[10px] leading-none px-1.5 py-1 rounded-full bg-signal text-ink">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
         </div>
 
-        {/* Tag filter -- previously the only way to narrow the archive was
-            by mood; tags (the words the user actually types themselves,
-            e.g. "work", "family") had no filter at all. Only rendered once
-            there's at least one real tag to filter by. */}
-        {availableTags.length > 0 && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-white/55">Tags:</span>
-            <button
-              type="button"
-              onClick={() => setTagFilter("")}
-              className={`px-2.5 py-1 rounded-lg border text-xs ${
-                tagFilter === "" ? "border-white/40 bg-white/10" : "border-white/10 bg-white/5 hover:bg-white/10"
-              }`}
-            >
-              All
-            </button>
-            {availableTags.map(({ tag, count }) => (
+        {/* Active filters stay visible as removable chips even when the
+            filter panel itself is collapsed, so "why is my list short" is
+            always answerable at a glance. */}
+        {!showFilters && activeFilterCount > 0 && (
+          <div className="flex items-center gap-2 flex-wrap -mt-2">
+            {moodFilter && (
               <button
-                key={tag}
                 type="button"
-                onClick={() => setTagFilter(tag)}
-                className={`px-2.5 py-1 rounded-lg border text-xs ${
-                  tagFilter === tag ? "border-white/40 bg-white/10" : "border-white/10 bg-white/5 hover:bg-white/10"
-                }`}
+                onClick={() => setMoodFilter("")}
+                className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full border border-ink/15 bg-ink/5 text-xs capitalize hover:bg-ink/10"
               >
-                {tag} <span className="text-white/55">{count}</span>
+                <span className="h-2 w-2 rounded-full" style={moodDotStyle(moodFilter)} />
+                {MOOD_LABELS[moodFilter] || moodFilter}
+                <X size={12} className="text-ink/50" />
               </button>
-            ))}
+            )}
+            {tagFilter && (
+              <button
+                type="button"
+                onClick={() => setTagFilter("")}
+                className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full border border-ink/15 bg-ink/5 text-xs hover:bg-ink/10"
+              >
+                {tagFilter}
+                <X size={12} className="text-ink/50" />
+              </button>
+            )}
+          </div>
+        )}
+
+        {showFilters && (
+          <div className="ui-card rounded-2xl p-4 space-y-4">
+            <div>
+              <p className="ui-kicker mb-2">Mood</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setMoodFilter("")}
+                  className={`px-3 py-1.5 rounded-lg border text-xs capitalize ${
+                    moodFilter === "" ? "border-ink/40 bg-ink/10" : "border-ink/10 bg-ink/5 hover:bg-ink/10"
+                  }`}
+                >
+                  All moods
+                </button>
+                {moods.map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setMoodFilter(moodFilter === m ? "" : m)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs capitalize ${
+                      moodFilter === m ? "border-ink/40 bg-ink/10" : "border-ink/10 bg-ink/5 hover:bg-ink/10"
+                    }`}
+                  >
+                    <span className="h-2 w-2 rounded-full" style={moodDotStyle(m)} />
+                    {m}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Tag filter -- previously the only way to narrow the archive
+                was by mood; tags (the words the user actually types
+                themselves, e.g. "work", "family") had no filter at all.
+                Ranked by frequency, capped at VISIBLE_TAG_COUNT with an
+                expand toggle, and counts get their own muted badge instead
+                of sitting as plain text next to the label. */}
+            {rankedTags.length > 0 && (
+              <div>
+                <p className="ui-kicker mb-2">Tags</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setTagFilter("")}
+                    className={`px-2.5 py-1 rounded-lg border text-xs ${
+                      tagFilter === "" ? "border-ink/40 bg-ink/10" : "border-ink/10 bg-ink/5 hover:bg-ink/10"
+                    }`}
+                  >
+                    All
+                  </button>
+                  {visibleTags.map(({ tag, count }) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => setTagFilter(tagFilter === tag ? "" : tag)}
+                      className={`inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-lg border text-xs ${
+                        tagFilter === tag ? "border-ink/40 bg-ink/10" : "border-ink/10 bg-ink/5 hover:bg-ink/10"
+                      }`}
+                    >
+                      {tag}
+                      <span className="ui-mono text-[10px] leading-none px-1.5 py-0.5 rounded-full bg-ink/10 text-ink/50">
+                        {count}
+                      </span>
+                    </button>
+                  ))}
+                  {hiddenTagCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllTags(true)}
+                      className="px-2.5 py-1 rounded-lg border border-dashed border-ink/15 text-xs text-ink/55 hover:bg-ink/5"
+                    >
+                      +{hiddenTagCount} more
+                    </button>
+                  )}
+                  {showAllTags && rankedTags.length > VISIBLE_TAG_COUNT && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllTags(false)}
+                      className="px-2.5 py-1 rounded-lg border border-dashed border-ink/15 text-xs text-ink/55 hover:bg-ink/5"
+                    >
+                      Show less
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -162,7 +268,7 @@ export default function JournalHistoryView() {
             ))}
           </div>
         ) : entries.length === 0 ? (
-          <div className="ui-card rounded-2xl p-6 text-center text-white/60 text-sm">
+          <div className="ui-card rounded-2xl p-6 text-center text-ink/60 text-sm">
             {moodFilter || tagFilter
               ? `No entries match ${[moodFilter && `mood "${moodFilter}"`, tagFilter && `tag "${tagFilter}"`].filter(Boolean).join(" and ")}.`
               : "Nothing here yet -- write your first entry to start building your archive."}
@@ -174,14 +280,14 @@ export default function JournalHistoryView() {
                 key={entry._id}
                 type="button"
                 onClick={() => setOpenEntry(entry)}
-                className="ui-card rounded-2xl p-4 text-left hover:bg-white/10 transition space-y-2"
+                className="ui-card rounded-2xl p-4 text-left hover:bg-ink/10 transition space-y-2"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="inline-flex items-center gap-1.5 text-xs text-white/60 capitalize">
-                    <span className={`h-2 w-2 rounded-full shrink-0 ${moodDotColors[entry.mood] || "bg-white/40"}`} />
+                  <span className="inline-flex items-center gap-1.5 text-xs text-ink/60 capitalize">
+                    <span className="h-2 w-2 rounded-full shrink-0" style={moodDotStyle(entry.mood)} />
                     {entry.mood}
                   </span>
-                  <span className="text-xs text-white/50 ui-mono">
+                  <span className="text-xs text-ink/50 ui-mono">
                     {new Date(entry.createdAt).toLocaleDateString(undefined, {
                       month: "short",
                       day: "numeric",
@@ -190,11 +296,11 @@ export default function JournalHistoryView() {
                   </span>
                 </div>
                 <p className="font-medium text-sm">{entry.title || "Untitled entry"}</p>
-                <p className="text-sm text-white/70">{truncateAtWord(entry.content, 160)}</p>
+                <p className="text-sm text-ink/70">{truncateAtWord(entry.content, 160)}</p>
                 {entry.tags?.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {entry.tags.map((t) => (
-                      <span key={t} className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-white/60 ui-mono">
+                      <span key={t} className="text-[10px] px-2 py-0.5 rounded-full bg-ink/10 text-ink/60 ui-mono">
                         {t}
                       </span>
                     ))}
@@ -211,19 +317,19 @@ export default function JournalHistoryView() {
               type="button"
               disabled={page <= 1 || loading}
               onClick={() => load(page - 1, moodFilter, tagFilter)}
-              className="p-2 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-white/5"
+              className="p-2 rounded-lg border border-ink/15 bg-ink/5 hover:bg-ink/10 disabled:opacity-30 disabled:hover:bg-ink/5"
               aria-label="Previous page"
             >
               <ChevronLeft size={16} />
             </button>
-            <span className="text-xs text-white/60">
+            <span className="text-xs text-ink/60">
               Page {page} of {totalPages}
             </span>
             <button
               type="button"
               disabled={page >= totalPages || loading}
               onClick={() => load(page + 1, moodFilter, tagFilter)}
-              className="p-2 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-white/5"
+              className="p-2 rounded-lg border border-ink/15 bg-ink/5 hover:bg-ink/10 disabled:opacity-30 disabled:hover:bg-ink/5"
               aria-label="Next page"
             >
               <ChevronRight size={16} />

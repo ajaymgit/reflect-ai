@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ChevronRight, HeartPulse, LineChart, Settings, Sparkles } from "lucide-react";
+import { ChevronRight, HeartPulse, LineChart, PartyPopper, Settings } from "lucide-react";
 
 // Mobile-only overflow destination -- see AppShell.jsx's mobilePrimaryItems.
 // The bottom tab bar only has room for 5 icons before it turns into a
@@ -22,7 +22,7 @@ const items = [
     to: "/year-in-review",
     label: "Year in review",
     desc: "Your last 12 months, summarized",
-    Icon: Sparkles,
+    Icon: PartyPopper,
   },
   {
     to: "/health",
@@ -47,19 +47,19 @@ export default function MorePage() {
           <h2 className="ui-title">More</h2>
         </div>
 
-        <div className="ui-card rounded-2xl divide-y divide-white/8 overflow-hidden">
+        <div className="ui-card rounded-2xl divide-y divide-ink/8 overflow-hidden">
           {items.map(({ to, label, desc, Icon }) => (
             <Link
               key={to}
               to={to}
-              className="flex items-center gap-3 px-4 py-4 hover:bg-white/5 transition"
+              className="flex items-center gap-3 px-4 py-4 hover:bg-ink/5 transition"
             >
-              <Icon size={18} className="text-white/60 shrink-0" />
+              <Icon size={18} className="text-ink/60 shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium">{label}</p>
-                <p className="text-xs text-white/50 mt-0.5">{desc}</p>
+                <p className="text-xs text-ink/50 mt-0.5">{desc}</p>
               </div>
-              <ChevronRight size={16} className="text-white/45 shrink-0" />
+              <ChevronRight size={16} className="text-ink/45 shrink-0" />
             </Link>
           ))}
         </div>

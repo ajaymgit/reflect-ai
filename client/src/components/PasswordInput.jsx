@@ -16,7 +16,7 @@ export default function PasswordInput({ className = "", inputClassName = "ui-inp
         onClick={() => setVisible((v) => !v)}
         tabIndex={-1}
         aria-label={visible ? "Hide password" : "Show password"}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white/80"
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-ink/50 hover:text-ink/80"
       >
         {visible ? <EyeOff size={16} /> : <Eye size={16} />}
       </button>

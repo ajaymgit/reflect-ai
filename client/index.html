@@ -3,31 +3,39 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ReflectAI</title>
-    <!-- Previously no webfont was actually loaded at all -- the CSS asked for
-         "Inter" but nothing here ever fetched it, so every browser silently
-         fell back to system-ui (San Francisco on macOS, Segoe on Windows,
-         etc). That system-default sans-serif look is exactly what reads as
-         "generic AI-generated template" today, since it's what every
-         unstyled shadcn/Tailwind starter renders with out of the box.
-         Fraunces (a characterful serif, for headings) + Manrope (a distinct
-         geometric sans, for body) actually get loaded and give the app a
-         real, deliberate typographic identity instead. -->
+    <title>Equoria - ReflectAI</title>
+    <meta
+      name="description"
+      content="A private journaling workspace with memory-aware reflective conversations, mood tracking, and evidence-based prompts."
+    />
+    <meta name="theme-color" content="#F4EFE2" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- No dedicated og-image asset yet -- title/description alone still
+         give link previews something real instead of nothing, and adding a
+         generated share-card image (same pattern as Year in Review's
+         downloadShareCard) is a reasonable follow-up rather than a blocker
+         for a private, account-gated app that's rarely actually shared as a
+         link. -->
+    <meta property="og:title" content="Equoria - ReflectAI" />
+    <meta
+      property="og:description"
+      content="A private journaling workspace with memory-aware reflective conversations, mood tracking, and evidence-based prompts."
+    />
+    <meta property="og:type" content="website" />
+    <!-- v3 typography: Space Grotesk (bold geometric display, replacing the
+         Fraunces serif) + Inter (workhorse body sans, replacing Manrope) +
+         JetBrains Mono (replacing IBM Plex Mono) for metadata/data text via
+         .ui-kicker/.ui-mono. Deliberately a different pairing family from
+         every earlier pass -- no serif anywhere in this system. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- IBM Plex Mono added alongside Fraunces/Manrope: premium editorial
-         products (the pattern researched for this pass) pair an expressive
-         serif for headings with a monospace utility face for metadata --
-         dates, counts, tags, stat labels -- so those small data-ish bits of
-         text read as deliberately "designed data" rather than just smaller
-         body text. Applied via .ui-kicker and .ui-mono in index.css, not by
-         hand on every page. -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
   </head>
-  <body class="bg-[#09090B]">
+  <body class="bg-[#F4EFE2]">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

@@ -42,7 +42,7 @@ export default function MoodRoseChart({ distribution }) {
   return (
     <div className="flex flex-col items-center gap-3">
       {total === 0 ? (
-        <p className="text-sm text-white/60 py-8">Not enough entries yet to show a mood distribution.</p>
+        <p className="text-sm text-ink/60 py-8">Not enough entries yet to show a mood distribution.</p>
       ) : (
         <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} role="img" aria-label="Mood distribution rose chart">
           {/* Faint reference rings so wedge length has a scale to read against. */}
@@ -53,7 +53,7 @@ export default function MoodRoseChart({ distribution }) {
               cy={center}
               r={maxRadius * frac}
               fill="none"
-              stroke="rgba(255,255,255,0.08)"
+              stroke="rgba(23,20,15,0.12)"
               strokeWidth={1}
             />
           ))}
@@ -77,12 +77,12 @@ export default function MoodRoseChart({ distribution }) {
               </path>
             );
           })}
-          <circle cx={center} cy={center} r={2.5} fill="rgba(255,255,255,0.4)" />
+          <circle cx={center} cy={center} r={2.5} fill="rgba(23,20,15,0.5)" />
         </svg>
       )}
       <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
         {MOOD_ORDER.map((mood, i) => (
-          <span key={mood.key} className="inline-flex items-center gap-1.5 text-xs text-white/70">
+          <span key={mood.key} className="inline-flex items-center gap-1.5 text-xs text-ink/70">
             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: mood.color }} />
             {mood.label} ({counts[i]})
           </span>

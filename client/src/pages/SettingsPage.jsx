@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Bell, Download, HeartPulse, LogOut, Palette, ShieldCheck, UserRound } from "lucide-react";
 import { apiFetch, describeError } from "../api";
 import { useAuth } from "../context/AuthContext";
@@ -15,7 +15,7 @@ function SectionCard({ icon: Icon, title, children }) {
   return (
     <div className="ui-card rounded-2xl p-5">
       <div className="flex items-center gap-2 mb-3">
-        <Icon size={15} className="text-white/50" />
+        <Icon size={15} className="text-ink/50" />
         <p className="ui-kicker">{title}</p>
       </div>
       {children}
@@ -24,12 +24,16 @@ function SectionCard({ icon: Icon, title, children }) {
 }
 
 // Hue (0-360) for each slider's default position -- chosen to match this
-// app's actual existing dark-green background (~150) and light-green accent
-// (~95) tones, so the sliders start wherever the app already looked before
-// this feature existed, instead of snapping to an arbitrary color the first
-// time someone opens Settings.
-const DEFAULT_DARK_HUE = 150;
-const DEFAULT_LIGHT_HUE = 95;
+// app's actual current background/accent tones, so the sliders start
+// wherever the app already looks before this feature is touched, instead of
+// snapping to an arbitrary color the first time someone opens Settings.
+// Matches the actual --user-dark/--user-light fallback values (#F4EFE2
+// ivory base at ~43deg / #3D4FD1 indigo "signal" accent at ~233deg) defined
+// in index.css, so the sliders and their "Button" preview start exactly
+// where the app already looks rather than snapping to an arbitrary color
+// the first time someone opens Settings.
+const DEFAULT_DARK_HUE = 43;
+const DEFAULT_LIGHT_HUE = 233;
 
 const defaultSettings = {
   themeMode: "daylight",
@@ -57,6 +61,26 @@ function loadSettings() {
   }
 }
 
+// Separate from loadSettings() on purpose: that function always returns a
+// numeric darkHue/lightHue (falling back to DEFAULT_DARK_HUE/LIGHT_HUE) so
+// the sliders always have a value to render, even for someone who has never
+// touched them. This one instead asks "did the user actually save a hue at
+// some point" by checking the raw persisted JSON for the key itself, not the
+// merged-with-defaults result. That distinction is what the --user-dark /
+// --user-light effect below needs: it must only override the page background
+// for someone who deliberately customized it, never merely because the
+// sliders happen to have *a* default position to display.
+function hasStoredHue() {
+  try {
+    const raw = localStorage.getItem("equoria-settings");
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    return typeof parsed.darkHue === "number" || typeof parsed.lightHue === "number";
+  } catch {
+    return false;
+  }
+}
+
 export default function SettingsPage() {
   // Reading localStorage in the lazy useState initializer (rather than in a
   // separate mount effect that calls setSettings after the fact) means
@@ -67,6 +91,18 @@ export default function SettingsPage() {
   // otherwise trigger a jarring veil flash on every page load for anyone
   // whose saved theme isn't the default.
   const [settings, setSettings] = useState(loadSettings);
+  // Was previously not tracked at all -- the effect below just set
+  // --user-dark/--user-light unconditionally on every mount of this page,
+  // using DEFAULT_DARK_HUE/DEFAULT_LIGHT_HUE if nothing was ever saved. That
+  // silently pinned the ENTIRE app's background to a fixed pale-ivory shade
+  // (hslToHex(43, 45, 92)) the instant anyone opened Settings, overriding
+  // body[data-theme-mode="midnight"]'s dark palette everywhere for the rest
+  // of the browser session (since --user-dark lives as an inline style on
+  // <html>, which survives client-side navigation) -- confirmed live: on
+  // Midnight, opening Settings then clicking back to Home left the whole app
+  // washed out light with dark-tuned text now illegible against it. Gating
+  // the effect on "was a hue actually ever saved" fixes it at the source.
+  const [hasCustomTheme, setHasCustomTheme] = useState(hasStoredHue);
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutStatus, setLogoutStatus] = useState("");
   const { logout, user, setUser } = useAuth();
@@ -90,8 +126,19 @@ export default function SettingsPage() {
   }
 
   useEffect(() => {
-    localStorage.setItem("equoria-settings", JSON.stringify(settings));
-  }, [settings]);
+    // Was `JSON.stringify(settings)` unconditionally -- that always wrote
+    // darkHue/lightHue to disk (using their DEFAULT_* values if untouched),
+    // which is exactly what made hasStoredHue() true for every account
+    // forever after their very first visit to this page, defeating the fix
+    // above the moment it looked at persisted data instead of live state.
+    // Only persist the hue keys once they're a real, user-made override;
+    // themeMode (light/dark mode itself, as opposed to the custom accent
+    // hues) is a deliberate choice the instant it's touched, so it always
+    // persists.
+    const { darkHue, lightHue, ...rest } = settings;
+    const toSave = hasCustomTheme ? settings : rest;
+    localStorage.setItem("equoria-settings", JSON.stringify(toSave));
+  }, [settings, hasCustomTheme]);
 
   // Sets on <html> (not <body>) so the vars are visible to every stylesheet
   // rule regardless of specificity/ordering. Each slider only stores a hue
@@ -103,11 +150,22 @@ export default function SettingsPage() {
   // current position is exactly what's rendered everywhere.
   useEffect(() => {
     const root = document.documentElement;
-    root.style.setProperty("--user-dark", hslToHex(settings.darkHue, 18, 13));
-    root.style.setProperty("--user-light", hslToHex(settings.lightHue, 30, 58));
-    root.style.setProperty("--user-light-soft", hslToHex(settings.lightHue, 30, 73));
-    root.style.setProperty("--user-light-glow", `hsla(${settings.lightHue}, 30%, 58%, 0.32)`);
-  }, [settings.darkHue, settings.lightHue]);
+    if (!hasCustomTheme) {
+      // Nothing saved yet -- make sure no stale override from earlier in
+      // this tab's session lingers, so CSS's own
+      // var(--user-dark, rgb(var(--paper))) fallback (the correct,
+      // theme-mode-aware color) takes over.
+      root.style.removeProperty("--user-dark");
+      root.style.removeProperty("--user-light");
+      root.style.removeProperty("--user-light-soft");
+      root.style.removeProperty("--user-light-glow");
+      return;
+    }
+    root.style.setProperty("--user-dark", hslToHex(settings.darkHue, 45, 92));
+    root.style.setProperty("--user-light", hslToHex(settings.lightHue, 62, 53));
+    root.style.setProperty("--user-light-soft", hslToHex(settings.lightHue, 67, 73));
+    root.style.setProperty("--user-light-glow", `hsla(${settings.lightHue}, 62%, 53%, 0.28)`);
+  }, [settings.darkHue, settings.lightHue, hasCustomTheme]);
 
   // Applying data-theme-mode instantly on toggle used to just snap between
   // the two palettes. A radial-gradient background (.page-gradient) can't be
@@ -175,23 +233,29 @@ export default function SettingsPage() {
                   label="Dark color"
                   detail="The app's main background."
                   hue={settings.darkHue}
-                  saturation={18}
-                  lightness={13}
+                  saturation={45}
+                  lightness={92}
                   defaultHue={DEFAULT_DARK_HUE}
-                  onChange={(hue) => setSettings((prev) => ({ ...prev, darkHue: hue }))}
+                  onChange={(hue) => {
+                    setHasCustomTheme(true);
+                    setSettings((prev) => ({ ...prev, darkHue: hue }));
+                  }}
                 />
                 <HueSlider
                   label="Light color"
                   detail="Buttons and highlight accents."
                   hue={settings.lightHue}
-                  saturation={30}
-                  lightness={58}
+                  saturation={62}
+                  lightness={53}
                   defaultHue={DEFAULT_LIGHT_HUE}
-                  onChange={(hue) => setSettings((prev) => ({ ...prev, lightHue: hue }))}
+                  onChange={(hue) => {
+                    setHasCustomTheme(true);
+                    setSettings((prev) => ({ ...prev, lightHue: hue }));
+                  }}
                 />
               </div>
               <AppearancePreview darkHue={settings.darkHue} lightHue={settings.lightHue} />
-              <p className="text-xs text-white/50 mt-2">Applies instantly across the whole app.</p>
+              <p className="text-xs text-ink/50 mt-2">Applies instantly across the whole app.</p>
             </SectionCard>
 
             <SectionCard icon={UserRound} title="Account">
@@ -201,11 +265,11 @@ export default function SettingsPage() {
                   never needed the extra separation. */}
               <div className="grid sm:grid-cols-2 gap-3">
                 <div>
-                  <p className="text-xs text-white/50 uppercase tracking-wide">Name</p>
+                  <p className="text-xs text-ink/50 uppercase tracking-wide">Name</p>
                   <p className="text-sm mt-1">{user?.name || "--"}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-white/50 uppercase tracking-wide">Email</p>
+                  <p className="text-xs text-ink/50 uppercase tracking-wide">Email</p>
                   <p className="text-sm mt-1">{user?.email || "--"}</p>
                 </div>
               </div>
@@ -221,7 +285,7 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div>
                   <p className="text-sm font-medium">Log out everywhere</p>
-                  <p className="text-xs text-white/70 mt-1 max-w-md">
+                  <p className="text-xs text-ink/70 mt-1 max-w-md">
                     Signs you out on every device and browser, including this one. Use this if you
                     think someone else may have access to your account.
                   </p>
@@ -255,6 +319,16 @@ export default function SettingsPage() {
             </SectionCard>
           </div>
         </div>
+
+        <p className="text-xs text-ink/50 text-center pt-2">
+          <Link to="/privacy" className="underline hover:text-ink/75">
+            Privacy Policy
+          </Link>
+          <span className="mx-2">·</span>
+          <Link to="/terms" className="underline hover:text-ink/75">
+            Terms of Service
+          </Link>
+        </p>
       </div>
     </main>
   );
@@ -265,18 +339,18 @@ export default function SettingsPage() {
 // properties, which only update once the settings-change effect runs),
 // so dragging a slider updates this preview in the same render.
 function AppearancePreview({ darkHue, lightHue }) {
-  const bg = hslToHex(darkHue, 18, 13);
-  const light = hslToHex(lightHue, 30, 58);
+  const bg = hslToHex(darkHue, 45, 92);
+  const light = hslToHex(lightHue, 62, 53);
   return (
-    <div className="mt-3 rounded-xl p-3 border border-white/10" style={{ background: bg }}>
-      <p className="text-[10px] uppercase tracking-wide" style={{ color: light, fontFamily: '"IBM Plex Mono", monospace' }}>
+    <div className="mt-3 rounded-xl p-3 border border-ink/10" style={{ background: bg }}>
+      <p className="text-[10px] uppercase tracking-wide" style={{ color: light, fontFamily: '"JetBrains Mono", monospace' }}>
         Preview
       </p>
       <button
         type="button"
         tabIndex={-1}
         className="mt-2 px-3 py-1.5 rounded-lg text-[11px] font-semibold pointer-events-none"
-        style={{ background: light, color: "#16210f" }}
+        style={{ background: light, color: "#FFFFFF" }}
       >
         Button
       </button>
@@ -327,7 +401,7 @@ function ExportSection() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <p className="text-sm font-medium">Export your data</p>
-          <p className="text-xs text-white/70 mt-1 max-w-md">
+          <p className="text-xs text-ink/70 mt-1 max-w-md">
             Download every journal entry, health reading, retrospect analysis, and chat message as one JSON file.
           </p>
         </div>
@@ -393,7 +467,7 @@ function ReminderSection({ user, setUser }) {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <p className="text-sm font-medium">Daily journaling reminder</p>
-          <p className="text-xs text-white/70 mt-1 max-w-md">
+          <p className="text-xs text-ink/70 mt-1 max-w-md">
             A gentle email nudge if you haven't journaled yet by your chosen time.
           </p>
         </div>
@@ -408,13 +482,13 @@ function ReminderSection({ user, setUser }) {
             }}
             className="w-4 h-4"
           />
-          <span className="text-xs text-white/70">{enabled ? "On" : "Off"}</span>
+          <span className="text-xs text-ink/70">{enabled ? "On" : "Off"}</span>
         </label>
       </div>
 
       {enabled && (
-        <div className="mt-3 flex items-center gap-3 border-t border-white/10 pt-3">
-          <p className="text-xs text-white/70">Remind me around</p>
+        <div className="mt-3 flex items-center gap-3 border-t border-ink/10 pt-3">
+          <p className="text-xs text-ink/70">Remind me around</p>
           <select
             value={hour}
             onChange={(e) => {
@@ -426,8 +500,12 @@ function ReminderSection({ user, setUser }) {
             // color) without importing its width:100% -- that would fight
             // this flex row's layout. Previously a hardcoded near-black navy
             // (#111827) that looked like a different, unstyled control next
-            // to every real .ui-input field elsewhere in the app.
-            className="rounded-[0.8rem] bg-[#101814]/90 border border-white/15 px-3 py-1.5 text-xs outline-none focus:border-[#c5d7a6]"
+            // to every real .ui-input field elsewhere in the app. The
+            // outline-none is paired with a real focus ring (like
+            // .ui-input:focus's box-shadow) rather than a border-color
+            // change alone -- a 1px border tint is too subtle a focus
+            // signal on its own.
+            className="rounded-[0.8rem] bg-paper-sunken/90 border border-ink/15 px-3 py-1.5 text-xs outline-none focus:border-ember-soft focus:ring-2 focus:ring-ember-soft/30"
           >
             {Array.from({ length: 24 }).map((_, h) => (
               <option key={h} value={h}>
@@ -435,7 +513,7 @@ function ReminderSection({ user, setUser }) {
               </option>
             ))}
           </select>
-          {busy && <span className="text-xs text-white/50">Saving...</span>}
+          {busy && <span className="text-xs text-ink/50">Saving...</span>}
           {saved && !busy && <span className="text-xs text-emerald-300">Saved</span>}
         </div>
       )}
@@ -492,7 +570,7 @@ function AppleHealthSection() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <p className="text-sm font-medium">Apple Health</p>
-          <p className="text-xs text-white/70 mt-1 max-w-md">
+          <p className="text-xs text-ink/70 mt-1 max-w-md">
             Sync real steps, sleep, and heart rate from your iPhone via the ReflectHealthSync companion app, instead
             of relying on manually logged numbers.
           </p>
@@ -510,20 +588,20 @@ function AppleHealthSection() {
       {error && <p className="text-xs text-red-300 mt-2">{error}</p>}
 
       {token && (
-        <div className="mt-3 space-y-3 border-t border-white/10 pt-3">
+        <div className="mt-3 space-y-3 border-t border-ink/10 pt-3">
           <div className="flex flex-col sm:flex-row gap-3 items-start">
             {qrDataUrl && (
-              <div className="shrink-0 rounded-xl overflow-hidden border border-white/15 bg-white p-2">
+              <div className="shrink-0 rounded-xl overflow-hidden border border-ink/15 bg-white p-2">
                 <img src={qrDataUrl} alt="QR code with server URL and sync token" width={140} height={140} />
               </div>
             )}
             <div className="flex-1 space-y-2 min-w-0">
-              <p className="text-xs text-white/70">
+              <p className="text-xs text-ink/70">
                 In the ReflectHealthSync app, tap "Scan QR Code" and point your camera at this -- it fills in the
                 server URL and token for you. Won't be shown again after you leave this page.
               </p>
               <div className="flex items-center gap-2">
-                <p className="text-xs font-mono break-all bg-black/30 rounded-lg p-2 flex-1">{token}</p>
+                <p className="text-xs font-mono break-all bg-paper-sunken rounded-lg p-2 flex-1">{token}</p>
                 <button
                   type="button"
                   onClick={copyToken}
@@ -532,13 +610,13 @@ function AppleHealthSection() {
                   {copied ? "Copied" : "Copy"}
                 </button>
               </div>
-              <p className="text-xs text-white/50">
+              <p className="text-xs text-ink/50">
                 No camera handy? Paste the token above plus this server URL manually:{" "}
                 <span className="font-mono">{apiBase}</span>
               </p>
             </div>
           </div>
-          <p className="text-xs text-white/50">Sync endpoint: <span className="font-mono">{syncUrl}</span></p>
+          <p className="text-xs text-ink/50">Sync endpoint: <span className="font-mono">{syncUrl}</span></p>
         </div>
       )}
     </div>
@@ -617,7 +695,7 @@ function TwoFactorSection({ user, setUser }) {
           <p className="text-sm font-medium">
             {user?.twoFactorEnabled ? "Enabled" : "Not enabled"}
           </p>
-          <p className="text-xs text-white/70 mt-1 max-w-md">
+          <p className="text-xs text-ink/70 mt-1 max-w-md">
             {user?.twoFactorEnabled
               ? "Logging in also requires a code from your authenticator app."
               : "Add an authenticator app code as a second step at login."}
@@ -647,12 +725,12 @@ function TwoFactorSection({ user, setUser }) {
       {error && <p className="text-xs text-red-300 mt-2">{error}</p>}
 
       {setup && (
-        <form onSubmit={confirmSetup} className="mt-3 space-y-2 border-t border-white/10 pt-3">
-          <p className="text-xs text-white/70">
+        <form onSubmit={confirmSetup} className="mt-3 space-y-2 border-t border-ink/10 pt-3">
+          <p className="text-xs text-ink/70">
             Scan this into your authenticator app (Google Authenticator, Authy, 1Password, etc.), or enter the key
             manually:
           </p>
-          <p className="text-xs font-mono break-all bg-black/30 rounded-lg p-2">{setup.secret}</p>
+          <p className="text-xs font-mono break-all bg-paper-sunken rounded-lg p-2">{setup.secret}</p>
           <input
             className="ui-input"
             placeholder="Enter the 6-digit code to confirm"
@@ -666,7 +744,7 @@ function TwoFactorSection({ user, setUser }) {
             </button>
             <button
               type="button"
-              className="text-xs text-white/70 hover:text-white"
+              className="text-xs text-ink/70 hover:text-ink"
               onClick={() => { setSetup(null); setCode(""); setError(""); }}
             >
               Cancel
@@ -676,12 +754,12 @@ function TwoFactorSection({ user, setUser }) {
       )}
 
       {backupCodes && (
-        <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
-          <p className="text-xs text-white/70">
+        <div className="mt-3 space-y-2 border-t border-ink/10 pt-3">
+          <p className="text-xs text-ink/70">
             Save these backup codes somewhere safe. Each one can be used once to sign in if you lose access to your
             authenticator app. They won't be shown again.
           </p>
-          <div className="grid grid-cols-2 gap-1 text-xs font-mono bg-black/30 rounded-lg p-2">
+          <div className="grid grid-cols-2 gap-1 text-xs font-mono bg-paper-sunken rounded-lg p-2">
             {backupCodes.map((c) => (
               <span key={c}>{c}</span>
             ))}
@@ -697,8 +775,8 @@ function TwoFactorSection({ user, setUser }) {
       )}
 
       {showDisable && (
-        <form onSubmit={handleDisable} className="mt-3 space-y-2 border-t border-white/10 pt-3">
-          <p className="text-xs text-white/70">Enter your password to disable two-factor authentication.</p>
+        <form onSubmit={handleDisable} className="mt-3 space-y-2 border-t border-ink/10 pt-3">
+          <p className="text-xs text-ink/70">Enter your password to disable two-factor authentication.</p>
           <PasswordInput
             placeholder="Password"
             value={disablePassword}
@@ -714,7 +792,7 @@ function TwoFactorSection({ user, setUser }) {
             </button>
             <button
               type="button"
-              className="text-xs text-white/70 hover:text-white"
+              className="text-xs text-ink/70 hover:text-ink"
               onClick={() => { setShowDisable(false); setDisablePassword(""); setError(""); }}
             >
               Cancel
@@ -738,7 +816,7 @@ function HueSlider({ label, detail, hue, saturation, lightness, defaultHue, onCh
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-medium">{label}</p>
-          <p className="text-xs text-white/60 mt-0.5">{detail}</p>
+          <p className="text-xs text-ink/60 mt-0.5">{detail}</p>
         </div>
         {hue !== defaultHue && (
           <button
@@ -762,7 +840,7 @@ function HueSlider({ label, detail, hue, saturation, lightness, defaultHue, onCh
           aria-label={label}
         />
         <span
-          className="w-7 h-7 rounded-full border border-white/25 shrink-0"
+          className="w-7 h-7 rounded-full border border-ink/25 shrink-0"
           style={{ background: swatch }}
         />
       </div>
@@ -778,13 +856,13 @@ function SelectOption({ title, detail, value, onChange }) {
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="rounded-[0.8rem] bg-[#101814]/90 border border-white/15 px-3 py-1.5 text-xs outline-none focus:border-[#c5d7a6]"
+          className="rounded-[0.8rem] bg-paper-sunken/90 border border-ink/15 px-3 py-1.5 text-xs outline-none focus:border-ember-soft focus:ring-2 focus:ring-ember-soft/30"
         >
           <option value="midnight">Midnight</option>
           <option value="daylight">Daylight</option>
         </select>
       </div>
-      <p className="text-xs text-white/70 mt-2">{detail}</p>
+      <p className="text-xs text-ink/70 mt-2">{detail}</p>
     </div>
   );
 }

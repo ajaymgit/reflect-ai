@@ -5,7 +5,7 @@ export default function AuthRedirect({ children }) {
   const { user, loading } = useAuth();
   if (loading) {
     return (
-      <div className="min-h-screen page-gradient flex items-center justify-center text-white/70 text-sm">
+      <div className="min-h-screen page-gradient flex items-center justify-center text-ink/70 text-sm">
         Loading your space...
       </div>
     );

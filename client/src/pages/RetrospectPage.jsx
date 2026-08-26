@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, HelpCircle, Repeat, HeartPulse, Sparkles } from "lucide-react";
+import { ArrowRight, HelpCircle, Repeat, HeartPulse, PartyPopper } from "lucide-react";
 import { apiFetch } from "../api";
 import { isoDay } from "../utils/date";
 import DayEntryPreview from "../components/DayEntryPreview";
@@ -86,12 +86,14 @@ export default function RetrospectPage() {
   return (
     <main className="ui-page">
       <motion.div className="max-w-6xl mx-auto space-y-4" variants={cVariants} initial="hidden" animate="visible">
-        {/* Headline finding -- one neutral surface + typography (Fraunces
-            for the actual finding) instead of a colored/tinted border. Same
-            restraint as Health page's headline card. */}
-        <motion.div variants={iVariants} className="ui-card rounded-2xl p-5">
+        {/* Headline finding -- pull-quote treatment (left rule + serif),
+            matching Health's "This month's finding" and Year in Review's "A
+            pattern worth knowing" -- the same generated-sentence pattern
+            reads consistently across all three pages, and stands apart from
+            the boxed data cards around it instead of being just another one. */}
+        <motion.div variants={iVariants} className="ui-quote py-1">
           <p className="ui-kicker">Retrospect analysis</p>
-          <p className="text-base md:text-lg font-medium mt-2 leading-snug">
+          <p className="ui-quote-text text-lg md:text-xl mt-2 leading-snug text-ink/95">
             {data?.emotionalPatternSummary || "Analyzing entries..."}
           </p>
         </motion.div>
@@ -102,11 +104,11 @@ export default function RetrospectPage() {
             much wider day-by-day window than the 20-entry `timeline` the
             bar chart below uses, specifically so this can show real
             sustained coverage instead of a handful of scattered entries. */}
-        <motion.div variants={iVariants} className="ui-card rounded-2xl p-4">
+        <motion.div variants={iVariants} className="ui-card-hero p-4">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
               <h3 className="font-medium">Mood, day by day</h3>
-              <p className="text-xs text-white/60 mt-1">Last six months. Click a square to read that day.</p>
+              <p className="text-xs text-ink/60 mt-1">Last six months. Click a square to read that day.</p>
             </div>
             <MoodLegend />
           </div>
@@ -117,7 +119,7 @@ export default function RetrospectPage() {
         <motion.div variants={iVariants} className="grid lg:grid-cols-3 gap-4">
           <div className="ui-card rounded-2xl p-4 lg:col-span-2">
             <h3 className="font-medium">Emotional timeline</h3>
-            <p className="text-xs text-white/60 mt-2">
+            <p className="text-xs text-ink/60 mt-2">
               Each bar shows the emotional tone of that day, colored to match. Click a bar to see what you wrote.
             </p>
             <div className="h-64 mt-3">
@@ -136,15 +138,27 @@ export default function RetrospectPage() {
                   entirely instead of trying to force Recharts to
                   re-measure. */}
               <ResponsiveContainer key={data ? "loaded" : "loading"} width="100%" height="100%">
-                <BarChart data={moodSeries}>
-                  <XAxis dataKey="date" tick={{ fill: "#c4bfa0", fontSize: 12 }} />
+                <BarChart data={moodSeries} barCategoryGap="35%">
+                  {/* axisLine/tickLine off on both axes -- the default
+                      Recharts frame (solid axis lines boxing in the plot
+                      area) is one of the more obvious "unstyled chart
+                      library" tells; dropping it leaves just the bars and
+                      their labels, which reads as considered rather than
+                      defaulted. */}
+                  <XAxis dataKey="date" tick={{ fill: "rgb(var(--ink) / 0.55)", fontSize: 12 }} axisLine={false} tickLine={false} />
                   <YAxis
-                    tick={{ fill: "#c4bfa0", fontSize: 12 }}
+                    tick={{ fill: "rgb(var(--ink) / 0.55)", fontSize: 12 }}
                     domain={[0, 5]}
                     tickFormatter={(v) => scoreToLabel(v)}
                     width={72}
+                    axisLine={false}
+                    tickLine={false}
                   />
-                  <Tooltip formatter={(value) => scoreToLabel(value)} />
+                  <Tooltip
+                    formatter={(value) => scoreToLabel(value)}
+                    cursor={{ fill: "rgb(var(--ink) / 0.05)" }}
+                    contentStyle={{ background: "rgb(var(--paper-raised))", border: "1px solid rgb(var(--ink) / 0.15)", borderRadius: 8, fontSize: 12 }}
+                  />
                   {/* Clickable -- there was no way to go from "this day
                       looked rough" to actually reading that day's entry.
                       Each bar's own Cell colors it by that day's mood
@@ -152,12 +166,13 @@ export default function RetrospectPage() {
                       bar regardless of tone. */}
                   <Bar
                     dataKey="score"
-                    radius={[8, 8, 0, 0]}
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={28}
                     cursor="pointer"
                     onClick={(point) => setSelectedDate(point?.payload?.rawDate || point?.rawDate || null)}
                   >
                     {moodSeries.map((entry, i) => (
-                      <Cell key={i} fill={SCORE_COLOR[Math.round(entry.score)] ?? "#8fae73"} />
+                      <Cell key={i} fill={SCORE_COLOR[Math.round(entry.score)] ?? "rgb(var(--signal))"} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -171,8 +186,8 @@ export default function RetrospectPage() {
                 when" but "how much of each, overall." */}
             <div className="ui-card rounded-2xl p-4">
               <h3 className="font-medium">Mood balance</h3>
-              <p className="text-xs text-white/60 mt-1">Last six months, by proportion.</p>
-              <MoodDonut distribution={moodDistribution} />
+              <p className="text-xs text-ink/60 mt-1">Last six months, by proportion.</p>
+              <MoodBalance distribution={moodDistribution} />
             </div>
 
             <div className="ui-card rounded-2xl p-4 space-y-3">
@@ -183,13 +198,13 @@ export default function RetrospectPage() {
                 {(data?.recurringThemes || []).map((theme) => (
                   <span
                     key={theme}
-                    className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs capitalize text-white/75"
+                    className="rounded-full border border-ink/15 bg-ink/5 px-3 py-1.5 text-xs capitalize text-ink/75"
                   >
                     {theme.replace(/_/g, " ")}
                   </span>
                 ))}
                 {(data?.recurringThemes || []).length === 0 && (
-                  <p className="text-xs text-white/50">Not enough entries yet to detect a recurring theme.</p>
+                  <p className="text-xs text-ink/50">Not enough entries yet to detect a recurring theme.</p>
                 )}
               </div>
             </div>
@@ -200,28 +215,28 @@ export default function RetrospectPage() {
             correlation, socratic question) -- merged into one card since
             they're facets of the same analysis. Plain small icons (no
             colored circle badges) plus hairline dividers between rows. */}
-        <motion.div variants={iVariants} className="ui-card rounded-2xl p-4 divide-y divide-white/10">
+        <motion.div variants={iVariants} className="ui-card rounded-2xl p-4 divide-y divide-ink/10">
           <div className="flex items-start gap-3 pb-3.5">
-            <Repeat size={16} className="text-white/55 mt-0.5 shrink-0" />
+            <Repeat size={16} className="text-ink/55 mt-0.5 shrink-0" />
             <div className="min-w-0">
               <p className="ui-kicker">Behavioral loops</p>
-              <p className="text-sm text-white/80 mt-1">
+              <p className="text-sm text-ink/80 mt-1">
                 {(data?.behavioralLoops || []).join(" • ") || "Not enough entries yet to detect a loop."}
               </p>
             </div>
           </div>
           <div className="flex items-start gap-3 py-3.5">
-            <HeartPulse size={16} className="text-white/55 mt-0.5 shrink-0" />
+            <HeartPulse size={16} className="text-ink/55 mt-0.5 shrink-0" />
             <div className="min-w-0">
               <p className="ui-kicker">Health correlation</p>
-              <p className="text-sm text-white/80 mt-1">{data?.healthCorrelation || "No correlation data yet."}</p>
+              <p className="text-sm text-ink/80 mt-1">{data?.healthCorrelation || "No correlation data yet."}</p>
             </div>
           </div>
           <div className="flex items-start gap-3 pt-3.5">
-            <HelpCircle size={16} className="text-white/55 mt-0.5 shrink-0" />
+            <HelpCircle size={16} className="text-ink/55 mt-0.5 shrink-0" />
             <div className="min-w-0 flex-1">
               <p className="ui-kicker">Socratic question</p>
-              <p className="text-white/90 mt-1">
+              <p className="text-ink/90 mt-1">
                 {data?.socraticQuestion || "What pattern feels most meaningful to reflect on next?"}
               </p>
               <button
@@ -241,16 +256,16 @@ export default function RetrospectPage() {
         <motion.div variants={iVariants}>
           <Link
             to="/year-in-review"
-            className="ui-card rounded-2xl p-5 flex items-center justify-between gap-3 hover:bg-white/5 transition"
+            className="ui-card rounded-2xl p-5 flex items-center justify-between gap-3 hover:bg-ink/5 transition"
           >
             <div className="flex items-center gap-3">
-              <Sparkles size={18} className="text-white/50 shrink-0" />
+              <PartyPopper size={18} className="text-ink/50 shrink-0" />
               <div>
                 <p className="text-sm font-medium">See your full year</p>
-                <p className="text-xs text-white/50 mt-0.5">Entries, streaks, and themes -- the last 12 months, summarized.</p>
+                <p className="text-xs text-ink/50 mt-0.5">Entries, streaks, and themes -- the last 12 months, summarized.</p>
               </div>
             </div>
-            <ArrowRight size={16} className="text-white/55 shrink-0" />
+            <ArrowRight size={16} className="text-ink/55 shrink-0" />
           </Link>
         </motion.div>
       </motion.div>
@@ -262,7 +277,7 @@ function MoodLegend() {
   return (
     <div className="flex items-center gap-2 flex-wrap">
       {Object.entries(MOOD_COLOR).map(([mood, color]) => (
-        <span key={mood} className="inline-flex items-center gap-1 text-[10px] text-white/60 capitalize">
+        <span key={mood} className="inline-flex items-center gap-1 text-[10px] text-ink/60 capitalize">
           <span className="h-2 w-2 rounded-sm" style={{ backgroundColor: color }} />
           {mood}
         </span>
@@ -316,19 +331,19 @@ function MoodHeatmap({ entries, onSelect }) {
           if (showLabel) lastMonth = monthLabel;
           return (
             <div key={wi} className="flex flex-col gap-[3px]">
-              <div className="h-3 text-[9px] text-white/50 leading-3">{showLabel ? monthLabel : ""}</div>
+              <div className="h-3 text-[9px] text-ink/50 leading-3">{showLabel ? monthLabel : ""}</div>
               {week.map((cell, di) =>
                 cell ? (
                   <button
                     key={di}
                     type="button"
                     title={`${cell.rawDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}${
-                      cell.mood ? ` — ${cell.mood}` : ""
+                      cell.mood ? ` - ${cell.mood}` : ""
                     }`}
                     onClick={() => cell.mood && onSelect(cell.date)}
                     disabled={!cell.mood}
-                    className={`h-[11px] w-[11px] rounded-[2px] ${cell.mood ? "cursor-pointer hover:ring-1 hover:ring-white/50" : "cursor-default"}`}
-                    style={{ backgroundColor: cell.mood ? MOOD_COLOR[cell.mood] || "#8fae73" : "rgba(255,255,255,0.06)" }}
+                    className={`h-[11px] w-[11px] rounded-[2px] ${cell.mood ? "cursor-pointer hover:ring-1 hover:ring-ink/50" : "cursor-default"}`}
+                    style={{ backgroundColor: cell.mood ? MOOD_COLOR[cell.mood] || "rgb(var(--signal))" : "rgb(var(--ink) / 0.07)" }}
                   />
                 ) : (
                   <div key={di} className="h-[11px] w-[11px]" />
@@ -342,45 +357,40 @@ function MoodHeatmap({ entries, onSelect }) {
   );
 }
 
-// Donut, not pie -- the center hole is used to show the single top mood +
-// its share as text, so the chart isn't purely decorative even at a glance.
-function MoodDonut({ distribution }) {
+// Ranked horizontal bars, not a donut -- a donut asks you to compare angles
+// (one of the worst-tested visual encodings for precise comparison; nobody
+// can reliably tell whether a 23% wedge is bigger than a 20% one just by
+// eye), and it was also the single most "generated dashboard" element on
+// this page: pie/donut is the first chart type any charting library's docs
+// lead with, which is exactly why it shows up by default rather than by
+// choice. A ranked bar list reads in the actual order that matters (most to
+// least frequent), the length encodes the number directly instead of an
+// angle, and the top mood still gets its own callout line the way the
+// donut's center hole used to carry it.
+function MoodBalance({ distribution }) {
   if (!distribution.length) {
-    return <p className="text-xs text-white/50 mt-4">Not enough entries yet to show a mood balance.</p>;
+    return <p className="text-xs text-ink/50 mt-4">Not enough entries yet to show a mood balance.</p>;
   }
   const top = distribution[0];
+  const max = distribution[0].pct || 1;
   return (
-    <div className="mt-2">
-      <div className="relative h-40">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={distribution}
-              dataKey="count"
-              nameKey="mood"
-              innerRadius="62%"
-              outerRadius="92%"
-              paddingAngle={2}
-              stroke="none"
-            >
-              {distribution.map((d) => (
-                <Cell key={d.mood} fill={MOOD_COLOR[d.mood] || "#8fae73"} />
-              ))}
-            </Pie>
-            <Tooltip formatter={(value, _name, entry) => [`${value} days (${entry.payload.pct}%)`, entry.payload.mood]} />
-          </PieChart>
-        </ResponsiveContainer>
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <p className="text-xl font-medium capitalize">{top.mood}</p>
-          <p className="text-[11px] text-white/50">{top.pct}% of days</p>
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-1.5 mt-2 justify-center">
+    <div className="mt-3">
+      <p className="ui-hero-number text-3xl capitalize" style={{ color: MOOD_COLOR[top.mood] || "rgb(var(--signal))" }}>
+        {top.mood}
+      </p>
+      <p className="text-xs text-ink/50 mt-1">{top.pct}% of days -- the most common tone in this window.</p>
+      <div className="mt-4 space-y-2.5">
         {distribution.map((d) => (
-          <span key={d.mood} className="inline-flex items-center gap-1.5 text-[11px] text-white/60 capitalize">
-            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: MOOD_COLOR[d.mood] || "#8fae73" }} />
-            {d.mood} · {d.pct}%
-          </span>
+          <div key={d.mood} className="flex items-center gap-3">
+            <span className="w-16 shrink-0 text-xs text-ink/70 capitalize">{d.mood}</span>
+            <div className="flex-1 h-2 rounded-full bg-ink/8 overflow-hidden">
+              <div
+                className="h-full rounded-full"
+                style={{ width: `${Math.max(4, (d.pct / max) * 100)}%`, background: MOOD_COLOR[d.mood] || "rgb(var(--signal))" }}
+              />
+            </div>
+            <span className="w-9 shrink-0 text-right text-xs text-ink/55 ui-mono">{d.pct}%</span>
+          </div>
         ))}
       </div>
     </div>

@@ -6,9 +6,6 @@ import {
   Bar,
   ComposedChart,
   Line,
-  PolarAngleAxis,
-  RadialBar,
-  RadialBarChart,
   ResponsiveContainer,
   Scatter,
   ScatterChart,
@@ -34,8 +31,6 @@ const itemVariants = {
 };
 const staticContainerVariants = { hidden: {}, visible: {} };
 const staticItemVariants = { hidden: { opacity: 1, y: 0 }, visible: { opacity: 1, y: 0 } };
-const tabFade = { hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3 } } };
-const staticTabFade = { hidden: { opacity: 1, y: 0 }, visible: { opacity: 1, y: 0 } };
 
 // One line color per metric kind -- functional (distinguishing chart lines
 // from each other), not decorative -- reused across the three trend charts
@@ -47,7 +42,7 @@ const METRIC_ACCENT = {
   stress: { color: "#da8b5b" },
   screenTime: { color: "#84689d" },
   calories: { color: "#e8ab5f" },
-  streak: { color: "#8fae73" },
+  streak: { color: "rgb(var(--signal))" },
 };
 
 const MOOD_SCORE_LABEL = { 0: "Angry", 1: "Stressed", 2: "Sad", 3: "Reflective", 4: "Calm", 5: "Happy" };
@@ -66,11 +61,6 @@ const CORRELATION_METRIC_COLOR = {
   restingHeartRate: "#a989b2",
 };
 
-const TABS = [
-  { id: "today", label: "Today" },
-  { id: "trends", label: "Trends" },
-  { id: "connections", label: "Connections" },
-];
 
 // Reduces the raw (metric, lag) correlation list down to each metric's
 // single strongest-|r| lag -- shared by the bar view and the scatter grid so
@@ -104,11 +94,9 @@ function strongestPerMetric(correlations) {
 export default function HealthPage() {
   const [data, setData] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
-  const [tab, setTab] = useState("today");
   const reducedMotion = usePrefersReducedMotion();
   const cVariants = reducedMotion ? staticContainerVariants : containerVariants;
   const iVariants = reducedMotion ? staticItemVariants : itemVariants;
-  const tVariants = reducedMotion ? staticTabFade : tabFade;
 
   const loadOverview = () => apiFetch("/api/health-data/overview").then(setData).catch(() => {});
 
@@ -131,61 +119,83 @@ export default function HealthPage() {
         <motion.div variants={iVariants} className="ui-card rounded-2xl p-5">
           <p className="ui-kicker">Health dashboard</p>
           <h2 className="ui-title mt-1">Mind-body metrics</h2>
-          <p className="text-sm text-white/70 mt-2">
-            Current status: <span className="font-medium text-white">{data?.status || "Loading..."}</span>
+          <p className="text-sm text-ink/70 mt-2">
+            Current status: <span className="font-medium text-ink">{data?.status || "Loading..."}</span>
           </p>
         </motion.div>
 
         {/* Headline finding -- the same real Pearson-correlation sentence
             that used to sit at the very bottom of the page, buried under
-            four other cards, now leads the whole page instead. One neutral
-            surface + typography, no colored border/tint. */}
-        <motion.div variants={iVariants} className="ui-card rounded-2xl p-5">
+            four other cards, now leads the whole page instead. Pull-quote
+            treatment (left rule + serif) rather than another boxed card, so
+            the one generated sentence worth reading first actually looks
+            different from the stat tiles around it instead of blending in. */}
+        <motion.div variants={iVariants} className="ui-quote py-1">
           <p className="ui-kicker">This month's finding</p>
-          <p className="text-base md:text-lg font-medium mt-2 leading-snug">
+          <p className="ui-quote-text text-lg md:text-xl mt-2 leading-snug text-ink/95">
             {data?.insight || "Keep logging health data and journal entries to unlock a real finding here."}
           </p>
         </motion.div>
 
-        <motion.div variants={iVariants} className="inline-flex gap-1 rounded-xl bg-black/20 p-1 w-full sm:w-auto">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              aria-pressed={tab === t.id}
-              className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-medium transition ${
-                tab === t.id ? "bg-[#8fae73] text-[#16210f]" : "text-white/60 hover:text-white/85"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </motion.div>
+        {/* Previously Today/Trends/Connections were three tabs, one visible
+            at a time -- switching away from Today made the page feel like
+            it had almost nothing in it (a single stat card), when in
+            reality there's a real month of trend charts and a whole
+            correlation analysis sitting one click away. Now all three
+            render in sequence on one continuously-scrollable page, each
+            under its own section header, so the page's actual depth is
+            visible without anyone having to know to click "Trends" first. */}
 
-        {tab === "today" && (
-          <motion.div key="today" variants={tVariants} initial="hidden" animate="visible" className="ui-card rounded-2xl p-5">
-            <div className="grid sm:grid-cols-[220px_1fr] gap-6 items-center">
-              {/* Stress gauge -- previously "Today" was nothing but plain
-                  numbers in a row, the emptiest-feeling tab on the page. A
-                  ring gauge gives the single most important today-metric
-                  (stress score, the one status/insight are both built from)
-                  actual visual weight instead of being one more number in a
-                  list indistinguishable from the rest. */}
-              <StressGauge score={data?.latest?.stressScore} />
-              <div>
-                <p className="text-xs text-[#d9d2b0] uppercase tracking-wider mb-3 ui-kicker">Today</p>
-                <StatStrip
-                  items={[
-                    { label: "Steps", value: data?.latest?.steps ?? "--", kind: "steps" },
-                    { label: "Sleep", value: data?.latest?.sleepHours ? `${data.latest.sleepHours}h` : "--", kind: "sleep" },
-                    { label: "Heart rate", value: data?.latest?.restingHeartRate ?? "--", kind: "heartRate" },
-                  ]}
-                />
-              </div>
+        {/* .ui-card-hero -- this card carries the page's actual hero numbers
+            (today's stress, steps, sleep), so it gets the bigger-radius tier
+            instead of matching the header card's rounded-2xl. */}
+        <motion.div variants={iVariants}>
+          <p className="ui-kicker mb-2">Today</p>
+          <div className="ui-card-hero p-5">
+            {/* Steps and sleep used to sit in a bare StatStrip -- plain
+                digits and a tiny gray label, no color, no context -- right
+                next to stress's full hero treatment (big colored number,
+                status word, progress bar). The three metrics read as
+                wildly inconsistent in how much attention they got, even
+                though all three are equally real, equally important daily
+                numbers. Same hero treatment, same tiering language, and a
+                real "vs your week" comparison (computed from the same
+                weekly series Trends already fetches) now apply to all
+                three, so a bare "8,200" actually says whether 8,200 is a
+                lot for THIS person. */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              <MetricHero
+                kicker="Stress"
+                value={Number.isFinite(data?.latest?.stressScore) ? data.latest.stressScore : "--"}
+                tier={stressTier(data?.latest?.stressScore)}
+                compareText={compareToWeek(data?.latest?.stressScore, average(data?.weekly, "stress"), (n) => `${Math.round(n)} pts`)}
+                raw={data?.latest?.stressScore}
+                scale={STRESS_SCALE}
+              />
+              <MetricHero
+                kicker="Steps"
+                value={Number.isFinite(data?.latest?.steps) ? data.latest.steps.toLocaleString() : "--"}
+                tier={stepsTier(data?.latest?.steps)}
+                compareText={compareToWeek(data?.latest?.steps, average(data?.weekly, "steps"), (n) => Math.round(n).toLocaleString())}
+                raw={data?.latest?.steps}
+                scale={STEPS_SCALE}
+              />
+              <MetricHero
+                kicker="Sleep"
+                value={Number.isFinite(data?.latest?.sleepHours) ? `${data.latest.sleepHours}h` : "--"}
+                tier={sleepTier(data?.latest?.sleepHours)}
+                compareText={compareToWeek(data?.latest?.sleepHours, average(data?.weekly, "sleep"), (n) => `${n.toFixed(1)}h`)}
+                raw={data?.latest?.sleepHours}
+                scale={SLEEP_SCALE}
+              />
             </div>
-            <div className="pt-5 mt-5 border-t border-white/10">
-              <p className="text-xs text-[#d9d2b0] uppercase tracking-wider mb-3 ui-kicker">This month</p>
+            {Number.isFinite(data?.latest?.restingHeartRate) && (
+              <p className="text-xs text-ink/50 mt-5">
+                Resting heart rate today: <span className="text-ink/80 font-medium">{data.latest.restingHeartRate} bpm</span>
+              </p>
+            )}
+            <div className="pt-5 mt-5 border-t border-ink/10">
+              <p className="text-xs text-signal uppercase tracking-wider mb-3 ui-kicker">This month</p>
               <StatStrip
                 items={[
                   { label: "Avg steps", value: data?.averages?.monthly?.steps ?? "--", kind: "steps" },
@@ -202,21 +212,22 @@ export default function HealthPage() {
                 ever got created. Anyone without it connected had no way to
                 put a number in at all, which is why the wellness score and
                 every chart on this page could stay permanently empty. */}
-            <div className="pt-5 mt-5 border-t border-white/10">
-              <p className="text-xs text-[#d9d2b0] uppercase tracking-wider mb-2 ui-kicker">Log today's data</p>
-              <p className="text-xs text-white/50 mb-3">
+            <div className="pt-5 mt-5 border-t border-ink/10">
+              <p className="text-xs text-signal uppercase tracking-wider mb-2 ui-kicker">Log today's data</p>
+              <p className="text-xs text-ink/50 mb-3">
                 {hasAnyHealthData
                   ? "No Apple Health sync? Enter today's numbers by hand -- this is what your wellness score and every chart here is built from."
                   : "Nothing here yet -- Dashboard's wellness score and this whole page need at least one entry to show anything. Add today's numbers to get started."}
               </p>
               <LogHealthDataForm onSaved={loadOverview} />
             </div>
-          </motion.div>
-        )}
+          </div>
+        </motion.div>
 
-        {tab === "trends" && (
-          <motion.div key="trends" variants={tVariants} initial="hidden" animate="visible" className="ui-card rounded-2xl p-4 space-y-4">
-            <p className="text-xs text-white/60">Click a point on any chart to see what you wrote that day.</p>
+        <motion.div variants={iVariants}>
+          <p className="ui-kicker mb-2">Trends</p>
+          <div className="ui-card rounded-2xl p-4 space-y-4">
+            <p className="text-xs text-ink/60">Click a point on any chart to see what you wrote that day.</p>
 
             {/* The one chart on this whole page that actually puts health
                 and mood on the same axes at the same time, rather than
@@ -256,15 +267,15 @@ export default function HealthPage() {
               />
             </div>
             <DayEntryPreview date={selectedDate} />
-          </motion.div>
-        )}
+          </div>
+        </motion.div>
 
-        {tab === "connections" && (
-          <motion.div key="connections" variants={tVariants} initial="hidden" animate="visible" className="space-y-4">
-            <div className="ui-card rounded-2xl p-4">
-              <p className="ui-kicker">Real correlation</p>
-              <h3 className="font-medium mt-1">Which health metric relates to your mood most?</h3>
-              <p className="text-xs text-white/60 mt-2">
+        <motion.div variants={iVariants} className="space-y-4">
+          <p className="ui-kicker -mb-2">Connections</p>
+          <div className="ui-card rounded-2xl p-4">
+            <p className="ui-kicker">Real correlation</p>
+            <h3 className="font-medium mt-1">Which health metric relates to your mood most?</h3>
+              <p className="text-xs text-ink/60 mt-2">
                 A real Pearson correlation computed from your own paired health + journal days -- not an AI guess. Longer
                 bar means a stronger relationship.
               </p>
@@ -275,7 +286,7 @@ export default function HealthPage() {
               <div className="ui-card rounded-2xl p-4">
                 <p className="ui-kicker">See the actual data</p>
                 <h3 className="font-medium mt-1">Every day, plotted</h3>
-                <p className="text-xs text-white/60 mt-2">
+                <p className="text-xs text-ink/60 mt-2">
                   Each dot is one real day: how much of that metric you had, against your mood. A tight diagonal line
                   of dots is a strong relationship; a scattered cloud is a weak one -- the r value above is just a
                   single number summarizing what these dots show directly.
@@ -287,14 +298,13 @@ export default function HealthPage() {
                       label={CORRELATION_METRIC_LABELS[c.metric] || c.metric}
                       points={c.points}
                       r={c.r}
-                      color={CORRELATION_METRIC_COLOR[c.metric] || "#8fae73"}
+                      color={CORRELATION_METRIC_COLOR[c.metric] || "rgb(var(--signal))"}
                     />
                   ))}
                 </div>
               </div>
             )}
-          </motion.div>
-        )}
+        </motion.div>
       </motion.div>
     </main>
   );
@@ -340,7 +350,7 @@ function LogHealthDataForm({ onSaved }) {
 
   return (
     <form onSubmit={save} className="grid sm:grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end">
-      <label className="text-xs text-white/60">
+      <label className="text-xs text-ink/60">
         Steps
         <input
           type="number"
@@ -351,7 +361,7 @@ function LogHealthDataForm({ onSaved }) {
           placeholder="8000"
         />
       </label>
-      <label className="text-xs text-white/60">
+      <label className="text-xs text-ink/60">
         Sleep (hours)
         <input
           type="number"
@@ -364,7 +374,7 @@ function LogHealthDataForm({ onSaved }) {
           placeholder="7.5"
         />
       </label>
-      <label className="text-xs text-white/60">
+      <label className="text-xs text-ink/60">
         Resting heart rate
         <input
           type="number"
@@ -380,7 +390,7 @@ function LogHealthDataForm({ onSaved }) {
         {saving ? "Saving..." : "Save today"}
       </button>
       {status && (
-        <p className={`sm:col-span-4 text-xs ${status === "Saved" ? "text-[#c5d7a6]" : "text-red-300"}`}>{status}</p>
+        <p className={`sm:col-span-4 text-xs ${status === "Saved" ? "text-ember-soft" : "text-red-300"}`}>{status}</p>
       )}
     </form>
   );
@@ -393,48 +403,138 @@ function StatStrip({ items }) {
   return (
     <div className="flex flex-wrap">
       {items.map((item, i) => (
-        <div key={item.label} className={`pr-6 ${i > 0 ? "pl-6 border-l border-white/10" : ""} mb-2`}>
+        <div key={item.label} className={`pr-6 ${i > 0 ? "pl-6 border-l border-ink/10" : ""} mb-2`}>
           <p className="text-lg font-medium leading-none">{item.value}</p>
-          <p className="text-[11px] text-white/60 mt-1.5">{item.label}</p>
+          <p className="text-[11px] text-ink/60 mt-1.5">{item.label}</p>
         </div>
       ))}
     </div>
   );
 }
 
-// A 270-degree ring gauge for today's stress score (0-100), colored by the
-// same Good/Moderate/Needs-attention thresholds the server's getStatus()
-// uses -- so the color you see here always agrees with the "Current status"
-// line at the top of the page instead of being a separately-tuned visual.
-function StressGauge({ score }) {
-  const s = Number.isFinite(score) ? Math.max(0, Math.min(100, score)) : null;
-  // Raw Tailwind red (#ef4444) previously here read as an "error state"
-  // rather than a status color, clashing with the muted earth-tone palette
-  // used everywhere else -- MOOD_HEX.angry is the same rust the app already
-  // uses for "needs attention" (the angry mood dot), one shared token.
-  const color = s == null ? "#64748b" : s >= 70 ? MOOD_HEX.angry : s >= 45 ? MOOD_HEX.happy : MOOD_HEX.calm;
-  const label = s == null ? "No data yet" : s >= 70 ? "Needs attention" : s >= 45 ? "Moderate" : "Good";
+// Shared Good/Moderate/Needs-attention tiering, one function per metric --
+// stress's thresholds match the server's getStatus() so the color here
+// always agrees with the "Current status" line at the top of the page.
+// Steps and sleep get the same three-tier treatment (rather than being bare
+// numbers) using ordinary health-guidance thresholds (10k steps/day as an
+// "active" day, 7-9h as a typical healthy sleep range) -- not a precision
+// medical claim, just enough to say whether today's number is worth a
+// second look. Raw Tailwind red/green previously here read as "error
+// state" colors that clashed with the muted earth-tone palette; MOOD_HEX
+// is the same rust/amber/sage pair already used everywhere else, so
+// good/moderate/needs-attention reads in the app's own color language.
+function stressTier(score) {
+  if (!Number.isFinite(score)) return { color: "#64748b", label: "No data yet" };
+  if (score >= 70) return { color: MOOD_HEX.angry, label: "Needs attention" };
+  if (score >= 45) return { color: MOOD_HEX.happy, label: "Moderate" };
+  return { color: MOOD_HEX.calm, label: "Good" };
+}
+
+function stepsTier(steps) {
+  if (!Number.isFinite(steps)) return { color: "#64748b", label: "No data yet" };
+  if (steps >= 8000) return { color: MOOD_HEX.calm, label: "Active day" };
+  if (steps >= 4000) return { color: MOOD_HEX.happy, label: "Getting there" };
+  return { color: MOOD_HEX.angry, label: "Low activity" };
+}
+
+function sleepTier(hours) {
+  if (!Number.isFinite(hours)) return { color: "#64748b", label: "No data yet" };
+  if (hours < 6) return { color: MOOD_HEX.angry, label: "Short sleep" };
+  if (hours < 7) return { color: MOOD_HEX.happy, label: "A bit short" };
+  if (hours <= 9) return { color: MOOD_HEX.calm, label: "Well rested" };
+  return { color: MOOD_HEX.happy, label: "Longer than usual" };
+}
+
+// Client-side average over the same weekly series the Trends tab already
+// fetches -- no second request needed to give "Today" a real baseline.
+function average(list, key) {
+  const vals = (list || []).map((d) => d[key]).filter((v) => Number.isFinite(v));
+  if (!vals.length) return null;
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
+
+// "vs your week" -- previously today's steps/sleep/stress were bare digits
+// with no baseline, so there was no way to tell whether 8,200 steps is a
+// lot for THIS person. A factual, non-editorializing delta against their
+// own last-7-days average (the tier color above already carries the
+// good/bad read) gives every number real context.
+function compareToWeek(value, weekAvg, format) {
+  if (!Number.isFinite(value) || !Number.isFinite(weekAvg)) return null;
+  const diff = value - weekAvg;
+  if (Math.abs(diff) < weekAvg * 0.03) return "about your week's average";
+  const sign = diff > 0 ? "+" : "-";
+  return `${sign}${format(Math.abs(diff))} vs your week`;
+}
+
+// Stress, steps and sleep each mean "better" in a different direction --
+// lower for stress, higher for steps, a sweet spot in the middle for sleep.
+// A single percent-fill bar can't say any of that (a bad, high-stress day
+// filled the bar just as much as a good, high-steps day), so each metric
+// instead gets its true range plus a shaded "healthy zone" pulled straight
+// from the tier thresholds above, and RangeGauge below just draws where
+// today's value landed against that zone.
+const STRESS_SCALE = { min: 0, max: 100, goodMin: 0, goodMax: 45 };
+const STEPS_SCALE = { min: 0, max: 12000, goodMin: 8000, goodMax: 12000 };
+const SLEEP_SCALE = { min: 4, max: 11, goodMin: 7, goodMax: 9 };
+
+// Track with a shaded healthy-range band and a single marker dot for
+// today's value -- replaces the old ambiguous "fuller = better" bar so the
+// same visual language works whether the goal is low (stress), high
+// (steps), or a mid-range sweet spot (sleep).
+function RangeGauge({ value, scale, color }) {
+  const { min, max, goodMin, goodMax } = scale;
+  const hasValue = Number.isFinite(value);
+  // If today's value falls outside [min, max] (e.g. a 13h sleep night, or a
+  // step count past the 12k ceiling), stretch the track to fit it instead of
+  // clamping the dot to the edge -- clamping would make 12h and 20h of sleep
+  // look identical. The healthy-zone band is computed against this same
+  // stretched range so it stays proportionally accurate.
+  const rangeMin = hasValue ? Math.min(min, value) : min;
+  const rangeMax = hasValue ? Math.max(max, value) : max;
+  const toPct = (v) => Math.max(0, Math.min(100, ((v - rangeMin) / (rangeMax - rangeMin)) * 100));
+  const zoneStart = toPct(goodMin);
+  const zoneEnd = toPct(goodMax);
+
   return (
-    <div className="relative mx-auto w-full max-w-[200px]">
-      <ResponsiveContainer width="100%" height={170}>
-        <RadialBarChart
-          cx="50%"
-          cy="50%"
-          innerRadius="72%"
-          outerRadius="100%"
-          barSize={14}
-          startAngle={90}
-          endAngle={-270}
-          data={[{ value: s ?? 0 }]}
-        >
-          <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
-          <RadialBar dataKey="value" cornerRadius={7} fill={color} background={{ fill: "rgba(255,255,255,0.08)" }} />
-        </RadialBarChart>
-      </ResponsiveContainer>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <p className="ui-title text-3xl leading-none">{s ?? "--"}</p>
-        <p className="text-[11px] text-white/50 mt-1.5 text-center px-2">{label}</p>
-      </div>
+    <div className="relative h-1.5 rounded-full bg-ink/8 mt-3 max-w-[160px]">
+      {/* Was bg-ink/15 on a bg-ink/8 track -- an 8%-vs-15% grey-on-grey
+          difference that reads as basically flat in the dark theme, so the
+          whole point of this gauge (see where today's value falls against
+          the healthy zone) was invisible. Tinting the zone in the metric's
+          own color at a readable-but-still-recessive opacity makes it a
+          real landmark on the track, while the marker dot above stays the
+          only fully-opaque element so it's still clearly "today's value". */}
+      <div
+        className="absolute top-0 h-full rounded-full"
+        style={{
+          left: `${zoneStart}%`,
+          width: `${Math.max(0, zoneEnd - zoneStart)}%`,
+          backgroundColor: color,
+          opacity: 0.3,
+        }}
+      />
+      {hasValue && (
+        <div
+          className="absolute top-1/2 w-2.5 h-2.5 rounded-full border-2 border-white transition-[left] duration-300 ease-out"
+          style={{ left: `${toPct(value)}%`, transform: "translate(-50%, -50%)", background: color, boxShadow: "0 1px 3px rgba(0,0,0,0.25)" }}
+        />
+      )}
+    </div>
+  );
+}
+
+function MetricHero({ kicker, value, tier, compareText, raw, scale }) {
+  return (
+    <div>
+      <p className="ui-hero-number text-4xl" style={{ color: tier.color }}>
+        {value}
+      </p>
+      <p className="ui-kicker mt-1.5" style={{ color: tier.color }}>
+        {tier.label}
+      </p>
+      {compareText && <p className="text-[11px] text-ink/50 mt-1">{compareText}</p>}
+      <RangeGauge value={raw} scale={scale} color={tier.color} />
+      <p className="text-[10px] text-ink/45 mt-1.5 uppercase tracking-wide">{kicker}</p>
     </div>
   );
 }
@@ -447,7 +547,7 @@ function StressGauge({ score }) {
 function CorrelationBars({ top }) {
   if (!top.length) {
     return (
-      <p className="text-sm text-white/60 mt-3">
+      <p className="text-sm text-ink/60 mt-3">
         Not enough days with both health data and a journal entry yet to compute a real correlation.
       </p>
     );
@@ -460,7 +560,7 @@ function CorrelationBars({ top }) {
         const positive = c.r >= 0;
         return (
           <div key={c.metric}>
-            <div className="flex items-center justify-between text-xs text-white/70">
+            <div className="flex items-center justify-between text-xs text-ink/70">
               <span>
                 {CORRELATION_METRIC_LABELS[c.metric] || c.metric}
                 {c.lag > 0 ? ` (${c.lag}d later)` : ""}
@@ -472,7 +572,7 @@ function CorrelationBars({ top }) {
                   correlation" reads in the app's own color language. */}
               <span style={{ color: positive ? MOOD_HEX.calm : MOOD_HEX.angry }}>r = {c.r.toFixed(2)}</span>
             </div>
-            <div className="mt-1 h-2 rounded-full bg-white/10 overflow-hidden">
+            <div className="mt-1 h-2 rounded-full bg-ink/10 overflow-hidden">
               <div
                 className="h-full rounded-full"
                 style={{ width: `${pct}%`, background: positive ? `${MOOD_HEX.calm}b3` : `${MOOD_HEX.angry}b3` }}
@@ -481,7 +581,7 @@ function CorrelationBars({ top }) {
           </div>
         );
       })}
-      <p className="text-[11px] text-white/55 mt-1">
+      <p className="text-[11px] text-ink/55 mt-1">
         n = paired days used for each metric. "Xd later" means that metric on one day is compared against mood X
         days after.
       </p>
@@ -499,26 +599,29 @@ function CorrelationScatter({ label, points, r, color }) {
   if (!points?.length) return null;
   const positive = r >= 0;
   return (
-    <div className="rounded-xl border border-white/10 p-3">
+    <div className="rounded-xl border border-ink/10 p-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-white/80">{label}</p>
+        <p className="text-sm text-ink/80">{label}</p>
         <span className="text-xs" style={{ color: positive ? MOOD_HEX.calm : MOOD_HEX.angry }}>r = {r.toFixed(2)}</span>
       </div>
       <div className="h-40 mt-2">
         <ResponsiveContainer width="100%" height="100%">
           <ScatterChart margin={{ top: 5, right: 8, bottom: 0, left: -18 }}>
-            <XAxis type="number" dataKey="x" tick={{ fill: "#c4bfa0", fontSize: 10 }} name={label} />
+            <XAxis type="number" dataKey="x" tick={{ fill: "rgb(var(--ink) / 0.55)", fontSize: 10 }} name={label} axisLine={false} tickLine={false} />
             <YAxis
               type="number"
               dataKey="y"
               domain={[0, 5]}
               tickFormatter={(v) => MOOD_SCORE_LABEL[Math.round(v)] || ""}
-              tick={{ fill: "#c4bfa0", fontSize: 9 }}
+              tick={{ fill: "rgb(var(--ink) / 0.55)", fontSize: 9 }}
               width={68}
+              axisLine={false}
+              tickLine={false}
             />
             <Tooltip
               cursor={{ strokeDasharray: "3 3" }}
               formatter={(value, name) => (name === "y" ? MOOD_SCORE_LABEL[Math.round(value)] || value : value)}
+              contentStyle={{ background: "rgb(var(--paper-raised))", border: "1px solid rgb(var(--ink) / 0.15)", borderRadius: 8, fontSize: 11 }}
             />
             <Scatter data={points} fill={color} fillOpacity={0.75} />
           </ScatterChart>
@@ -535,9 +638,9 @@ function CorrelationScatter({ label, points, r, color }) {
 function MoodOverlayChart({ data, onPointClick }) {
   const hasMood = (data || []).some((d) => Number.isFinite(d.mood));
   return (
-    <div className="rounded-xl border border-white/10 p-3">
-      <p className="text-sm text-white/80">Steps & mood together</p>
-      <p className="text-[11px] text-white/60 mt-1">
+    <div className="rounded-xl border border-ink/10 p-3">
+      <p className="text-sm text-ink/80">Steps & mood together</p>
+      <p className="text-[11px] text-ink/60 mt-1">
         {hasMood
           ? "Bars are steps that day; the line is your mood that day."
           : "Log a journal entry on days you also have health data to see mood plotted alongside steps."}
@@ -554,22 +657,27 @@ function MoodOverlayChart({ data, onPointClick }) {
             <XAxis
               dataKey="date"
               tickFormatter={(v) => new Date(v).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-              tick={{ fill: "#c4bfa0", fontSize: 11 }}
+              tick={{ fill: "rgb(var(--ink) / 0.55)", fontSize: 11 }}
+              axisLine={false}
+              tickLine={false}
             />
-            <YAxis yAxisId="left" tick={{ fill: "#c4bfa0", fontSize: 11 }} />
+            <YAxis yAxisId="left" tick={{ fill: "rgb(var(--ink) / 0.55)", fontSize: 11 }} axisLine={false} tickLine={false} />
             <YAxis
               yAxisId="right"
               orientation="right"
               domain={[0, 5]}
               tickFormatter={(v) => MOOD_SCORE_LABEL[Math.round(v)] || ""}
-              tick={{ fill: "#c4bfa0", fontSize: 10 }}
+              tick={{ fill: "rgb(var(--ink) / 0.55)", fontSize: 10 }}
               width={70}
+              axisLine={false}
+              tickLine={false}
             />
             <Tooltip
               labelFormatter={(v) =>
                 new Date(v).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })
               }
               formatter={(value, name) => (name === "mood" ? [MOOD_SCORE_LABEL[Math.round(value)] || "--", "Mood"] : [value, "Steps"])}
+              contentStyle={{ background: "rgb(var(--paper-raised))", border: "1px solid rgb(var(--ink) / 0.15)", borderRadius: 8, fontSize: 11 }}
             />
             <Bar yAxisId="left" dataKey="steps" fill="#e8ab5f" fillOpacity={0.55} radius={[4, 4, 0, 0]} />
             <Line
@@ -590,8 +698,8 @@ function MoodOverlayChart({ data, onPointClick }) {
 function TrendChart({ title, data, dataKey, accent, valueLabel, axisLabel, onPointClick }) {
   const gradientId = `trend-grad-${dataKey}`;
   return (
-    <div className="rounded-xl border border-white/10 p-3">
-      <p className="text-sm text-white/80">{title}</p>
+    <div className="rounded-xl border border-ink/10 p-3">
+      <p className="text-sm text-ink/80">{title}</p>
       <div className="h-44 mt-2 cursor-pointer">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart
@@ -616,9 +724,11 @@ function TrendChart({ title, data, dataKey, accent, valueLabel, axisLabel, onPoi
             <XAxis
               dataKey="date"
               tickFormatter={(v) => new Date(v).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-              tick={{ fill: "#c4bfa0", fontSize: 11 }}
+              tick={{ fill: "rgb(var(--ink) / 0.55)", fontSize: 11 }}
+              axisLine={false}
+              tickLine={false}
             />
-            <YAxis tick={{ fill: "#c4bfa0", fontSize: 11 }} tickCount={6} />
+            <YAxis tick={{ fill: "rgb(var(--ink) / 0.55)", fontSize: 11 }} tickCount={6} axisLine={false} tickLine={false} />
             <Tooltip
               formatter={(value) => [`${value} ${valueLabel}`, title]}
               labelFormatter={(v) =>
@@ -628,6 +738,7 @@ function TrendChart({ title, data, dataKey, accent, valueLabel, axisLabel, onPoi
                   day: "numeric",
                 })
               }
+              contentStyle={{ background: "rgb(var(--paper-raised))", border: "1px solid rgb(var(--ink) / 0.15)", borderRadius: 8, fontSize: 11 }}
             />
             <Area
               type="monotone"
@@ -641,7 +752,7 @@ function TrendChart({ title, data, dataKey, accent, valueLabel, axisLabel, onPoi
           </AreaChart>
         </ResponsiveContainer>
       </div>
-      <p className="text-[11px] text-white/50 mt-1 uppercase tracking-wide">{axisLabel}</p>
+      <p className="text-[11px] text-ink/50 mt-1 uppercase tracking-wide">{axisLabel}</p>
     </div>
   );
 }

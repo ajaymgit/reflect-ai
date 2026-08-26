@@ -25,6 +25,13 @@ export const registerSchema = z.object({
     name: z.string().min(2),
     email: emailField,
     password: passwordField,
+    // Honeypot -- a field real users never see or fill in (rendered
+    // visually hidden + tabindex="-1" on the client, see RegisterPage.jsx),
+    // so anything non-empty here is almost certainly a bot filling in every
+    // field it finds in the form's HTML. Optional so requests that omit it
+    // entirely (any API client that isn't the current web form) still pass;
+    // the route itself checks that when present, it's blank.
+    website: z.string().max(0, "Bot check failed").optional(),
   }),
   params: z.object({}).optional(),
   query: z.object({}).optional(),

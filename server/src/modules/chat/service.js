@@ -51,6 +51,11 @@ const aiTemperature = usingGeminiCompat ? 0.7 : 0.45;
 const useOllama = String(env.USE_OLLAMA || "true").toLowerCase() !== "false";
 const ollamaBaseUrl = env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
 const ollamaModel = env.OLLAMA_MODEL || "llama3.2:3b";
+// Only set when OLLAMA_BASE_URL points at Ollama's hosted API rather than a
+// local/self-hosted instance -- see env.js. Spread into fetch headers below
+// as a no-op ({}) when unset, so local Ollama (which never expects this
+// header) is unaffected.
+const ollamaAuthHeaders = env.OLLAMA_API_KEY ? { Authorization: `Bearer ${env.OLLAMA_API_KEY}` } : {};
 const openai = aiApiKey
   ? new OpenAI({
       apiKey: aiApiKey,
@@ -146,7 +151,7 @@ function buildReadiness({ journals, healthQuality, themes }) {
   return { score, label };
 }
 
-function calculateHealthQuality(healthRecords) {
+export function calculateHealthQuality(healthRecords) {
   const days = healthRecords.length;
   if (!days) return { days: 0, completeness: 0, confidence: 0, eligible: false };
   const completeness =
@@ -227,10 +232,12 @@ function truncateAtWord(text, maxLen) {
 async function buildSmartEvidenceCandidates(userId, journalPool, userMessage, intent) {
   if (!journalPool.length) return [];
   try {
-    const withEmbeddings = await JournalEntry.find({
-      _id: { $in: journalPool.map((j) => j._id) },
-    }).select("+embedding content mood createdAt");
-    const semanticMatches = await findSemanticMatches(withEmbeddings, userMessage, { limit: 5 });
+    // journalPool already carries `embedding` (buildChatContext now selects
+    // it on the same query that produced this pool), so this no longer
+    // re-fetches the same documents from Mongo a second time just to add
+    // that one field -- same input to findSemanticMatches, one fewer
+    // network round-trip per chat turn.
+    const semanticMatches = await findSemanticMatches(journalPool, userMessage, { limit: 5 });
     if (semanticMatches.length) {
       logInfo("Using semantic evidence candidates", { count: semanticMatches.length });
       return semanticMatches.map(({ journal, score }) => ({
@@ -249,7 +256,7 @@ async function buildSmartEvidenceCandidates(userId, journalPool, userMessage, in
   return buildEvidenceCandidates(journalPool, userMessage, intent);
 }
 
-function normalizeEvidence(evidence, candidates) {
+export function normalizeEvidence(evidence, candidates) {
   if (!Array.isArray(evidence)) return [];
   const byId = new Map(candidates.map((c) => [c.journalId, c]));
   const result = evidence
@@ -292,7 +299,7 @@ function normalizeEvidence(evidence, candidates) {
   return result;
 }
 
-function validateAiPayload(payload) {
+export function validateAiPayload(payload) {
   if (!payload || typeof payload !== "object") return false;
   const required = [
     "schemaVersion",
@@ -310,7 +317,7 @@ function validateAiPayload(payload) {
   return true;
 }
 
-function coerceAiPayload(rawPayload) {
+export function coerceAiPayload(rawPayload) {
   if (!rawPayload || typeof rawPayload !== "object") return null;
   const payload = {
     schemaVersion: "1.0",
@@ -355,7 +362,7 @@ function scoreMessageDepth(userMessage = "") {
   return Math.min(score, 5);
 }
 
-function buildLongitudinalBlueprint({ userMessage, journals = [], themes = [], sessionTurns = [], mode = "quick" }) {
+export function buildLongitudinalBlueprint({ userMessage, journals = [], themes = [], sessionTurns = [], mode = "quick" }) {
   const depthScore = scoreMessageDepth(userMessage);
   let depthLevel = depthScore >= 4 ? "deep" : depthScore >= 2 ? "reflective" : "light";
   if (mode === "deep") depthLevel = "deep";
@@ -451,7 +458,15 @@ function humanizeQuestion(question = "", focus = "general_reflection") {
   return `${lead} ${cleaned}`;
 }
 
-function enrichPayload(payload, candidates) {
+// `ablation` is an opt-in, off-by-default parameter that exists solely to
+// support the ablation study in scripts/evalAblation.js (see the paper's
+// Reproducibility section) -- it lets that script measure what these two
+// removed anti-patterns actually cost by deliberately re-enabling them on a
+// real captured model payload, without touching production behavior. Every
+// existing caller (routes.js, evalChatEngine.js, service.test.js) never
+// passes it, so `ablation` is always `{}` there and this function's output
+// is byte-for-byte identical to before these flags existed.
+export function enrichPayload(payload, candidates, ablation = {}) {
   const enriched = {
     ...payload,
     evidence: normalizeEvidence(payload.evidence, candidates),
@@ -470,6 +485,14 @@ function enrichPayload(payload, candidates) {
   // any user who had written at least one journal entry. If the model made a
   // claim with no evidence, the honest outcome is a fallback, not a claim
   // dressed up with an unrelated citation.
+  //
+  // ablation.autoFillEvidence deliberately re-introduces exactly that removed
+  // bug, gated behind an explicit opt-in flag never set in production, so the
+  // eval-time ablation study can measure how often this anti-pattern would
+  // have let an unsupported claim through.
+  if (ablation.autoFillEvidence && enriched.evidence.length === 0 && candidates.length) {
+    enriched.evidence = [candidates[0]];
+  }
 
   if (!enriched.question) {
     enriched.question = "When this pattern appears, what thought usually shows up first for you?";
@@ -481,6 +504,13 @@ function enrichPayload(payload, candidates) {
   // the confidenceOk check ran, which misrepresented the model's own
   // uncertainty to the user. A genuinely low-confidence response should now
   // correctly fail verifyInsight's confidenceOk check and fall back.
+  //
+  // ablation.boostConfidenceFloor is the same deliberate, opt-in-only
+  // re-introduction of that second removed anti-pattern, for the same
+  // ablation-study purpose as above.
+  if (ablation.boostConfidenceFloor && enriched.evidence.length > 0 && enriched.confidence < 0.68) {
+    enriched.confidence = 0.68;
+  }
 
   enriched.question = humanizeQuestion(enriched.question, enriched.currentFocus);
 
@@ -492,7 +522,7 @@ function detectTopicShift(userMessage) {
   return topicSwitchRegex.test(text);
 }
 
-function detectIntent(userMessage) {
+export function detectIntent(userMessage) {
   const text = normalizeText(userMessage);
   const simpleOpenChat = /^(chat|talk|open chat|lets chat)$/.test(text);
   if (detectTopicShift(text)) return "topic_switch";
@@ -510,7 +540,7 @@ function detectIntent(userMessage) {
   return "reflection";
 }
 
-function inferFocus(userMessage, themes = [], blocked = []) {
+export function inferFocus(userMessage, themes = [], blocked = []) {
   const text = String(userMessage || "").toLowerCase();
   const mapped = [
     { focus: "workload", tokens: ["work", "meeting", "deadline", "office"] },
@@ -899,7 +929,7 @@ function buildContextFollowUp({ userMessage, sessionTurns = [] }) {
 const HEALTH_KEYWORD_SOURCE =
   "\\b(sleep|stress|heart rate|heart|steps|activity|recovery|rest pattern|resting|screen time|movement pattern|energy level|sedentary)\\b";
 
-function scrubHealthReferences(payload) {
+export function scrubHealthReferences(payload) {
   const scrub = (text) =>
     String(text || "")
       .replace(new RegExp(HEALTH_KEYWORD_SOURCE, "gi"), "energy pattern")
@@ -944,26 +974,60 @@ function recoverOllamaConfidence(payload) {
 }
 
 async function generateInsightWithOllama(prompt) {
-  const response = await fetchWithTimeout(`${ollamaBaseUrl}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: ollamaModel,
-      stream: false,
-      format: "json",
-      options: {
-        temperature: 0.2,
-      },
-      messages: [
-        {
-          role: "system",
-          content:
-            "Return strict JSON only. No markdown, no explanations, no prose outside JSON.",
+  const response = await fetchWithTimeout(
+    `${ollamaBaseUrl}/api/chat`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...ollamaAuthHeaders },
+      body: JSON.stringify({
+        model: ollamaModel,
+        stream: false,
+        format: "json",
+        // keep_alive: previously unset, which uses Ollama's default 5-minute
+        // idle unload -- fine for occasional real-user traffic, but during a
+        // batch eval run (see scripts/evalChatEngine.js) or any burst of
+        // chat turns more than 5 minutes apart, the model gets evicted from
+        // memory and the next call pays a full reload before it can even
+        // start generating, on top of normal inference time. Keeping it
+        // resident for 30 minutes removes that reload tax from every call
+        // after the first in a session/eval run, with no effect on output.
+        keep_alive: "30m",
+        options: {
+          temperature: 0.2,
+          // num_predict: previously unset (Ollama's default is effectively
+          // unbounded generation length). The prompt's own rules already cap
+          // insight/question to <=28/<=24 words each, so a valid response is
+          // always short -- but with no cap, a model that fails to emit a
+          // closing brace (or drifts into repetition, which small local
+          // models occasionally do) keeps generating tokens with nothing to
+          // stop it until the request eventually times out. 320 tokens is
+          // generously above what a schema-conformant JSON response needs
+          // (short insight + question + up to 5 short evidence quotes +
+          // reasoning), so this only ever cuts off runaway generations, not
+          // normal ones -- it does not change the accept/reject policy.
+          num_predict: 320,
         },
-        { role: "user", content: prompt },
-      ],
-    }),
-  });
+        messages: [
+          {
+            role: "system",
+            content:
+              "Return strict JSON only. No markdown, no explanations, no prose outside JSON.",
+          },
+          { role: "user", content: prompt },
+        ],
+      }),
+    },
+    // fetchWithTimeout's shared default is 20000ms. Deep/analysis-mode
+    // prompts are longer and, on a CPU-bound local 3B model under real
+    // load, occasionally run past that -- which previously counted as a
+    // hard failure (falls through to attempt 2, then heuristic/fallback)
+    // even though the model would have produced a real, valid answer given
+    // a few more seconds. This only widens the network-timeout budget for
+    // this one call site; it does not touch the accept/reject policy
+    // (evidence/confidence/health checks) at all, and the Vitest suite runs
+    // with USE_OLLAMA=false so it never exercises this code path.
+    30000,
+  );
 
   if (!response.ok) {
     throw new AppError("AI_PARSE_FAILED", `Ollama request failed with status ${response.status}`, 502);
@@ -1114,7 +1178,7 @@ ${userMessage}
   throw new AppError("AI_PARSE_FAILED", "AI response could not be parsed", 502);
 }
 
-function verifyInsight({ payload, rawText, healthQuality }) {
+export function verifyInsight({ payload, rawText, healthQuality, ablation = {} }) {
   // Evidence/confidence should only be required when the model is actually
   // asserting something about the user's patterns (a non-empty `insight`) --
   // not for a plain conversational turn (fallback=false, insight="") like a
@@ -1126,7 +1190,16 @@ function verifyInsight({ payload, rawText, healthQuality }) {
   // fallback question, even though the model behaved correctly. This was
   // caught live: real chat turns coming back fallback:false, evidence: [],
   // insight: "" and still failing verification on every casual message.
-  const hasInsightClaim = !payload.fallback && String(payload.insight || "").trim().length > 0;
+  //
+  // ablation.requireEvidenceUnconditionally deliberately restores that
+  // earlier, less-precise gate (evidence/confidence required on every
+  // fallback=false turn regardless of whether a claim was made), gated
+  // behind an explicit opt-in flag never set in production. It exists only
+  // so the eval-time ablation study can measure the usability cost of the
+  // unconditional version -- see scripts/evalAblation.js.
+  const hasInsightClaim = ablation.requireEvidenceUnconditionally
+    ? !payload.fallback
+    : !payload.fallback && String(payload.insight || "").trim().length > 0;
   const decisions = {
     evidencePresent: hasInsightClaim ? payload.evidence.length > 0 : true,
     confidenceOk: hasInsightClaim ? payload.confidence >= policyConfig.minConfidence : true,
@@ -1149,13 +1222,25 @@ function verifyInsight({ payload, rawText, healthQuality }) {
 }
 
 export async function buildChatContext(userId) {
-  const journals = await JournalEntry.find({ userId }).sort({ createdAt: -1 }).limit(20);
-  const retrospect = await RetrospectAnalysis.findOne({ userId }).sort({ createdAt: -1 });
-  const health = await HealthData.find({
-    userId,
-    date: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-  }).sort({ date: -1 });
-  const session = await ChatSession.findOne({ userId });
+  // These four reads are independent of one another (none depends on
+  // another's result), so they previously ran as four sequential awaits --
+  // each one paying a full Mongo round-trip before the next even started.
+  // Running them concurrently cuts buildChatContext's latency to roughly
+  // that of the single slowest query instead of the sum of all four, with
+  // no change in what's fetched or returned.
+  // journals also now selects the embedding field (`+embedding`, normally
+  // excluded -- see JournalEntry.js) so buildSmartEvidenceCandidates below
+  // can reuse this same result set for semantic matching instead of
+  // re-querying JournalEntry a second time for the same 20 documents.
+  const [journals, retrospect, health, session] = await Promise.all([
+    JournalEntry.find({ userId }).sort({ createdAt: -1 }).limit(20).select("+embedding"),
+    RetrospectAnalysis.findOne({ userId }).sort({ createdAt: -1 }),
+    HealthData.find({
+      userId,
+      date: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+    }).sort({ date: -1 }),
+    ChatSession.findOne({ userId }),
+  ]);
   const themes = detectThemes(journals);
   const healthQuality = calculateHealthQuality(health);
   const readiness = buildReadiness({ journals, healthQuality, themes });
@@ -1178,7 +1263,7 @@ export async function buildChatContext(userId) {
 // avoidRepeatedQuestion) but only ever wired into the "no provider" branch --
 // giving real, varied, on-brand responses in both cases instead of the one
 // hardcoded apology line every AI-call failure used to fall back to.
-function buildHeuristicResponse({ userMessage, context, evidenceCandidates }) {
+export function buildHeuristicResponse({ userMessage, context, evidenceCandidates }) {
   const recentTurns = context.session?.turns || [];
   const intent = detectIntent(userMessage);
   let payload =
@@ -1196,7 +1281,7 @@ function buildHeuristicResponse({ userMessage, context, evidenceCandidates }) {
   return payload;
 }
 
-export async function processChatTurn({ userId, userMessage, chatSettings = {} }) {
+export async function processChatTurn({ userId, userMessage, chatSettings = {}, ablation = {} }) {
   const normalizedSettings = normalizeChatSettings(chatSettings);
   const context = await buildChatContext(userId);
   const journalPool = normalizedSettings.useMemory ? context.journals : [];
@@ -1211,18 +1296,35 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
   let payload = null;
   let parseFailed = false;
   let responseSource = "fallback";
+  // Captures the model's own, pre-policy output (before enrichPayload
+  // touches it) whenever generation actually succeeds -- exposed on the
+  // return value below so scripts/evalAblation.js can replay the same real
+  // generated payload through an alternate (ablated) policy pipeline without
+  // making a second, independently-stochastic model call. Stays null on the
+  // heuristic/no-provider/total-failure paths, since those never produced a
+  // raw model payload in the first place.
+  let rawGeneratedPayload = null;
   const aiAvailable = !!openai || useOllama;
 
   if (aiAvailable) {
     try {
+      // Previously also sent the full `journals` pool here (up to 20 raw
+      // entries, full content, in addition to evidenceCandidates below) --
+      // the prompt's own rules only ever tell the model to cite from
+      // `evidenceCandidates` ("Use at least one evidence object from
+      // evidenceCandidates when fallback=false"), never from a separate
+      // `journals` field, so that raw pool was pure prompt bloat: up to 20x
+      // full journal entries JSON-stringified into every single request,
+      // directly inflating prefill time on a CPU-bound local 3B model for
+      // no behavioral benefit. `evidenceCandidates` (already the
+      // relevance-scored top 5, semantic-matched when available) plus
+      // `themes` and `latestRetrospect` still give the model everything it
+      // needs for both specific citations and longer-term pattern context.
+      // Nothing downstream reads this payload's `journals` field -- removing
+      // it does not change evidence matching, gating, or any accept/reject
+      // policy decision, only how many tokens get sent to the model.
       const generated = await generateInsight(
         {
-          journals: context.journals.map((j) => ({
-            id: String(j._id),
-            content: j.content,
-            mood: j.mood,
-            date: j.createdAt,
-          })),
           evidenceCandidates,
           themes: context.themes,
           latestRetrospect: context.retrospect?.summary || "",
@@ -1234,7 +1336,8 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
         },
         userMessage,
       );
-      payload = enrichPayload(generated.payload, evidenceCandidates);
+      rawGeneratedPayload = generated.payload;
+      payload = enrichPayload(generated.payload, evidenceCandidates, ablation);
       // Same repetition guard already applied to heuristic replies (see
       // buildHeuristicResponse below) -- previously only that rule-based path
       // got it, so a genuine Ollama/cloud reply could ask the near-same
@@ -1302,7 +1405,7 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
     payload = scrubHealthReferences(payload);
   }
 
-  const verification = verifyInsight({ payload, rawText, healthQuality: context.healthQuality });
+  const verification = verifyInsight({ payload, rawText, healthQuality: context.healthQuality, ablation });
   const accepted = verification.accepted;
   // Only logs the rejection case, not every turn -- added during the
   // original "why is everything falling back" investigation, when logging
@@ -1364,6 +1467,14 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {} }
     themes: context.themes,
     healthQuality: context.healthQuality,
     session,
+    // Additive fields, not used by any existing caller (routes.js just reads
+    // `payload`): accepted mirrors verification.accepted, and
+    // rawGeneratedPayload/evidenceCandidates expose exactly what
+    // scripts/evalAblation.js needs to replay this same real turn through an
+    // alternate policy configuration.
+    accepted,
+    rawGeneratedPayload,
+    evidenceCandidates,
   };
 }
 

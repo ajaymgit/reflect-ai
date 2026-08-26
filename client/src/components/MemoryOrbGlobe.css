@@ -126,8 +126,8 @@
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #1b241f;
-  background: linear-gradient(135deg, #e8ab5f, #8fae73);
+  color: #FFFFFF;
+  background: linear-gradient(135deg, #e8ab5f, #3D4FD1);
   box-shadow: 0 4px 14px rgba(232, 171, 95, 0.35);
 }
 

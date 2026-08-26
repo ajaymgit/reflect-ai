@@ -64,7 +64,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen page-gradient living-bg mood-calm text-white flex items-center justify-center p-4">
+    <div className="min-h-screen page-gradient living-bg mood-calm text-ink flex items-center justify-center p-4">
       <motion.div
         className="w-full max-w-5xl grid md:grid-cols-2 gap-4"
         initial={reducedMotion ? false : { opacity: 0, y: 12 }}
@@ -75,21 +75,21 @@ export default function LoginPage() {
           <div>
             <p className="ui-kicker">Equoria</p>
             <h1 className="ui-title mt-3">ReflectAI Coach</h1>
-            <p className="text-white/70 mt-3 text-sm leading-6">
+            <p className="text-ink/70 mt-3 text-sm leading-6">
               A calm journaling workspace with memory-aware reflective conversations and evidence-based prompts.
             </p>
             {/* Names the actual differentiated features instead of generic
                 copy -- previously this said nothing more specific than "a
                 calm journaling workspace," which undersells what's actually
                 here compared to the rest of the app. */}
-            <ul className="text-sm text-white/70 mt-5 space-y-2">
+            <ul className="text-sm text-ink/70 mt-5 space-y-2">
               <li>• Keepsakes -- flag entries worth revisiting later</li>
               <li>• Time capsules -- seal a letter to your future self</li>
               <li>• Retrospect -- real patterns in your mood over time</li>
             </ul>
           </div>
-          <div className="text-sm text-white/70">
-            Demo: <span className="text-white">demo@reflectai.com / Demo@123</span>
+          <div className="text-sm text-ink/70">
+            Demo: <span className="text-ink">demo@reflectai.com / Demo@123</span>
           </div>
         </section>
 
@@ -102,11 +102,13 @@ export default function LoginPage() {
             <input
               className="ui-input"
               type="email"
+              autoComplete="email"
               placeholder="Email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
             <PasswordInput
+              autoComplete="current-password"
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -115,14 +117,14 @@ export default function LoginPage() {
             <button className="w-full p-3 ui-button-primary" disabled={submitting}>
               {submitting ? "Signing in..." : "Login"}
             </button>
-            <p className="text-sm text-white/70">
-              <Link className="text-[#d9d2b0] hover:text-[#ede5c4]" to="/forgot-password">
+            <p className="text-sm text-ink/70">
+              <Link className="text-signal hover:text-signal-soft" to="/forgot-password">
                 Forgot password?
               </Link>
             </p>
-            <p className="text-sm text-white/70">
+            <p className="text-sm text-ink/70">
               New here?{" "}
-              <Link className="text-[#d9d2b0] hover:text-[#ede5c4]" to="/register">
+              <Link className="text-signal hover:text-signal-soft" to="/register">
                 Create account
               </Link>
             </p>
@@ -134,7 +136,7 @@ export default function LoginPage() {
             <div>
               <p className="ui-kicker">Two-factor authentication</p>
               <h2 className="ui-title mt-1">Enter your code</h2>
-              <p className="text-sm text-white/70 mt-2">
+              <p className="text-sm text-ink/70 mt-2">
                 Enter the 6-digit code from your authenticator app, or one of your backup codes.
               </p>
             </div>
@@ -152,7 +154,7 @@ export default function LoginPage() {
             </button>
             <button
               type="button"
-              className="text-sm text-white/70 hover:text-white"
+              className="text-sm text-ink/70 hover:text-ink"
               onClick={() => {
                 setTwoFactorToken(null);
                 setCode("");

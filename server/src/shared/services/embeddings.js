@@ -14,6 +14,13 @@ import { logError, logInfo } from "../utils/logger.js";
 const useOllama = String(env.USE_OLLAMA || "true").toLowerCase() !== "false";
 const ollamaBaseUrl = env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
 const embedModel = env.OLLAMA_EMBED_MODEL || "nomic-embed-text";
+// See chat/service.js's identical constant. Worth knowing: Ollama Cloud's
+// hosted catalog is oriented around large chat/reasoning models, not small
+// task-specific embedding models like nomic-embed-text -- if it's not
+// available there, this just 404s and embedText's existing catch-all falls
+// back to keyword matching (logged once, not fatal), the same as if this
+// model were never pulled locally.
+const ollamaAuthHeaders = env.OLLAMA_API_KEY ? { Authorization: `Bearer ${env.OLLAMA_API_KEY}` } : {};
 
 let embedModelUnavailableLogged = false;
 
@@ -41,7 +48,7 @@ export async function embedText(text, { taskType = "document" } = {}) {
       `${ollamaBaseUrl}/api/embeddings`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...ollamaAuthHeaders },
         body: JSON.stringify({ model: embedModel, prompt: `${prefixFor(taskType)}${String(text)}` }),
       },
       10000,

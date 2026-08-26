@@ -371,5 +371,33 @@ router.post(
   }),
 );
 
+// Backfill route, scoped to the caller's own entries only. extractThemes's
+// STOPWORDS list has grown since entries in this account were first written
+// (it was missing common filler words like "actually"/"instead"/"like",
+// which then won the per-entry top-3 over real topics), and `themes` is only
+// ever computed once at write time -- older entries keep serving whatever
+// extractThemes said back then until something recomputes them. Idempotent
+// and safe to call repeatedly; only touches entries whose recomputed value
+// actually differs from what's stored.
+router.post(
+  "/recompute-themes",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const entries = await JournalEntry.find({ userId: req.user._id });
+    let changed = 0;
+    for (const entry of entries) {
+      const next = extractThemes(entry.content);
+      const prev = Array.isArray(entry.themes) ? entry.themes : [];
+      const same = prev.length === next.length && prev.every((t, i) => t === next[i]);
+      if (!same) {
+        entry.themes = next;
+        await entry.save();
+        changed += 1;
+      }
+    }
+    res.json({ scanned: entries.length, changed });
+  }),
+);
+
 export default router;
 

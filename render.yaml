@@ -1,0 +1,102 @@
+# Render Blueprint -- deploys reflect-ai as a real website: the client as a
+# static site, the server as a web service. One-time setup: on Render,
+# New -> Blueprint -> point at this repo/branch. Render reads this file and
+# creates both services below in one go.
+#
+# `plan: free` on the server means it sleeps after inactivity and wakes on
+# the next request (a few seconds' delay) -- fine for a personal/demo-scale
+# app; bump to a paid plan later if that cold-start delay becomes a problem.
+# Static sites are free on Render regardless, no plan field needed.
+#
+# Env vars marked `sync: false` are prompted for once in the Render
+# Dashboard on first deploy, never stored in this committed file. A few of
+# them (CLIENT_URL, VITE_API_URL) are also chicken-and-egg: each service's
+# real https://*.onrender.com URL only exists after its first deploy, so
+# fill those two in via the Dashboard once both services have deployed once
+# (see the comments below each one).
+services:
+  - type: web
+    name: reflectai-server
+    runtime: node
+    rootDir: server
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      # Same MONGO_URI/JWT_SECRET/ENCRYPTION_KEY rules as local .env (see
+      # env.js) -- generate real values, don't reuse local dev secrets.
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      # The reflectai-client static site's URL below, e.g.
+      # https://reflectai-client.onrender.com -- fill in after that
+      # service's first deploy reveals its actual assigned subdomain.
+      # Comma-separate if you also have a custom domain (see index.js's
+      # CORS setup, which splits this on commas). The Capacitor Android app
+      # doesn't need an entry here -- its origin is allowed unconditionally.
+      - key: CLIENT_URL
+        sync: false
+      - key: DEMO_EMAIL
+        value: demo@reflectai.com
+      - key: DEMO_PASSWORD
+        sync: false
+      # Cloud LLM fallback (used if Ollama is unreachable or USE_OLLAMA is
+      # false) -- optional, chat/retrospect features degrade to a
+      # deterministic heuristic responder without either of these.
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: AI_MODEL
+        value: gemini-2.0-flash
+      # Ollama Cloud, not a local instance -- a deployed server can't reach
+      # 127.0.0.1:11434 on your own machine. Get an API key at
+      # https://ollama.com/settings/keys. gpt-oss:20b is a level-1 (light)
+      # cloud model, chosen to stretch the free tier's quota -- swap for a
+      # heavier model once you've confirmed you need it.
+      - key: USE_OLLAMA
+        value: "true"
+      - key: OLLAMA_BASE_URL
+        value: https://ollama.com
+      - key: OLLAMA_MODEL
+        value: gpt-oss:20b
+      - key: OLLAMA_API_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        value: "ReflectAI <onboarding@resend.dev>"
+      # Render sits in front of this service as a reverse proxy -- see the
+      # TRUST_PROXY comment in env.js for why every rate limiter here
+      # (login, refresh, forgot-password, 2FA) needs this set to work
+      # correctly rather than bucketing every user under Render's own IP.
+      - key: TRUST_PROXY
+        value: "1"
+
+  - type: web
+    name: reflectai-client
+    runtime: static
+    rootDir: client
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      # The reflectai-server web service's URL above, e.g.
+      # https://reflectai-server.onrender.com -- same chicken-and-egg fill-in
+      # as CLIENT_URL. This gets baked into the client bundle at build time
+      # (Vite env vars aren't runtime-configurable), so re-deploy the client
+      # after setting this if it's ever missing on first deploy.
+      - key: VITE_API_URL
+        sync: false
+    routes:
+      # react-router-dom does client-side routing -- without this, loading
+      # (or refreshing) any URL other than "/" directly (e.g. /dashboard)
+      # 404s at the static-file layer before React ever gets a chance to
+      # render. This tells Render's static host to always serve index.html
+      # and let the client-side router take over from there.
+      - type: rewrite
+        source: /*
+        destination: /index.html

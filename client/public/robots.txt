@@ -1,0 +1,6 @@
+# Equoria (ReflectAI) is a private, account-gated journaling app -- there is
+# no public marketing content for a crawler to index, and everything past
+# /login requires authentication anyway. Disallowing everything is the
+# honest signal here, not an SEO afterthought.
+User-agent: *
+Disallow: /

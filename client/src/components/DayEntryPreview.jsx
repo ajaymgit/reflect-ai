@@ -28,16 +28,16 @@ export default function DayEntryPreview({ date }) {
   if (!date) return null;
 
   return (
-    <div className="mt-3 rounded-xl p-3 bg-white/5 border border-white/10">
-      <p className="text-[11px] text-[#d9d2b0]">{new Date(`${date}T00:00:00`).toDateString()}</p>
-      {state.loading && <p className="text-sm text-white/60 mt-1">Loading...</p>}
+    <div className="mt-3 rounded-xl p-3 bg-ink/5 border border-ink/10">
+      <p className="text-[11px] text-signal">{new Date(`${date}T00:00:00`).toDateString()}</p>
+      {state.loading && <p className="text-sm text-ink/60 mt-1">Loading...</p>}
       {!state.loading && state.entry && (
         <>
-          <p className="text-sm text-white/85 mt-1">{state.entry.title || "Untitled entry"}</p>
-          <p className="text-xs text-white/70 mt-1 line-clamp-3">{state.entry.content}</p>
+          <p className="text-sm text-ink/85 mt-1">{state.entry.title || "Untitled entry"}</p>
+          <p className="text-xs text-ink/70 mt-1 line-clamp-3">{state.entry.content}</p>
         </>
       )}
-      {!state.loading && !state.entry && <p className="text-sm text-white/60 mt-1">No entry found for that day.</p>}
+      {!state.loading && !state.entry && <p className="text-sm text-ink/60 mt-1">No entry found for that day.</p>}
     </div>
   );
 }

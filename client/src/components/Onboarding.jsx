@@ -40,14 +40,24 @@ export default function Onboarding({ onDone }) {
 
   return (
     <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="ui-card rounded-3xl p-8 max-w-md w-full text-center relative">
-        <button
-          type="button"
-          onClick={onDone}
-          className="absolute top-4 right-4 text-xs text-white/55 hover:text-white/70"
-        >
-          Skip
-        </button>
+      {/* Left-aligned, no icon-in-a-colored-circle badge, no dot-strip
+          progress indicator -- that combination (centered card, circular
+          icon badge, row of dots, Skip top-right) is the default output of
+          basically every onboarding-carousel template/generator, and reading
+          as one of those was a bigger tell than any single page's styling.
+          Step count uses the app's own ui-mono convention (already how every
+          stat/kicker/timestamp in the app marks "this is metadata") instead
+          of a generic dot strip -- same information, in this app's own
+          typographic language rather than a borrowed one. */}
+      <div className="ui-card rounded-3xl p-8 max-w-md w-full relative">
+        <div className="flex items-center justify-between">
+          <p className="ui-mono text-xs text-ink/45">
+            {String(step + 1).padStart(2, "0")} / {String(SLIDES.length).padStart(2, "0")}
+          </p>
+          <button type="button" onClick={onDone} className="text-xs text-ink/55 hover:text-ink/70">
+            Skip
+          </button>
+        </div>
 
         <AnimatePresence mode="wait">
           <motion.div
@@ -56,25 +66,17 @@ export default function Onboarding({ onDone }) {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -16 }}
             transition={{ duration: 0.25 }}
+            className="mt-8"
           >
-            <div className="mx-auto h-14 w-14 rounded-full bg-[#8fae73]/20 border border-[#8fae73]/40 flex items-center justify-center">
-              <slide.Icon size={26} className="text-[#8fae73]" />
+            <div className="flex items-center gap-2.5">
+              <slide.Icon size={17} className="text-signal shrink-0" />
+              <h3 className="ui-title text-2xl">{slide.title}</h3>
             </div>
-            <h3 className="ui-title text-2xl mt-4">{slide.title}</h3>
-            <p className="text-sm text-white/70 mt-3 leading-6">{slide.body}</p>
+            <p className="text-sm text-ink/70 mt-3 leading-6">{slide.body}</p>
           </motion.div>
         </AnimatePresence>
 
-        <div className="flex items-center justify-center gap-1.5 mt-6">
-          {SLIDES.map((_, i) => (
-            <span
-              key={i}
-              className={`h-1.5 rounded-full transition-all ${i === step ? "w-5 bg-[#8fae73]" : "w-1.5 bg-white/20"}`}
-            />
-          ))}
-        </div>
-
-        <div className="flex gap-2 mt-6">
+        <div className="flex gap-2 mt-8">
           {step > 0 && (
             <button
               type="button"

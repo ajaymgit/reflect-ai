@@ -42,10 +42,48 @@ app.use((_req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Referrer-Policy", "no-referrer");
+  // Tells browsers to only ever talk to this host over HTTPS for the next
+  // year (and to remember that for subdomains too), so a stray http://
+  // link or a downgrade attempt can't silently send credentials/tokens over
+  // plaintext. This doesn't itself terminate/redirect HTTP -- that's the
+  // hosting platform or reverse proxy's job (Render, Fly.io, Nginx, etc. all
+  // do this in front of the app) -- but the header is safe to always send:
+  // browsers just ignore it entirely over a plain HTTP connection.
+  res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   next();
 });
 
-app.use(cors({ origin: env.CLIENT_URL, credentials: true }));
+// Was a single-origin `origin: env.CLIENT_URL` -- correct for a web-only
+// deploy, but the packaged Android app (see client/capacitor.config.ts)
+// serves its WebView content from a fixed origin of its own
+// (https://localhost is Capacitor's default androidScheme; capacitor://localhost
+// shows up on some configurations/older versions), neither of which is
+// env.CLIENT_URL. Rather than hardcoding one, allow CLIENT_URL to be a
+// comma-separated list (for real web origins -- staging, production, etc.)
+// and always additionally allow the two fixed Capacitor origins, since
+// those identify "the native app shell," not an attacker-controlled site.
+const allowedWebOrigins = new Set(
+  String(env.CLIENT_URL || "")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean),
+);
+const CAPACITOR_ORIGINS = new Set(["https://localhost", "capacitor://localhost"]);
+app.use(
+  cors({
+    origin(origin, callback) {
+      // No Origin header at all (server-to-server calls, curl, some native
+      // HTTP clients) -- never sent by a browser or WebView making a real
+      // cross-origin request, so allowing it here isn't a same-origin-policy
+      // bypass, just a no-op for non-browser callers.
+      if (!origin || allowedWebOrigins.has(origin) || CAPACITOR_ORIGINS.has(origin)) {
+        return callback(null, true);
+      }
+      callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
+  }),
+);
 app.use(express.json({ limit: "1mb" }));
 app.use(requestIdMiddleware);
 

@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import AppShell from "./components/AppShell";
 import AuthRedirect from "./components/AuthRedirect";
@@ -8,6 +8,9 @@ const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
 const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
+const PrivacyPolicyPage = lazy(() => import("./pages/PrivacyPolicyPage"));
+const TermsPage = lazy(() => import("./pages/TermsPage"));
+const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const JournalPage = lazy(() => import("./pages/JournalPage"));
 const YearInReviewPage = lazy(() => import("./pages/YearInReviewPage"));
@@ -18,8 +21,31 @@ const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const MorePage = lazy(() => import("./pages/MorePage"));
 
 export default function App() {
+  // AppShell (and SettingsPage's own toggle) apply body[data-theme-mode] --
+  // but AppShell only mounts inside the authenticated "/" route tree, so any
+  // page outside it (this file's own /login, /privacy, /terms, and the
+  // catch-all 404 below) never gets that effect and falls back to index.css's
+  // default light "daylight" styling. Barely noticeable pre-login, but jarring
+  // for the 404 page specifically: it's reachable by an already-authenticated,
+  // already-dark-themed user who mistypes an in-app URL (e.g. "/journal"
+  // instead of "/journal/new") or loads a stale link, and it explicitly
+  // offers them a "Back to Home" action -- so it reads as part of the app,
+  // not a public marketing page, and should match whatever theme they had.
+  // Applying the saved preference once here, before any route renders, means
+  // every page (including this 404) starts themed correctly instead of only
+  // the ones nested under AppShell.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("equoria-settings");
+      const settings = raw ? JSON.parse(raw) : null;
+      document.body.setAttribute("data-theme-mode", settings?.themeMode === "midnight" ? "midnight" : "daylight");
+    } catch {
+      document.body.setAttribute("data-theme-mode", "daylight");
+    }
+  }, []);
+
   const routeFallback = (
-    <div className="min-h-[40vh] flex items-center justify-center text-white/70 text-sm">
+    <div className="min-h-[40vh] flex items-center justify-center text-ink/70 text-sm">
       Loading your space...
     </div>
   );
@@ -63,6 +89,25 @@ export default function App() {
         element={
           <Suspense fallback={routeFallback}>
             <ResetPasswordPage />
+          </Suspense>
+        }
+      />
+      {/* Public, unauthenticated -- linked from Register and Settings.
+          Reachable whether or not you have an account, same as any real
+          site's legal pages. */}
+      <Route
+        path="/privacy"
+        element={
+          <Suspense fallback={routeFallback}>
+            <PrivacyPolicyPage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/terms"
+        element={
+          <Suspense fallback={routeFallback}>
+            <TermsPage />
           </Suspense>
         }
       />
@@ -146,7 +191,17 @@ export default function App() {
         />
         <Route index element={<Navigate to="/dashboard" replace />} />
       </Route>
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      {/* A real 404 instead of a silent redirect -- see NotFoundPage.jsx for
+          why that matters (an old bookmark or typo'd link used to just land
+          you somewhere else with zero explanation). */}
+      <Route
+        path="*"
+        element={
+          <Suspense fallback={routeFallback}>
+            <NotFoundPage />
+          </Suspense>
+        }
+      />
     </Routes>
   );
 }

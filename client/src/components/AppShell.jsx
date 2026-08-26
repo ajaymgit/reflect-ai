@@ -1,4 +1,4 @@
-import { Flame, Home, MessageCircle, PenSquare, Settings, HeartPulse, LineChart, Sparkles, MoreHorizontal } from "lucide-react";
+import { Flame, Home, MessageCircle, PenSquare, Settings, HeartPulse, LineChart, PartyPopper, MoreHorizontal } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { apiFetch } from "../api";
@@ -38,7 +38,7 @@ const navGroups = [
     label: "Insights",
     items: [
       { to: "/retrospect", label: "Retrospect", Icon: LineChart },
-      { to: "/year-in-review", label: "Year in Review", Icon: Sparkles },
+      { to: "/year-in-review", label: "Year in Review", Icon: PartyPopper },
       { to: "/health", label: "Health", Icon: HeartPulse },
     ],
   },
@@ -63,6 +63,16 @@ export default function AppShell() {
   const location = useLocation();
   const title = pageTitles[location.pathname] || "Home";
   const isMoreActive = moreRoutes.has(location.pathname);
+
+  // Every route inside the app previously left the browser tab reading the
+  // static "ReflectAI" from index.html forever -- with several tabs open
+  // (Chat in one, Health in another) there was no way to tell them apart
+  // without clicking into each. Reuses the same pageTitles map the mobile
+  // header already renders, so there's one source of truth for "what this
+  // route is called," not a second copy to keep in sync.
+  useEffect(() => {
+    document.title = `${title} - Equoria`;
+  }, [title]);
   // Momentum indicator on the Journal nav item -- previously a streak was
   // only ever visible after opening Dashboard; this surfaces it right in
   // the nav so it's a constant, low-effort reminder rather than something
@@ -114,55 +124,55 @@ export default function AppShell() {
   }, [location.pathname]);
 
   return (
-    <div className="min-h-screen page-gradient text-white pb-20 md:pb-0 md:flex">
-      {/* Desktop sidebar -- replaces the old horizontal pill row entirely.
-          Sits alongside content rather than above it, so it can show every
-          destination, grouped, all the time, instead of the old row that
-          would have needed to wrap or scroll once Year in Review was added
-          as an 8th item. Background is an olive-dark tone matching
-          .page-gradient/.ui-card's rgba(32,45,38,...) family -- previously
-          a slate-navy (#1f2937) hex that visibly clashed against the
-          olive/forest theme underneath it, like a leftover template shell
-          wrapped around a different app. */}
-      <aside className="hidden md:flex md:flex-col md:w-60 md:shrink-0 border-r border-white/10 bg-[#151f1a]/85 backdrop-blur px-4 py-5 md:sticky md:top-0 md:h-screen md:overflow-y-auto scroll-area">
-        <Link to="/dashboard" className="block px-2 mb-6 hover:opacity-90 transition">
-          <p className="ui-kicker text-[#d9d2b0]">Equoria</p>
-          <p className="text-lg font-semibold" style={{ fontFamily: "Fraunces, Georgia, serif" }}>
-            Reflect
-          </p>
+    <div className="min-h-screen page-gradient text-ink pb-20 md:pb-0 md:flex">
+      {/* Desktop sidebar -- sits alongside content rather than above it, so
+          it can show every destination, grouped, all the time. Solid
+          paper.raised, not a translucent background plus backdrop-blur --
+          "frosted glass" chrome is exactly the kind of default-AI-generated
+          polish this system deliberately avoids everywhere else (flat
+          surfaces, real borders, no blur), so the nav shouldn't be the one
+          place that still has it. */}
+      <aside className="hidden md:flex md:flex-col md:w-60 md:shrink-0 border-r border-ink/10 bg-paper-raised px-4 py-5 md:sticky md:top-0 md:h-screen md:overflow-y-auto scroll-area">
+        {/* Real wordmark presence: bigger serif "Reflect", small gold accent
+            mark standing in for a logo, "Equoria" demoted to a quiet mono
+            sub-label underneath instead of leading. */}
+        <Link to="/dashboard" className="flex items-center gap-2.5 px-2 mb-8 hover:opacity-90 transition">
+          <span className="h-2 w-2 rounded-full shrink-0 bg-accent-ember" />
+          <div>
+            <p className="text-xl font-semibold leading-none font-display">Reflect</p>
+            <p className="ui-kicker text-ink-faint mt-1">Equoria</p>
+          </div>
         </Link>
-        <nav className="flex-1 space-y-5">
+        <nav className="flex-1 space-y-6">
           {navGroups.map((group, i) => (
             <div key={group.label || `group-${i}`}>
-              {group.label && (
-                <p className="ui-kicker px-2 mb-1.5 text-white/55">{group.label}</p>
-              )}
-              <div className="space-y-1">
+              {group.label && <p className="ui-kicker px-3 mb-2 text-ink-faint">{group.label}</p>}
+              <div className="space-y-0.5">
                 {group.items.map(({ to, label, Icon }) => {
                   const isActive = location.pathname === to;
                   return (
                     <Link
                       key={to}
                       to={to}
-                      className={`flex items-center gap-2.5 rounded-xl px-3 py-2.5 border text-sm transition ${
-                        isActive ? "text-white" : "border-transparent text-white/80 hover:bg-white/5"
+                      // Left-edge accent bar instead of a bordered/tinted
+                      // pill -- a tab indicator, not a button, since these
+                      // are destinations not actions. Text weight (not just
+                      // color) does real work too: active items are
+                      // genuinely bolder, not just brighter.
+                      className={`relative flex items-center gap-2.5 rounded-lg pl-3 pr-3 py-2.5 text-sm transition ${
+                        isActive ? "text-ink font-medium bg-ink/[0.06]" : "text-ink-muted hover:text-ink hover:bg-ink/5"
                       }`}
-                      // Same --user-light-driven active state the old top nav
-                      // pill used, kept identical so the Settings -> Appearance
-                      // hue slider still reaches the nav no matter where it lives.
-                      style={
-                        isActive
-                          ? {
-                              borderColor: "color-mix(in srgb, var(--user-light, #c6d8a8) 70%, transparent)",
-                              background: "color-mix(in srgb, var(--user-light, #8fae73) 22%, transparent)",
-                            }
-                          : undefined
-                      }
                     >
-                      <Icon size={16} />
+                      {isActive && (
+                        <span
+                          className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full"
+                          style={{ background: "var(--user-light, rgb(var(--signal)))" }}
+                        />
+                      )}
+                      <Icon size={16} className={isActive ? "" : "text-ink-faint"} />
                       {label}
                       {to === "/journal/new" && streak > 0 && (
-                        <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-[#e8ab5f]">
+                        <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-accent-ember">
                           <Flame size={11} />
                           {streak}
                         </span>
@@ -177,11 +187,11 @@ export default function AppShell() {
       </aside>
 
       <div className="flex-1 min-w-0">
-        <header className="sticky top-0 z-40 border-b border-white/10 bg-[#151f1a]/85 backdrop-blur px-4 md:px-6 py-3 md:hidden">
-          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+        <header className="sticky top-0 z-40 border-b border-ink/10 bg-paper-raised px-4 md:px-6 py-3 md:hidden">
+          <div className="max-w-7xl mx-auto flex items-center gap-2.5">
+            <span className="h-1.5 w-1.5 rounded-full shrink-0 bg-accent-ember" />
             <Link to="/dashboard" className="hover:opacity-90 transition">
-              <p className="ui-kicker text-[#d9d2b0]">Equoria</p>
-              <h1 className="text-base font-semibold">{title}</h1>
+              <h1 className="text-base font-semibold font-display">{title}</h1>
             </Link>
           </div>
         </header>
@@ -191,7 +201,7 @@ export default function AppShell() {
         </div>
       </div>
 
-      <nav className="md:hidden fixed bottom-0 inset-x-0 border-t border-white/10 bg-[#10150f]/95 backdrop-blur z-30">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 border-t border-ink/10 bg-paper-sunken z-30">
         <div className="grid grid-cols-5 gap-1 px-2 py-2">
           {mobilePrimaryItems.map(({ to, label, Icon }) => {
             const isActive = to === "/more" ? isMoreActive : location.pathname === to;
@@ -199,12 +209,12 @@ export default function AppShell() {
               <Link
                 key={to}
                 to={to}
-                className={`rounded-lg p-2 text-center text-[10px] ${isActive ? "text-white" : "text-white/80"}`}
+                className={`rounded-lg p-2 text-center text-[10px] ${isActive ? "text-ink" : "text-ink-muted"}`}
                 style={
                   isActive
                     ? {
-                        background: "color-mix(in srgb, var(--user-light, #8fae73) 30%, transparent)",
-                        boxShadow: "0 0 18px color-mix(in srgb, var(--user-light, #9abf75) 30%, transparent)",
+                        background: "color-mix(in srgb, var(--user-light, rgb(var(--signal))) 30%, transparent)",
+                        boxShadow: "0 0 18px color-mix(in srgb, var(--user-light, rgb(var(--signal-soft))) 30%, transparent)",
                       }
                     : undefined
                 }
@@ -212,7 +222,7 @@ export default function AppShell() {
                 <span className="relative inline-block">
                   <Icon size={14} className="mx-auto mb-1" />
                   {to === "/journal/new" && streak > 0 && (
-                    <span className="absolute -top-0.5 -right-1 h-1.5 w-1.5 rounded-full bg-[#e8ab5f]" />
+                    <span className="absolute -top-0.5 -right-1 h-1.5 w-1.5 rounded-full bg-accent-ember" />
                   )}
                 </span>
                 {label}

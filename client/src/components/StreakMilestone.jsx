@@ -63,16 +63,16 @@ export default function StreakMilestone({ streak }) {
           type="button"
           onClick={dismiss}
           aria-label="Close"
-          className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-white/10 transition"
+          className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-ink/10 transition"
         >
-          <X size={15} className="text-white/60" />
+          <X size={15} className="text-ink/60" />
         </button>
         <div className="mx-auto h-14 w-14 rounded-full bg-[#e8ab5f]/20 border border-[#e8ab5f]/40 flex items-center justify-center">
           <Flame size={26} className="text-[#e8ab5f]" />
         </div>
         <p className="ui-kicker mt-4">Streak milestone</p>
         <h3 className="ui-title text-2xl mt-1">{milestone.label}</h3>
-        <p className="text-sm text-white/70 mt-2 leading-6">{milestone.detail}</p>
+        <p className="text-sm text-ink/70 mt-2 leading-6">{milestone.detail}</p>
         <button type="button" onClick={dismiss} className="mt-5 w-full px-4 py-2.5 min-h-11 ui-button-primary">
           Keep going
         </button>

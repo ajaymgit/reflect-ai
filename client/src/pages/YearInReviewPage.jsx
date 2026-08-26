@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { Download } from "lucide-react";
 import { apiFetch } from "../api";
 import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
-import { MOOD_BG_CLASS as moodDotColors } from "../utils/moodColors";
+import { moodDotStyle } from "../utils/moodColors";
 
 const containerVariants = { hidden: {}, visible: { transition: { staggerChildren: 0.09 } } };
 const itemVariants = {
@@ -30,27 +30,27 @@ async function downloadShareCard(data, memberSince) {
   const ctx = canvas.getContext("2d");
 
   const bgGrad = ctx.createLinearGradient(0, 0, 0, height);
-  bgGrad.addColorStop(0, "#1b241f");
-  bgGrad.addColorStop(1, "#121a16");
+  bgGrad.addColorStop(0, "#FFFFFF");
+  bgGrad.addColorStop(1, "#E8E0CB");
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, width, height);
 
   const accentGrad = ctx.createRadialGradient(width * 0.85, height * 0.08, 20, width * 0.85, height * 0.08, 520);
-  accentGrad.addColorStop(0, "rgba(210,126,86,0.35)");
-  accentGrad.addColorStop(1, "rgba(210,126,86,0)");
+  accentGrad.addColorStop(0, "rgba(61,79,209,0.16)");
+  accentGrad.addColorStop(1, "rgba(61,79,209,0)");
   ctx.fillStyle = accentGrad;
   ctx.fillRect(0, 0, width, height);
 
-  ctx.fillStyle = "#d9d2b0";
-  ctx.font = "600 28px 'IBM Plex Mono', monospace";
+  ctx.fillStyle = "#3D4FD1";
+  ctx.font = "600 28px 'JetBrains Mono', monospace";
   ctx.fillText("EQUORIA", 80, 130);
 
-  ctx.fillStyle = "#f8fafc";
-  ctx.font = "600 56px Georgia, serif";
+  ctx.fillStyle = "#17140F";
+  ctx.font = "600 56px 'Space Grotesk', sans-serif";
   wrapText(ctx, "Your year, reflected", 80, 210, width - 160, 62);
 
-  ctx.fillStyle = "rgba(248,250,252,0.6)";
-  ctx.font = "24px Manrope, sans-serif";
+  ctx.fillStyle = "rgba(23,20,15,0.6)";
+  ctx.font = "24px Inter, sans-serif";
   ctx.fillText(`Journaling since ${memberSince}`, 80, 300);
 
   let y = 420;
@@ -62,17 +62,17 @@ async function downloadShareCard(data, memberSince) {
   y += 150;
 
   if (data.topThemes?.length > 0) {
-    ctx.fillStyle = "rgba(248,250,252,0.45)";
-    ctx.font = "20px 'IBM Plex Mono', monospace";
+    ctx.fillStyle = "rgba(23,20,15,0.5)";
+    ctx.font = "20px 'JetBrains Mono', monospace";
     ctx.fillText("WHAT YOU WROTE ABOUT MOST", 80, y);
-    ctx.fillStyle = "#f8fafc";
-    ctx.font = "30px Manrope, sans-serif";
+    ctx.fillStyle = "#17140F";
+    ctx.font = "30px Inter, sans-serif";
     const themeLine = data.topThemes.slice(0, 5).map((t) => t.theme.replace(/_/g, " ")).join("  ·  ");
     wrapText(ctx, themeLine, 80, y + 46, width - 160, 40);
   }
 
-  ctx.fillStyle = "rgba(248,250,252,0.35)";
-  ctx.font = "20px 'IBM Plex Mono', monospace";
+  ctx.fillStyle = "rgba(23,20,15,0.4)";
+  ctx.font = "20px 'JetBrains Mono', monospace";
   ctx.fillText(`${data.totalWords?.toLocaleString?.() ?? data.totalWords ?? 0} words in total`, 80, height - 80);
 
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
@@ -87,11 +87,11 @@ async function downloadShareCard(data, memberSince) {
 }
 
 function drawStat(ctx, label, value, x, y) {
-  ctx.fillStyle = "rgba(248,250,252,0.45)";
-  ctx.font = "20px 'IBM Plex Mono', monospace";
+  ctx.fillStyle = "rgba(23,20,15,0.5)";
+  ctx.font = "20px 'JetBrains Mono', monospace";
   ctx.fillText(label.toUpperCase(), x, y);
-  ctx.fillStyle = "#f8fafc";
-  ctx.font = "600 64px Georgia, serif";
+  ctx.fillStyle = "#17140F";
+  ctx.font = "600 64px 'Space Grotesk', sans-serif";
   ctx.fillText(value, x, y + 76);
 }
 
@@ -155,7 +155,7 @@ export default function YearInReviewPage() {
         <div className="max-w-2xl mx-auto ui-card rounded-2xl p-8 text-center">
           <p className="ui-kicker">Year in review</p>
           <h2 className="ui-title mt-2">Not enough entries yet</h2>
-          <p className="text-sm text-white/70 mt-3">
+          <p className="text-sm text-ink/70 mt-3">
             Keep journaling and this page will fill in with your own highlights -- moods, streaks, themes, and more.
           </p>
           <Link to="/journal/new" className="inline-flex mt-5 px-4 py-2.5 text-sm ui-button-primary">
@@ -181,94 +181,154 @@ export default function YearInReviewPage() {
     }
   }
 
+  // moodCounts was already being sent by the server and never rendered
+  // anywhere on this page -- the raw material for a real chart sitting
+  // unused, on the one page in the app with zero charts on it at all
+  // (every other page -- Dashboard, Health, Retrospect -- has at least one
+  // real visualization by now). Same ranked-bar treatment Retrospect's
+  // MoodBalance uses, not a donut, for the same reason: length reads more
+  // precisely than angle, and it keeps the app's charts speaking one
+  // consistent visual language instead of introducing a new chart type
+  // just for this page.
+  const moodEntries = Object.entries(data.moodCounts || {}).sort((a, b) => b[1] - a[1]);
+  const moodTotal = moodEntries.reduce((sum, [, c]) => sum + c, 0);
+  const maxMoodCount = moodEntries[0]?.[1] || 1;
+
   return (
     <main className="ui-page">
-      <motion.div className="max-w-2xl mx-auto space-y-4" variants={cVariants} initial="hidden" animate="visible">
+      <motion.div className="max-w-4xl mx-auto space-y-4" variants={cVariants} initial="hidden" animate="visible">
         <motion.div variants={iVariants} className="text-center py-6">
           <p className="ui-kicker">Your year, reflected</p>
           <h1 className="ui-title text-3xl mt-2">The past 12 months</h1>
-          <p className="text-sm text-white/60 mt-2">Journaling since {memberSince}</p>
+          <p className="text-sm text-ink/60 mt-2">Journaling since {memberSince}</p>
           <button
             type="button"
             onClick={handleShare}
             disabled={sharing}
-            className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 text-xs disabled:opacity-60"
+            className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-ink/15 bg-ink/5 hover:bg-ink/10 text-xs disabled:opacity-60"
           >
             <Download size={13} />
             {sharing ? "Preparing..." : "Save as image"}
           </button>
         </motion.div>
 
-        <motion.div variants={iVariants} className="ui-card rounded-2xl p-8 text-center">
-          <p className="text-xs text-white/60 uppercase tracking-wide">Entries written</p>
-          <p className="ui-title text-6xl mt-2">{data.totalEntries}</p>
-          <p className="text-sm text-white/60 mt-2">
-            across {data.daysJournaled} {data.daysJournaled === 1 ? "day" : "days"} -- {data.totalWords.toLocaleString()} words in total
-          </p>
-        </motion.div>
-
-        <motion.div variants={iVariants} className="grid sm:grid-cols-2 gap-4">
-          <div className="ui-card rounded-2xl p-6 text-center">
-            <p className="text-xs text-white/60 uppercase tracking-wide">Longest streak</p>
-            <p className="ui-title text-4xl mt-2">{data.longestStreak}</p>
-            <p className="text-sm text-white/60 mt-1">consecutive days</p>
+        {/* .ui-card-hero + .ui-hero-number -- the true hero of the whole
+            page, so it gets both the bigger-radius card tier and the same
+            wide hero-number scale Health/Dashboard use for their one big
+            number, instead of a one-off text-6xl bolted onto .ui-title.
+            Longest streak and top mood folded into the same card as
+            secondary stats (a dense strip, like Dashboard's hero card)
+            instead of each getting its own separate full-width card below --
+            three numbers that used to take three cards' worth of vertical
+            space and empty padding now share one. */}
+        <motion.div variants={iVariants} className="ui-card-hero p-6 md:p-8">
+          <div className="text-center">
+            <p className="text-xs text-ink/60 uppercase tracking-wide">Entries written</p>
+            <p className="ui-hero-number text-6xl mt-2 text-accent-ember">{data.totalEntries}</p>
+            <p className="text-sm text-ink/60 mt-2">
+              across {data.daysJournaled} {data.daysJournaled === 1 ? "day" : "days"} -- {data.totalWords.toLocaleString()} words in total
+            </p>
           </div>
-          <div className="ui-card rounded-2xl p-6 text-center">
-            <p className="text-xs text-white/60 uppercase tracking-wide">Most common mood</p>
-            {data.topMood && (
-              <p className="ui-title text-4xl mt-2 capitalize flex items-center justify-center gap-2">
-                <span className={`h-3 w-3 rounded-full ${moodDotColors[data.topMood] || "bg-white/40"}`} />
-                {data.topMood}
-              </p>
-            )}
-          </div>
-        </motion.div>
-
-        {data.topThemes?.length > 0 && (
-          <motion.div variants={iVariants} className="ui-card rounded-2xl p-6">
-            <p className="text-xs text-white/60 uppercase tracking-wide text-center mb-4">What you wrote about most</p>
-            <div className="flex flex-wrap justify-center gap-2">
-              {data.topThemes.map(({ theme, count }, i) => (
-                <span
-                  key={theme}
-                  className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 capitalize"
-                  style={{ fontSize: `${Math.max(12, 16 - i)}px` }}
-                >
-                  {theme.replace(/_/g, " ")}
-                </span>
-              ))}
+          <div className="grid grid-cols-2 mt-6 pt-5 border-t border-ink/10 max-w-sm mx-auto">
+            <div className="text-center border-r border-ink/10">
+              <p className="text-xl font-medium">{data.longestStreak}</p>
+              <p className="text-xs text-ink/55 mt-0.5">longest streak</p>
             </div>
-          </motion.div>
-        )}
+            <div className="text-center">
+              {data.topMood ? (
+                <p className="text-xl font-medium capitalize flex items-center justify-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full" style={moodDotStyle(data.topMood)} />
+                  {data.topMood}
+                </p>
+              ) : (
+                <p className="text-xl font-medium">--</p>
+              )}
+              <p className="text-xs text-ink/55 mt-0.5">most common mood</p>
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div variants={iVariants} className="grid md:grid-cols-2 gap-4 items-start">
+          {/* Real chart, not just a number and a label -- the mood ranking
+              the "most common mood" stat above is a summary of. */}
+          {moodEntries.length > 0 && (
+            <div className="ui-card rounded-2xl p-6">
+              <p className="text-xs text-ink/60 uppercase tracking-wide">Mood balance</p>
+              <p className="text-xs text-ink/45 mt-0.5">The whole year, by proportion.</p>
+              <div className="mt-4 space-y-2.5">
+                {moodEntries.map(([mood, count]) => {
+                  const pct = moodTotal ? Math.round((count / moodTotal) * 100) : 0;
+                  return (
+                    <div key={mood} className="flex items-center gap-3">
+                      <span className="w-16 shrink-0 text-xs text-ink/70 capitalize">{mood}</span>
+                      <div className="flex-1 h-2 rounded-full bg-ink/8 overflow-hidden">
+                        <div
+                          className="h-full rounded-full"
+                          style={{ width: `${Math.max(4, (count / maxMoodCount) * 100)}%`, ...moodDotStyle(mood) }}
+                        />
+                      </div>
+                      <span className="w-9 shrink-0 text-right text-xs text-ink/55 ui-mono">{pct}%</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {data.topThemes?.length > 0 && (
+            <div className="ui-card rounded-2xl p-6">
+              <p className="text-xs text-ink/60 uppercase tracking-wide">What you wrote about most</p>
+              <p className="text-xs text-ink/45 mt-0.5">Most-recurring themes, ranked.</p>
+              {/* Consistent chip size + a count badge instead of the
+                  font-size-implies-rank pattern used before (and the theme
+                  cloud on the Write page used to have, at a more extreme
+                  12-28px range) -- same "why is this one bigger" confusion
+                  either way, just fixed here too for the same reason. */}
+              <div className="flex flex-wrap gap-2 mt-4">
+                {data.topThemes.map(({ theme, count }) => (
+                  <span
+                    key={theme}
+                    className="inline-flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-lg border border-ink/10 bg-ink/5 capitalize text-sm"
+                  >
+                    {theme.replace(/_/g, " ")}
+                    <span className="ui-mono text-[10px] leading-none px-1.5 py-0.5 rounded-full bg-ink/10 text-ink/50">
+                      {count}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </motion.div>
 
         {(data.bestMonth || data.hardestMonth) && (
           <motion.div variants={iVariants} className="grid sm:grid-cols-2 gap-4">
             {data.bestMonth && (
               <div className="ui-card rounded-2xl p-6 text-center">
-                <p className="text-xs text-white/60 uppercase tracking-wide">Brightest stretch</p>
+                <p className="text-xs text-ink/60 uppercase tracking-wide">Brightest stretch</p>
                 <p className="text-xl font-medium mt-2">{data.bestMonth.label}</p>
-                <p className="text-xs text-white/50 mt-1">{data.bestMonth.count} entries</p>
+                <p className="text-xs text-ink/50 mt-1">{data.bestMonth.count} entries</p>
               </div>
             )}
             {data.hardestMonth && data.hardestMonth.label !== data.bestMonth?.label && (
               <div className="ui-card rounded-2xl p-6 text-center">
-                <p className="text-xs text-white/60 uppercase tracking-wide">Hardest stretch</p>
+                <p className="text-xs text-ink/60 uppercase tracking-wide">Hardest stretch</p>
                 <p className="text-xl font-medium mt-2">{data.hardestMonth.label}</p>
-                <p className="text-xs text-white/50 mt-1">{data.hardestMonth.count} entries</p>
+                <p className="text-xs text-ink/50 mt-1">{data.hardestMonth.count} entries</p>
               </div>
             )}
           </motion.div>
         )}
 
         {data.correlationHighlight && (
-          <motion.div variants={iVariants} className="ui-card rounded-2xl p-6">
-            <p className="text-xs text-white/60 uppercase tracking-wide mb-3">A pattern worth knowing</p>
-            <p className="text-sm text-white/85 leading-relaxed">{data.correlationHighlight}</p>
+          <motion.div variants={iVariants} className="ui-quote py-1 mx-2">
+            <p className="ui-kicker">A pattern worth knowing</p>
+            <p className="ui-quote-text text-lg mt-2 leading-relaxed text-ink/95">{data.correlationHighlight}</p>
           </motion.div>
         )}
 
         <motion.div variants={iVariants} className="text-center pt-4 pb-8">
-          <Link to="/retrospect" className="text-sm text-white/50 hover:text-white/80">
+          <Link to="/retrospect" className="text-sm text-ink/50 hover:text-ink/80">
             Back to Retrospect
           </Link>
         </motion.div>

@@ -53,9 +53,23 @@ router.get(
     // `data?.emotionalPatternSummary || "Analyzing entries..."` still renders
     // this normally since it's a non-empty string, not null/undefined.
     const topMood = Object.entries(moodCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
-    const recurringThemes = Array.from(
-      new Set(entries.flatMap((e) => (Array.isArray(e.themes) ? e.themes : [])).filter(Boolean)),
-    ).slice(0, 6);
+    // Previously just Array.from(new Set(...)).slice(0, 6) -- the first 6
+    // DISTINCT themes in entry order, not the 6 most common. A theme that
+    // showed up once in the oldest of these 20 entries could out-rank one
+    // that showed up in half of them, purely by luck of chronological
+    // position. Now actually ranked by frequency, same convention as the
+    // Write page's theme-cloud endpoint below.
+    const themeCounts = new Map();
+    for (const e of entries) {
+      for (const t of Array.isArray(e.themes) ? e.themes : []) {
+        if (!t) continue;
+        themeCounts.set(t, (themeCounts.get(t) || 0) + 1);
+      }
+    }
+    const recurringThemes = Array.from(themeCounts.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 6)
+      .map(([theme]) => theme);
 
     res.json({
       dateRange: {
@@ -66,6 +80,11 @@ router.get(
         ? `Most frequent emotional tone across recent entries: ${topMood}.`
         : "Not enough journal entries yet to identify a recurring emotional tone.",
       recurringThemes,
+      // Previously computed for topMood's ranking and then discarded --
+      // never actually sent to the client. Dashboard's Retrospect preview
+      // card now uses this for a real mini mood-balance chart instead of
+      // just a summary sentence.
+      moodCounts,
       // Previously two hardcoded sentences shown identically to every user
       // regardless of their actual data. Now generated per-user from real
       // journal + health entries (see service.js) -- honest empty/placeholder

@@ -28,15 +28,26 @@ export const MOOD_LABELS = {
 
 export const MOODS = Object.keys(MOOD_HEX);
 
-// Tailwind arbitrary-value classes derived from MOOD_HEX, for spots that
-// want a class string rather than an inline style (dots, pills, bars).
-export const MOOD_BG_CLASS = Object.fromEntries(
-  Object.entries(MOOD_HEX).map(([mood, hex]) => [mood, `bg-[${hex}]`])
-);
+// NOTE: this used to export MOOD_BG_CLASS -- Tailwind arbitrary-value class
+// strings (`bg-[#e8ab5f]`) built via template literal at runtime. Tailwind's
+// JIT scanner only generates CSS for class names it can find as literal text
+// in source files; a class name assembled at runtime from a JS object is
+// invisible to it. The result: every mood dot/pill/bar built from that map
+// (Journal, History, Chat, YearInReview, EntryModal, MoodCalendar) was
+// silently rendering with NO background color at all. Replaced with a style
+// helper -- inline styles always work regardless of what Tailwind can scan.
+export function moodDotStyle(mood, opacity = 1) {
+  const hex = MOOD_HEX[mood];
+  if (!hex) return { backgroundColor: "rgba(255,255,255,0.35)" };
+  if (opacity >= 1) return { backgroundColor: hex };
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return { backgroundColor: `rgba(${r}, ${g}, ${b}, ${opacity})` };
+}
 
 export const MOOD_META = MOODS.map((key) => ({
   key,
   label: MOOD_LABELS[key],
-  color: MOOD_BG_CLASS[key],
   hex: MOOD_HEX[key],
 }));

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Gem, X } from "lucide-react";
+import { ArrowRight, Gem, X } from "lucide-react";
 import MemoryOrbGlobe from "./MemoryOrbGlobe";
 import DayEntryPreview from "./DayEntryPreview";
 import { apiFetch } from "../api";
@@ -58,19 +58,54 @@ export default function MoodGlobeLauncher({ variant = "card" }) {
 
   return (
     <>
-      {variant === "card" ? (
+      {variant === "feature" ? (
+        // A full-width band with its own ember accent border (every other
+        // Dashboard teaser -- Health, Retrospect -- uses the signal-blue
+        // left border; this one deliberately doesn't, so it reads as a
+        // different kind of thing: an experience to open, not a data
+        // preview) instead of a same-size box in a 3-up grid where it used
+        // to visually blend in with Health/Retrospect and, disabled and
+        // grayed out for anyone without a Keepsake yet, was easy to miss
+        // entirely.
         <button
           type="button"
           onClick={handleOpen}
           disabled={orbs.length === 0}
-          className="w-full text-left ui-card rounded-2xl p-4 flex items-center gap-4 hover:bg-white/10 transition disabled:opacity-60 disabled:hover:bg-white/5 group"
+          className="w-full text-left ui-card rounded-2xl border-l-[5px] border-l-[#e8ab5f] p-5 flex items-center gap-5 hover:bg-ink/[0.03] transition disabled:hover:bg-transparent group"
         >
-          <span className="shrink-0 h-12 w-12 rounded-full bg-gradient-to-br from-[#e8ab5f]/50 to-[#8fae73]/50 border border-white/15 flex items-center justify-center group-hover:scale-105 transition-transform">
-            <Gem size={20} className="text-white/90" />
+          <span className="shrink-0 h-14 w-14 rounded-full bg-gradient-to-br from-[#e8ab5f]/60 to-signal/50 border border-ink/15 flex items-center justify-center group-hover:scale-105 transition-transform">
+            <Gem size={24} className="text-ink" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="ui-kicker text-[#e8ab5f]">Keepsakes</span>
+            <span className="block text-base font-medium mt-1">
+              {orbs.length
+                ? `Revisit ${orbs.length} saved ${orbs.length === 1 ? "moment" : "moments"} as a small glowing world`
+                : "Nothing saved yet"}
+            </span>
+            <span className="block text-sm text-ink/60 mt-0.5">
+              {orbs.length
+                ? "Drag to explore, click any orb to reopen that entry."
+                : "Mark an entry as a Keepsake from the composer to start your collection."}
+            </span>
+          </span>
+          {orbs.length > 0 && (
+            <ArrowRight size={18} className="text-ink/40 shrink-0 group-hover:text-ink/70 transition" />
+          )}
+        </button>
+      ) : variant === "card" ? (
+        <button
+          type="button"
+          onClick={handleOpen}
+          disabled={orbs.length === 0}
+          className="w-full text-left ui-card rounded-2xl p-4 flex items-center gap-4 hover:bg-ink/10 transition disabled:opacity-60 disabled:hover:bg-ink/5 group"
+        >
+          <span className="shrink-0 h-12 w-12 rounded-full bg-gradient-to-br from-[#e8ab5f]/50 to-signal/50 border border-ink/15 flex items-center justify-center group-hover:scale-105 transition-transform">
+            <Gem size={20} className="text-ink/90" />
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-medium">Keepsakes</span>
-            <span className="block text-xs text-white/60 mt-0.5">
+            <span className="block text-xs text-ink/60 mt-0.5">
               {orbs.length
                 ? `Revisit ${orbs.length} saved ${orbs.length === 1 ? "moment" : "moments"} as a small glowing world.`
                 : "Not every entry has to be one -- mark an entry as a Keepsake to start your collection."}
@@ -84,7 +119,7 @@ export default function MoodGlobeLauncher({ variant = "card" }) {
           disabled={orbs.length === 0}
           title={orbs.length ? "Revisit your Keepsakes" : "Mark an entry as a Keepsake to start your collection"}
           aria-label="Open Keepsakes"
-          className="p-1.5 rounded-lg hover:bg-white/10 text-white/70 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent transition"
+          className="p-1.5 rounded-lg hover:bg-ink/10 text-ink/70 hover:text-ink disabled:opacity-30 disabled:hover:bg-transparent transition"
         >
           <Gem size={14} />
         </button>
@@ -104,14 +139,14 @@ export default function MoodGlobeLauncher({ variant = "card" }) {
           >
             <div className="w-full max-w-3xl" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-3 gap-4">
-                <p className="text-sm text-white/80">
+                <p className="text-sm text-ink/80">
                   Each glowing orb is a Keepsake you chose to save. Drag to explore, click one to reopen that entry.
                 </p>
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
                   aria-label="Close Keepsakes"
-                  className="p-1.5 rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition shrink-0"
+                  className="p-1.5 rounded-lg hover:bg-ink/10 text-ink/70 hover:text-ink transition shrink-0"
                 >
                   <X size={18} />
                 </button>

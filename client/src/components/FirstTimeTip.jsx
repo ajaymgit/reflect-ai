@@ -35,7 +35,7 @@ export default function FirstTimeTip({ id, children, className = "" }) {
 
   return (
     <div
-      className={`flex items-start gap-2.5 rounded-xl border border-[#c5d7a6]/30 bg-[#8fae73]/12 px-3.5 py-2.5 text-xs text-white/80 leading-5 ${className}`}
+      className={`flex items-start gap-2.5 rounded-xl border border-ember-soft/30 bg-signal/12 px-3.5 py-2.5 text-xs text-ink/80 leading-5 ${className}`}
     >
       <p className="flex-1">{children}</p>
       <button
@@ -45,7 +45,7 @@ export default function FirstTimeTip({ id, children, className = "" }) {
           setDismissed(true);
         }}
         aria-label="Dismiss tip"
-        className="shrink-0 -m-1 p-1 rounded-lg hover:bg-white/10 transition"
+        className="shrink-0 -m-1 p-1 rounded-lg hover:bg-ink/10 transition"
       >
         <X size={13} />
       </button>

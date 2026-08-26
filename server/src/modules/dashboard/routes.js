@@ -183,9 +183,18 @@ router.get(
         isKeepsake: j.isKeepsake === true,
         createdAt: j.createdAt,
       })),
+      // Was gated on `streak >= 5` (consecutive-day journaling streak) --
+      // completely unrelated to whether Retrospect actually has anything to
+      // show. A broken streak (missed a day or two) made this say "add a few
+      // more entries" even for an account with dozens of entries and a
+      // fully-populated Retrospect preview sitting right below it on the
+      // same page. Gated on total entry count instead, matching the same
+      // MIN_ENTRIES_FOR_AI=3 threshold retrospect/service.js uses to decide
+      // whether real analysis is possible -- so this banner agrees with
+      // what Retrospect itself is actually able to show.
       retrospectAlert:
-        streak >= 5
-          ? "You have enough recent entries for a strong reflect session."
+        allRecentJournals.length >= 3
+          ? "You have enough entries for a strong reflect session."
           : "Add a few more entries to unlock deeper retrospective insights.",
     });
   }),
