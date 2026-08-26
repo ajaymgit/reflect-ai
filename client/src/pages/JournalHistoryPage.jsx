@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, ChevronLeft, ChevronRight, Search, SlidersHorizontal, X } from "lucide-react";
+import { BookOpen, Check, ChevronLeft, ChevronRight, Pencil, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { apiFetch, describeError } from "../api";
 import EntryModal, { EntryModalById } from "../components/EntryModal";
@@ -69,6 +69,20 @@ export default function JournalHistoryView() {
   // actually want to narrow something down.
   const [showFilters, setShowFilters] = useState(false);
   const [showAllTags, setShowAllTags] = useState(false);
+
+  // Renaming/removing a tag across every entry that has it -- previously the
+  // only way to fix a typo'd tag ("wrok" instead of "work") was to open and
+  // hand-edit every single entry that has it, one at a time. Backed by
+  // PATCH /api/journal/tags/rename (see server/src/modules/journal/routes.js),
+  // which rewrites `from` -> `to` across this user's own entries in one call
+  // (an empty `to` removes the tag entirely). `editingTag` tracks which
+  // chip's inline editor is open, not a separate modal -- keeps this
+  // lightweight for what's meant to be an occasional cleanup action, not a
+  // whole new page.
+  const [editingTag, setEditingTag] = useState(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [renameBusy, setRenameBusy] = useState(false);
+  const [renameError, setRenameError] = useState("");
 
   // Meaning-based search over this same archive -- previously the semantic
   // search endpoint (GET /api/journal/search) was only reachable from the
@@ -148,6 +162,34 @@ export default function JournalHistoryView() {
     setSearchResults([]);
     setSearchMode("empty_query");
     setSearchError("");
+  }
+
+  async function commitTagRename(from, to) {
+    setRenameBusy(true);
+    setRenameError("");
+    try {
+      await apiFetch("/api/journal/tags/rename", {
+        method: "PATCH",
+        body: JSON.stringify({ from, to }),
+      });
+      const filterWasCleared = tagFilter === from;
+      const [tagsData] = await Promise.all([
+        apiFetch("/api/journal/tags"),
+        load(filterWasCleared ? 1 : page, moodFilter, filterWasCleared ? "" : tagFilter),
+      ]);
+      setAvailableTags(tagsData.tags || []);
+      // The active filter chip was pointing at the tag that just got
+      // renamed/removed -- clear it (renaming into `to` isn't automatically
+      // re-applied as the filter; that'd be a surprising side effect of what
+      // was framed as a cleanup action, not a filter change).
+      if (filterWasCleared) setTagFilter("");
+      setEditingTag(null);
+      setRenameValue("");
+    } catch (err) {
+      setRenameError(describeError(err));
+    } finally {
+      setRenameBusy(false);
+    }
   }
 
   // Tags the user has actually used, ranked by frequency -- backed by GET
@@ -366,21 +408,97 @@ export default function JournalHistoryView() {
                   >
                     All
                   </button>
-                  {visibleTags.map(({ tag, count }) => (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => setTagFilter(tagFilter === tag ? "" : tag)}
-                      className={`inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-lg border text-xs ${
-                        tagFilter === tag ? "border-ink/40 bg-ink/10" : "border-ink/10 bg-ink/5 hover:bg-ink/10"
-                      }`}
-                    >
-                      {tag}
-                      <span className="ui-mono text-[10px] leading-none px-1.5 py-0.5 rounded-full bg-ink/10 text-ink/50">
-                        {count}
+                  {visibleTags.map(({ tag, count }) =>
+                    editingTag === tag ? (
+                      // Inline editor replaces the chip itself rather than
+                      // opening a separate modal -- this is meant to feel
+                      // like an occasional, lightweight cleanup action, not a
+                      // whole new surface. Enter saves, Escape cancels, same
+                      // convention as every other inline-edit text field in
+                      // the app.
+                      <form
+                        key={tag}
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          const next = renameValue.trim();
+                          if (!next || next.toLowerCase() === tag.toLowerCase()) {
+                            setEditingTag(null);
+                            return;
+                          }
+                          commitTagRename(tag, next);
+                        }}
+                        className="inline-flex items-center gap-1 rounded-lg border border-signal/40 bg-signal/10 pl-2 pr-1 py-1"
+                      >
+                        <input
+                          autoFocus
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") setEditingTag(null);
+                          }}
+                          disabled={renameBusy}
+                          className="w-24 bg-transparent text-xs outline-none disabled:opacity-60"
+                        />
+                        <button
+                          type="submit"
+                          disabled={renameBusy}
+                          aria-label="Save tag name"
+                          className="p-1 rounded hover:bg-ink/10 text-ink/70 hover:text-ink disabled:opacity-50"
+                        >
+                          <Check size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={renameBusy}
+                          onClick={() => {
+                            if (window.confirm(`Remove the "${tag}" tag from every entry? This can't be undone.`)) {
+                              commitTagRename(tag, "");
+                            }
+                          }}
+                          aria-label="Delete tag"
+                          className="p-1 rounded hover:bg-red-500/10 text-ink/70 hover:text-red-300 disabled:opacity-50"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={renameBusy}
+                          onClick={() => setEditingTag(null)}
+                          aria-label="Cancel"
+                          className="p-1 rounded hover:bg-ink/10 text-ink/70 hover:text-ink disabled:opacity-50"
+                        >
+                          <X size={12} />
+                        </button>
+                      </form>
+                    ) : (
+                      <span
+                        key={tag}
+                        className={`group inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-lg border text-xs ${
+                          tagFilter === tag ? "border-ink/40 bg-ink/10" : "border-ink/10 bg-ink/5 hover:bg-ink/10"
+                        }`}
+                      >
+                        <button type="button" onClick={() => setTagFilter(tagFilter === tag ? "" : tag)} className="inline-flex items-center gap-1.5">
+                          {tag}
+                          <span className="ui-mono text-[10px] leading-none px-1.5 py-0.5 rounded-full bg-ink/10 text-ink/50">
+                            {count}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingTag(tag);
+                            setRenameValue(tag);
+                            setRenameError("");
+                          }}
+                          aria-label={`Rename tag "${tag}"`}
+                          title="Rename or remove this tag"
+                          className="p-0.5 rounded opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-ink/10 text-ink/50 hover:text-ink transition"
+                        >
+                          <Pencil size={11} />
+                        </button>
                       </span>
-                    </button>
-                  ))}
+                    ),
+                  )}
                   {hiddenTagCount > 0 && (
                     <button
                       type="button"
@@ -400,6 +518,7 @@ export default function JournalHistoryView() {
                     </button>
                   )}
                 </div>
+                {renameError && <p className="text-xs text-red-300 mt-2">{renameError}</p>}
               </div>
             )}
           </div>

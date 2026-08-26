@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 import JournalEntry from "../../models/JournalEntry.js";
 import { requireAuth } from "../../shared/middleware/auth.js";
 import { validateRequest } from "../../shared/middleware/validateRequest.js";
-import { quickJournalSchema, updateJournalSchema } from "../../shared/validators/chatSchemas.js";
+import { quickJournalSchema, updateJournalSchema, renameTagSchema } from "../../shared/validators/chatSchemas.js";
 import { asyncHandler } from "../../shared/utils/asyncHandler.js";
 import { extractThemes } from "../../shared/utils/extractThemes.js";
 import { embedJournalEntry, findSemanticMatches } from "../../shared/services/embeddings.js";
@@ -154,6 +154,58 @@ router.get(
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .map(([tag, count]) => ({ tag, count }));
     res.json({ tags });
+  }),
+);
+
+// Previously the only way to fix a typo'd tag ("wrok" instead of "work") or
+// retire one you no longer want was to open every single entry that has it
+// and hand-edit the comma-separated tags field, one entry at a time -- for
+// anyone with more than a handful of tagged entries, effectively unfixable.
+// This rewrites every occurrence of `from` across this user's own entries in
+// one call. An empty/omitted `to` removes the tag entirely rather than
+// renaming it (see renameTagSchema) -- same underlying operation either way.
+// If `to` already exists on a given entry (a genuine merge, e.g. renaming
+// "wrok" into an existing "work"), the duplicate is dropped rather than
+// creating a repeated tag.
+//
+// tags is one JSON-encrypted blob per entry (see models/JournalEntry.js), so
+// this can't be a single Mongo update -- same "fetch, decrypt via getters,
+// mutate in JS, re-save" approach /recompute-themes below already uses, and
+// same reasoning: fine at this app's single-user scale, not something that
+// would hold up at real multi-tenant volume. Scoped through visibleFilter so
+// a sealed time capsule's tags can't be bulk-edited before its reveal date
+// either, same as the single-entry PATCH /:id route.
+router.patch(
+  "/tags/rename",
+  requireAuth,
+  validateRequest(renameTagSchema),
+  asyncHandler(async (req, res) => {
+    const from = req.validated.body.from.toLowerCase();
+    const to = req.validated.body.to.toLowerCase();
+
+    const entries = await JournalEntry.find(visibleFilter({ userId: req.user._id }));
+    let changed = 0;
+    for (const entry of entries) {
+      const current = (entry.tags || []).map((t) => String(t).trim());
+      if (!current.some((t) => t.toLowerCase() === from)) continue;
+
+      const next = [];
+      const seen = new Set();
+      for (const t of current) {
+        const replacement = t.toLowerCase() === from ? to : t;
+        if (!replacement) continue; // dropping the tag entirely (to === "")
+        const key = replacement.toLowerCase();
+        if (seen.has(key)) continue; // merge dedupe
+        seen.add(key);
+        next.push(replacement);
+      }
+
+      entry.tags = next;
+      await entry.save();
+      changed += 1;
+    }
+
+    res.json({ ok: true, changed });
   }),
 );
 

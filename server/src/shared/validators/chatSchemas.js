@@ -62,3 +62,18 @@ export const updateJournalSchema = z.object({
   query: z.object({}).optional(),
 });
 
+// PATCH /api/journal/tags/rename -- bulk rename (or, with an empty `to`,
+// remove) a tag across every one of this user's entries at once. `to` is
+// intentionally optional/blankable rather than required: fixing a typo like
+// "wrok" -> "work" and deleting a tag someone no longer wants are the same
+// underlying operation (rewrite every occurrence of `from`), so this is one
+// route instead of a separate rename endpoint plus a separate delete one.
+export const renameTagSchema = z.object({
+  body: z.object({
+    from: z.string().trim().min(1).max(40),
+    to: z.string().trim().max(40).optional().default(""),
+  }),
+  params: z.object({}).optional(),
+  query: z.object({}).optional(),
+});
+
