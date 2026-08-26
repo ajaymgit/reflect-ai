@@ -4,6 +4,7 @@ import JournalEntry from "../../models/JournalEntry.js";
 import { requireAuth } from "../../shared/middleware/auth.js";
 import { asyncHandler } from "../../shared/utils/asyncHandler.js";
 import { computeHealthMoodCorrelations } from "../../shared/utils/correlation.js";
+import { visibleJournalFilter } from "../../shared/utils/visibleJournal.js";
 
 const router = Router();
 
@@ -35,10 +36,15 @@ router.get(
     const yearAgo = new Date(now);
     yearAgo.setFullYear(yearAgo.getFullYear() - 1);
 
+    // visibleJournalFilter excludes time-capsule entries not yet due -- without
+    // it, a sealed capsule's content/mood would be folded into this year's
+    // aggregate stats (mood counts, word totals, streaks, correlation
+    // highlight) and `memberSince` could even resolve to a still-sealed
+    // capsule's date, all before its reveal date.
     const [entries, healthRows, firstEverEntry] = await Promise.all([
-      JournalEntry.find({ userId, createdAt: { $gte: yearAgo } }).sort({ createdAt: 1 }),
+      JournalEntry.find(visibleJournalFilter({ userId, createdAt: { $gte: yearAgo } })).sort({ createdAt: 1 }),
       HealthData.find({ userId, date: { $gte: yearAgo } }).sort({ date: 1 }),
-      JournalEntry.findOne({ userId }).sort({ createdAt: 1 }).select("createdAt"),
+      JournalEntry.findOne(visibleJournalFilter({ userId })).sort({ createdAt: 1 }).select("createdAt"),
     ]);
 
     if (entries.length === 0) {

@@ -9,6 +9,7 @@ import { findSemanticMatches } from "../../shared/services/embeddings.js";
 import { AppError } from "../../shared/utils/AppError.js";
 import { fetchWithTimeout } from "../../shared/utils/fetchWithTimeout.js";
 import { logError, logInfo } from "../../shared/utils/logger.js";
+import { visibleJournalFilter } from "../../shared/utils/visibleJournal.js";
 
 // Appends one turn to a user's chat session. Deliberately NOT
 // `ChatSession.findOneAndUpdate({...}, { $push: {...} }, { upsert: true })`
@@ -1232,8 +1233,13 @@ export async function buildChatContext(userId) {
   // excluded -- see JournalEntry.js) so buildSmartEvidenceCandidates below
   // can reuse this same result set for semantic matching instead of
   // re-querying JournalEntry a second time for the same 20 documents.
+  // visibleJournalFilter excludes time-capsule entries not yet due -- this is
+  // the most severe instance of this bug: without it, a sealed capsule's
+  // content could be pulled in as evidence and the AI could quote or
+  // paraphrase it straight back to the user in a chat reply, before its
+  // reveal date.
   const [journals, retrospect, health, session] = await Promise.all([
-    JournalEntry.find({ userId }).sort({ createdAt: -1 }).limit(20).select("+embedding"),
+    JournalEntry.find(visibleJournalFilter({ userId })).sort({ createdAt: -1 }).limit(20).select("+embedding"),
     RetrospectAnalysis.findOne({ userId }).sort({ createdAt: -1 }),
     HealthData.find({
       userId,

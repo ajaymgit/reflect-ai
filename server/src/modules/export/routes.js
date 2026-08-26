@@ -5,6 +5,7 @@ import JournalEntry from "../../models/JournalEntry.js";
 import RetrospectAnalysis from "../../models/RetrospectAnalysis.js";
 import { requireAuth } from "../../shared/middleware/auth.js";
 import { asyncHandler } from "../../shared/utils/asyncHandler.js";
+import { visibleJournalFilter } from "../../shared/utils/visibleJournal.js";
 
 const router = Router();
 
@@ -23,8 +24,14 @@ router.get(
   asyncHandler(async (req, res) => {
     const userId = req.user._id;
 
+    // visibleJournalFilter excludes time-capsule entries not yet due -- this
+    // is the most direct instance of this bug: without the guard, "download
+    // my data" would hand the user their own sealed capsule's content in the
+    // export file, defeating the entire point of sealing it in the first
+    // place (the promise, per the /capsules route, is "even the sender can't
+    // peek early").
     const [journals, health, retrospects, chatSession] = await Promise.all([
-      JournalEntry.find({ userId }).sort({ createdAt: 1 }),
+      JournalEntry.find(visibleJournalFilter({ userId })).sort({ createdAt: 1 }),
       HealthData.find({ userId }).sort({ date: 1 }),
       RetrospectAnalysis.find({ userId }).sort({ createdAt: 1 }),
       ChatSession.findOne({ userId }),

@@ -4,6 +4,7 @@ import JournalEntry from "../../models/JournalEntry.js";
 import { requireAuth } from "../../shared/middleware/auth.js";
 import { asyncHandler } from "../../shared/utils/asyncHandler.js";
 import { getStreakDays, localDayKey } from "../../shared/utils/streak.js";
+import { visibleJournalFilter as visibleFilter } from "../../shared/utils/visibleJournal.js";
 
 const router = Router();
 
@@ -78,14 +79,6 @@ const ALLOWED_RANGES = new Set(["today", "week", "month"]);
 function wellnessFromStress(stressScore) {
   if (!Number.isFinite(stressScore)) return null;
   return Math.max(35, Math.min(95, 100 - Math.round(stressScore * 0.6)));
-}
-
-// Same guard as journal/routes.js's visibleFilter -- excludes time-capsule
-// entries (JournalEntry.revealAt in the future) from Dashboard's own
-// journal queries, so a capsule can't leak through as "today's mood," a
-// recent entry, or a mood-calendar day before its reveal date.
-function visibleFilter(extra = {}) {
-  return { ...extra, revealAt: { $not: { $gt: new Date() } } };
 }
 
 // ?tzOffset is the browser's own Date.prototype.getTimezoneOffset() value

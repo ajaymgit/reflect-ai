@@ -5,6 +5,7 @@ import { env, policyConfig } from "../../shared/config/env.js";
 import { computeHealthMoodCorrelations } from "../../shared/utils/correlation.js";
 import { fetchWithTimeout } from "../../shared/utils/fetchWithTimeout.js";
 import { logError, logInfo } from "../../shared/utils/logger.js";
+import { visibleJournalFilter } from "../../shared/utils/visibleJournal.js";
 
 // Mirrors the Ollama/cloud config resolution in chat/service.js, duplicated
 // rather than imported from there. Chat's AI routing is safety-critical and
@@ -222,8 +223,14 @@ async function runGeneration({ journals, health, healthQuality, correlationDescr
 // get plain decrypted values). Exported separately from the route so it can
 // also be called from a future scheduled job without duplicating this logic.
 export async function generateRetrospectAnalysis(userId) {
+  // visibleJournalFilter excludes time-capsule entries not yet due --
+  // without this, `journals` (fed straight into the AI generation prompt
+  // below) could hand a sealed capsule's actual content to the model,
+  // whose generated summary/behavioralLoops/socraticQuestion could then
+  // reference or paraphrase what's written in a letter someone sealed
+  // specifically so even they couldn't read it early.
   const [journals, health, correlationHealth, correlationJournals] = await Promise.all([
-    JournalEntry.find({ userId }).sort({ createdAt: -1 }).limit(20),
+    JournalEntry.find(visibleJournalFilter({ userId })).sort({ createdAt: -1 }).limit(20),
     HealthData.find({
       userId,
       date: { $gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) },
@@ -233,7 +240,7 @@ export async function generateRetrospectAnalysis(userId) {
     // reliable Pearson coefficient than the 14-day window used for the AI's
     // main journal/health context above.
     HealthData.find({ userId }).sort({ date: -1 }).limit(60),
-    JournalEntry.find({ userId }).sort({ createdAt: -1 }).limit(90).select("mood createdAt"),
+    JournalEntry.find(visibleJournalFilter({ userId })).sort({ createdAt: -1 }).limit(90).select("mood createdAt"),
   ]);
   const healthQuality = calculateHealthQuality(health);
   const correlations = computeHealthMoodCorrelations({ healthRows: correlationHealth, journalRows: correlationJournals });

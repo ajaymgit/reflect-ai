@@ -8,22 +8,9 @@ import { asyncHandler } from "../../shared/utils/asyncHandler.js";
 import { extractThemes } from "../../shared/utils/extractThemes.js";
 import { embedJournalEntry, findSemanticMatches } from "../../shared/services/embeddings.js";
 import { logError } from "../../shared/utils/logger.js";
+import { visibleJournalFilter as visibleFilter } from "../../shared/utils/visibleJournal.js";
 
 const router = Router();
-
-// Excludes time-capsule entries whose reveal date hasn't arrived yet (see
-// JournalEntry.revealAt) from every normal listing/search/lookup query in
-// this file -- a capsule set for a future date shouldn't show up in Recent
-// Entries, the archive, search, On This Day, or the theme cloud before then,
-// or the whole point of it is gone. `$not: { $gt: now }` matches a normal
-// entry (revealAt null/undefined) AND a capsule whose date has already
-// passed; only a revealAt strictly in the future is excluded. Used as the
-// base filter (merged with whatever else a given query already needs)
-// everywhere in this file that lists or looks up entries, so a new capsule
-// can never accidentally leak through a query that forgot the guard.
-function visibleFilter(extra = {}) {
-  return { ...extra, revealAt: { $not: { $gt: new Date() } } };
-}
 
 // /entries' ?mood filter (below) previously assigned req.query.mood straight
 // onto the Mongoose filter object with no validation. Express's query parser
@@ -387,7 +374,13 @@ router.patch(
     if (!mongoose.isValidObjectId(req.params.id)) {
       return res.status(400).json({ code: "INVALID_ID", message: "Not a valid entry id." });
     }
-    const entry = await JournalEntry.findOne({ _id: req.params.id, userId: req.user._id });
+    // visibleFilter here means a sealed, not-yet-due time capsule 404s on
+    // edit just like it does everywhere else -- without it, this route would
+    // both let someone silently tamper with a capsule before its reveal date
+    // AND leak the capsule's real content back in the `res.json({ entry })`
+    // response below, defeating the "even the sender can't peek early"
+    // guarantee via a completely different door than the read routes.
+    const entry = await JournalEntry.findOne(visibleFilter({ _id: req.params.id, userId: req.user._id }));
     if (!entry) return res.status(404).json({ code: "NOT_FOUND", message: "Entry not found." });
 
     const { content, mood, title, tags, isKeepsake } = req.validated.body;

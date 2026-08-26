@@ -3,6 +3,7 @@ import JournalEntry from "../../models/JournalEntry.js";
 import { requireAuth } from "../../shared/middleware/auth.js";
 import { asyncHandler } from "../../shared/utils/asyncHandler.js";
 import { getOrRefreshRetrospectAnalysis } from "./service.js";
+import { visibleJournalFilter } from "../../shared/utils/visibleJournal.js";
 
 const router = Router();
 
@@ -10,8 +11,13 @@ router.get(
   "/analysis",
   requireAuth,
   asyncHandler(async (req, res) => {
+    // visibleJournalFilter excludes time-capsule entries not yet due -- this
+    // route's `timeline` field below includes a raw content excerpt per
+    // entry, so without this guard a sealed capsule's actual text would be
+    // exposed here before its reveal date (the one code path this bug hit
+    // hardest -- everywhere else it only leaked mood/aggregate stats).
     const [entries, heatmapRows] = await Promise.all([
-      JournalEntry.find({ userId: req.user._id }).sort({ createdAt: -1 }).limit(20),
+      JournalEntry.find(visibleJournalFilter({ userId: req.user._id })).sort({ createdAt: -1 }).limit(20),
       // A much wider window than `entries` (last 365 days, mood + date only --
       // mood isn't an encrypted field, so this is a cheap, un-decrypted
       // query) purely to feed the calendar heatmap below. The 20-entry
@@ -19,7 +25,7 @@ router.get(
       // timeline, but a "year in pixels"-style heatmap needs real day-by-day
       // coverage across a full year, not just the most recent handful of
       // entries someone happened to write.
-      JournalEntry.find({ userId: req.user._id }).sort({ createdAt: -1 }).limit(400).select("mood createdAt"),
+      JournalEntry.find(visibleJournalFilter({ userId: req.user._id })).sort({ createdAt: -1 }).limit(400).select("mood createdAt"),
     ]);
     // Regenerates via Ollama when stale/missing (see service.js), falling
     // back to the latest cached analysis (or null for a brand-new account)

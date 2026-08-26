@@ -7,6 +7,7 @@ import { validateRequest } from "../../shared/middleware/validateRequest.js";
 import { manualHealthEntrySchema } from "../../shared/validators/healthSchemas.js";
 import { asyncHandler } from "../../shared/utils/asyncHandler.js";
 import { computeHealthMoodCorrelations, MOOD_SCORE } from "../../shared/utils/correlation.js";
+import { visibleJournalFilter } from "../../shared/utils/visibleJournal.js";
 
 const router = Router();
 
@@ -79,7 +80,11 @@ router.get(
     const [rows, correlationHealthRows, correlationJournalRows] = await Promise.all([
       HealthData.find({ userId: req.user._id }).sort({ date: -1 }).limit(30),
       HealthData.find({ userId: req.user._id }).sort({ date: -1 }).limit(60),
-      JournalEntry.find({ userId: req.user._id }).sort({ createdAt: -1 }).limit(90).select("mood createdAt"),
+      // visibleJournalFilter excludes time-capsule entries not yet due --
+      // otherwise a sealed capsule's mood could skew the Pearson
+      // correlation or show up as the mood overlaid on a day's point in
+      // the weekly trend chart, before its reveal date.
+      JournalEntry.find(visibleJournalFilter({ userId: req.user._id })).sort({ createdAt: -1 }).limit(90).select("mood createdAt"),
     ]);
     const correlations = computeHealthMoodCorrelations({
       healthRows: correlationHealthRows,
