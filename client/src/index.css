@@ -54,6 +54,45 @@ body[data-theme-mode="midnight"] {
   --ember-soft: 247 189 163; /* #F7BDA3 */
 }
 
+/* Organic -- a third theme, colors only (same fonts/shapes/layout as
+   everywhere else), built from a shared design reference: warm cream paper,
+   burnt-terracotta as the primary/action accent (replaces cobalt "signal"),
+   sage green as the secondary accent (replaces coral "ember"). Light and
+   dark variants both live here so it behaves like Daylight/Midnight -- pick
+   "Organic" as the theme, then Daylight/Midnight still choose which of
+   these two runs. Only the 9 tokens change, same as Midnight above; every
+   surface/text/accent in the app inherits from them automatically. */
+body[data-theme-mode="organic-light"] {
+  --paper: 245 238 221; /* #F5EEDD warm cream */
+  --paper-raised: 237 224 196; /* #EDE0C4 -- cards read as a deeper tan here,
+     not a lighter/whiter surface -- going toward white would fight the warm,
+     sun-baked feel the reference design leans on. */
+  --paper-sunken: 228 211 172; /* #E4D3AC -- deeper still, for nested/inset
+     surfaces (stat sub-cards, input wells). */
+  --ink: 31 25 15; /* #1F190F near-black warm brown */
+  --signal: 181 98 44; /* #B5622C burnt terracotta -- primary buttons, active
+     nav, kicker labels */
+  --signal-soft: 208 138 92; /* #D08A5C */
+  --signal-deep: 139 74 32; /* #8B4A20 */
+  --ember: 143 168 114; /* #8FA872 sage green -- selected states, positive
+     callouts */
+  --ember-soft: 199 217 174; /* #C7D9AE */
+}
+body[data-theme-mode="organic-dark"] {
+  --paper: 27 21 16; /* #1B1510 near-black warm brown, not pure black --
+     same relationship Midnight has to Daylight, applied to this hue family */
+  --paper-raised: 37 29 21; /* #251D15 */
+  --paper-sunken: 18 13 9; /* #120D09 */
+  --ink: 237 227 210; /* #EDE3D2 warm cream text */
+  --signal: 217 138 82; /* #D98A52 -- terracotta brightened for contrast on
+     the dark brown base, same way Midnight's signal brightens off Daylight's */
+  --signal-soft: 232 172 132; /* #E8AC84 */
+  --signal-deep: 181 98 44; /* #B5622C -- the light-mode terracotta becomes
+     the deep/pressed shade here */
+  --ember: 168 192 138; /* #A8C08A sage brightened for dark contrast */
+  --ember-soft: 203 219 180; /* #CBDBB4 */
+}
+
 body {
   /* --user-dark/--user-light (+ derived soft/glow variants) are only ever
      set (via inline style on <html>, see SettingsPage.jsx) once someone

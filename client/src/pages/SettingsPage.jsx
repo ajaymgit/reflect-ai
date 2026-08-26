@@ -899,6 +899,8 @@ function SelectOption({ title, detail, value, onChange }) {
         >
           <option value="midnight">Midnight</option>
           <option value="daylight">Daylight</option>
+          <option value="organic-light">Organic (Light)</option>
+          <option value="organic-dark">Organic (Dark)</option>
         </select>
       </div>
       <p className="text-xs text-ink/70 mt-2">{detail}</p>
