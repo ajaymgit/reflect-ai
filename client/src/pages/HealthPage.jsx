@@ -638,68 +638,92 @@ function CorrelationScatter({ label, points, r, color }) {
 // same week -- the direct visual counterpart to the Connections tab's
 // abstract r-value correlation, showing the same relationship as an actual
 // picture instead of a summary statistic.
+// Previously one chart with two independently-scaled y-axes (steps on the
+// left, mood 0-5 on the right) plotted over each other -- a well-documented
+// data-viz anti-pattern (Datawrapper, Flourish, and most chart style guides
+// specifically call out dual-axis combo charts): since the two scales are
+// arbitrary, either axis can be stretched or compressed to make two series
+// look more or less correlated than they really are, and a line crossing a
+// bar reads as "these relate" even when the crossing point is just where
+// two unrelated scales happen to intersect. This app already has an
+// honestly-scaled scatter plot with a real Pearson r for "does steps
+// correlate with mood" (see CorrelationScatter below) -- this chart's actual
+// job is showing the day-to-day shape of both series together, which two
+// separately-scaled panels sharing one x-axis (the recommended dual-axis
+// alternative) do without the misleading overlay. Same data, same width,
+// stacked and aligned by date instead of forced onto a shared plot.
 function MoodOverlayChart({ data, onPointClick }) {
   const hasMood = (data || []).some((d) => Number.isFinite(d.mood));
+  const handleClick = (e) => {
+    const raw = e?.activeLabel;
+    if (raw && onPointClick) onPointClick(isoDay(new Date(raw)));
+  };
+  const dateTick = { fill: "rgb(var(--ink) / 0.55)", fontSize: 11 };
+  const dateFormatter = (v) => new Date(v).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const tooltipLabel = (v) => new Date(v).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  const tooltipStyle = { background: "rgb(var(--paper-raised))", border: "1px solid rgb(var(--ink) / 0.15)", borderRadius: 8, fontSize: 11 };
+  // Identical margins on both panels so a given date lines up vertically
+  // between the steps bars above and the mood line below -- the whole point
+  // of stacking instead of overlaying.
+  const margin = { top: 4, right: 8, bottom: 0, left: 0 };
+
   return (
     <div className="rounded-xl border border-ink/10 p-3">
       <p className="text-sm text-ink/80">Steps & mood together</p>
       <p className="text-[11px] text-ink/60 mt-1">
         {hasMood
-          ? "Bars are steps that day; the line is your mood that day."
+          ? "Two separately-scaled charts, aligned by date -- steps above, mood below."
           : "Log a journal entry on days you also have health data to see mood plotted alongside steps."}
       </p>
-      <div className="h-52 mt-2 cursor-pointer">
+      <div className="h-28 mt-2 cursor-pointer">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart
-            data={data}
-            onClick={(e) => {
-              const raw = e?.activeLabel;
-              if (raw && onPointClick) onPointClick(isoDay(new Date(raw)));
-            }}
-          >
+          <ComposedChart data={data} margin={margin} onClick={handleClick}>
             {/* Same top-to-bottom gradient treatment as the Steps/Stress/
-                Sleep TrendCharts below (see gradientId there) -- previously
-                this was the one bar fill left flat/solid on the page. */}
+                Sleep TrendCharts below (see gradientId there). */}
             <defs>
               <linearGradient id="stepsBarGradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="#e8ab5f" stopOpacity={0.85} />
                 <stop offset="100%" stopColor="#e8ab5f" stopOpacity={0.35} />
               </linearGradient>
             </defs>
-            <XAxis
-              dataKey="date"
-              tickFormatter={(v) => new Date(v).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-              tick={{ fill: "rgb(var(--ink) / 0.55)", fontSize: 11 }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <YAxis yAxisId="left" tick={{ fill: "rgb(var(--ink) / 0.55)", fontSize: 11 }} axisLine={false} tickLine={false} />
+            {/* No x-axis tick labels on the top panel -- the bottom panel's
+                labels already apply to both, since they share the same
+                dates in the same order. */}
+            <XAxis dataKey="date" tick={false} axisLine={false} tickLine={false} height={4} />
             <YAxis
-              yAxisId="right"
-              orientation="right"
-              domain={[0, 5]}
-              tickFormatter={(v) => MOOD_SCORE_LABEL[Math.round(v)] || ""}
+              tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}k` : v)}
               tick={{ fill: "rgb(var(--ink) / 0.55)", fontSize: 10 }}
-              width={70}
+              width={44}
               axisLine={false}
               tickLine={false}
             />
             <Tooltip
-              labelFormatter={(v) =>
-                new Date(v).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })
-              }
-              formatter={(value, name) => (name === "mood" ? [MOOD_SCORE_LABEL[Math.round(value)] || "--", "Mood"] : [value, "Steps"])}
-              contentStyle={{ background: "rgb(var(--paper-raised))", border: "1px solid rgb(var(--ink) / 0.15)", borderRadius: 8, fontSize: 11 }}
+              labelFormatter={tooltipLabel}
+              formatter={(value) => [value, "Steps"]}
+              contentStyle={tooltipStyle}
             />
-            <Bar yAxisId="left" dataKey="steps" fill="url(#stepsBarGradient)" radius={[4, 4, 0, 0]} />
-            <Line
-              yAxisId="right"
-              dataKey="mood"
-              stroke="#a989b2"
-              strokeWidth={2.5}
-              dot={{ r: 3, fill: "#a989b2" }}
-              connectNulls
+            <Bar dataKey="steps" fill="url(#stepsBarGradient)" radius={[3, 3, 0, 0]} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="h-24 cursor-pointer">
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={data} margin={margin} onClick={handleClick}>
+            <XAxis dataKey="date" tickFormatter={dateFormatter} tick={dateTick} axisLine={false} tickLine={false} />
+            <YAxis
+              domain={[0, 5]}
+              tickFormatter={(v) => MOOD_SCORE_LABEL[Math.round(v)] || ""}
+              tick={{ fill: "rgb(var(--ink) / 0.55)", fontSize: 10 }}
+              width={44}
+              axisLine={false}
+              tickLine={false}
             />
+            <Tooltip
+              labelFormatter={tooltipLabel}
+              formatter={(value) => [MOOD_SCORE_LABEL[Math.round(value)] || "--", "Mood"]}
+              contentStyle={tooltipStyle}
+            />
+            <Line dataKey="mood" stroke="#a989b2" strokeWidth={2.5} dot={{ r: 3, fill: "#a989b2" }} connectNulls />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
