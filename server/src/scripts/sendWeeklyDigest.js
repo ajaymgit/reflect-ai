@@ -25,6 +25,7 @@ import User from "../models/User.js";
 import { env } from "../shared/config/env.js";
 import { sendEmail } from "../shared/utils/mailer.js";
 import { getStreakDays } from "../shared/utils/streak.js";
+import { visibleJournalFilter } from "../shared/utils/visibleJournal.js";
 
 const MOOD_LABEL = {
   happy: "happy",
@@ -98,15 +99,17 @@ async function run() {
 
   for (const user of users) {
     const [weekEntries, streakEntries, weekHealth] = await Promise.all([
-      // revealAt guard inlined (not journal/routes.js's visibleFilter, which
-      // isn't exported from that module) -- excludes time-capsule entries
-      // whose reveal date hasn't arrived yet, same as every other listing
-      // query in the app.
-      JournalEntry.find({
-        userId: user._id,
-        createdAt: { $gte: windowStart },
-        revealAt: { $not: { $gt: new Date() } },
-      }).select("mood createdAt"),
+      // Shared visibleJournalFilter (server/src/shared/utils/visibleJournal.js)
+      // -- excludes time-capsule entries whose reveal date hasn't arrived
+      // yet, same as every other listing query in the app. This used to be
+      // inlined by hand here (visibleJournalFilter wasn't factored out into
+      // its own module yet when this script was written); now it imports
+      // the same one everything else uses, so a future change to the
+      // capsule-visibility rule can't drift between this script and the
+      // live routes.
+      JournalEntry.find(visibleJournalFilter({ userId: user._id, createdAt: { $gte: windowStart } })).select(
+        "mood createdAt",
+      ),
       // Same "cap at ~10 years of entries, not documents" fix as the
       // dashboard's streak query and the daily reminder script -- see the
       // matching comment in dashboard/routes.js.
