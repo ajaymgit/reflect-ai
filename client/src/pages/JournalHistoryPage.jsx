@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BookOpen, ChevronLeft, ChevronRight, SlidersHorizontal, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { apiFetch, describeError } from "../api";
@@ -70,7 +70,20 @@ export default function JournalHistoryView() {
   const [showFilters, setShowFilters] = useState(false);
   const [showAllTags, setShowAllTags] = useState(false);
 
+  // Guards against out-of-order responses: clicking one mood pill then
+  // another (or a filter change landing right as a page-change request was
+  // already in flight) previously fired two overlapping GET requests with
+  // nothing to enforce ordering on the way back. If the first (now-stale)
+  // request resolved AFTER the second, its setEntries/setTotalPages calls
+  // would silently overwrite the correct, more-recent results -- the list on
+  // screen would stop matching whichever filter chip was actually active,
+  // with no error or visual indication anything was wrong. Each call to
+  // load() claims the next id; a response only gets applied if it's still
+  // the most recently issued request by the time it resolves.
+  const requestIdRef = useRef(0);
+
   const load = useCallback(async (targetPage, mood, tag) => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     setError("");
     try {
@@ -78,14 +91,16 @@ export default function JournalHistoryView() {
       if (mood) params.set("mood", mood);
       if (tag) params.set("tag", tag);
       const data = await apiFetch(`/api/journal/entries?${params.toString()}`);
+      if (requestId !== requestIdRef.current) return; // superseded by a newer request
       setEntries(data.entries || []);
       setPage(data.page || 1);
       setTotalPages(data.totalPages || 1);
       setTotal(data.total || 0);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       setError(describeError(err));
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, []);
 

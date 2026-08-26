@@ -102,9 +102,20 @@ router.get(
     const trendStart = new Date();
     trendStart.setDate(trendStart.getDate() - 13);
     trendStart.setHours(0, 0, 0, 0);
-    const [latestJournal, allRecentJournals, rangeJournals, healthRows, trendHealthRows] = await Promise.all([
+    const [latestJournal, allRecentJournals, streakJournals, rangeJournals, healthRows, trendHealthRows] = await Promise.all([
       JournalEntry.findOne(visibleFilter({ userId: req.user._id })).sort({ createdAt: -1 }),
       JournalEntry.find(visibleFilter({ userId: req.user._id })).sort({ createdAt: -1 }).limit(60),
+      // Dedicated to the streak count -- previously getStreakDays() was fed
+      // allRecentJournals (capped at 60 *documents*), which quietly caps how
+      // many *calendar days* of history it can see too. getStreakDays walks
+      // backward day-by-day counting consecutive journaled days; someone
+      // writing 3 entries/day on a real streak fills that 60-document cap in
+      // ~20 days, so their displayed streak would silently truncate there
+      // even though the streak actually continues further back. This query
+      // only needs createdAt (cheap even at a high limit) and caps at ~10
+      // years of entries instead of 60 rows, so streak length is no longer
+      // coupled to how many times per day someone journals.
+      JournalEntry.find(visibleFilter({ userId: req.user._id })).sort({ createdAt: -1 }).limit(3650).select("createdAt"),
       JournalEntry.find(visibleFilter({ userId: req.user._id, createdAt: { $gte: rangeStart } }))
         .sort({ createdAt: -1 })
         .limit(30),
@@ -117,7 +128,7 @@ router.get(
     ]);
 
     const recentJournals = rangeJournals.slice(0, 8);
-    const streak = getStreakDays(allRecentJournals);
+    const streak = getStreakDays(streakJournals);
     const avgStress = healthRows.length
       ? Math.round(healthRows.reduce((sum, item) => sum + (item.stressScore || 0), 0) / healthRows.length)
       : 0;

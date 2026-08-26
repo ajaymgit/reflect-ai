@@ -209,6 +209,7 @@ export default function JournalPage() {
   const [capsuleDate, setCapsuleDate] = useState("");
   const [capsules, setCapsules] = useState({ waiting: [], ready: [] });
   const [status, setStatus] = useState("");
+  const [saving, setSaving] = useState(false);
   const [health, setHealth] = useState(null);
   const [relatedEntry, setRelatedEntry] = useState(null);
   const [supportTab, setSupportTab] = useState("health");
@@ -356,7 +357,13 @@ export default function JournalPage() {
   }
 
   async function save() {
-    if (!content.trim()) return;
+    if (!content.trim() || saving) return;
+    // Was previously guarded only by the button label changing to "Saving..."
+    // -- the button itself stayed clickable the whole time, so a double-click
+    // (or one more click while a slow connection was still in flight) fired
+    // a second identical POST and created a duplicate entry. This flag both
+    // short-circuits a re-entrant call here and disables the button below.
+    setSaving(true);
     setStatus("Saving...");
     try {
       // Previously title/tags were never sent as real fields -- they were
@@ -404,6 +411,8 @@ export default function JournalPage() {
       // Previously this discarded the real error entirely and always showed
       // the same generic "Save failed", regardless of the actual cause.
       setStatus(describeError(err));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -634,8 +643,12 @@ export default function JournalPage() {
               value={tags}
               onChange={(e) => setTags(e.target.value)}
             />
-            <button className="px-5 min-h-11 ui-button-primary" onClick={save}>
-              Save entry
+            <button
+              className="px-5 min-h-11 ui-button-primary disabled:opacity-60"
+              onClick={save}
+              disabled={saving || !content.trim()}
+            >
+              {saving ? "Saving..." : "Save entry"}
             </button>
           </div>
           {/* Was previously mislabeled "Autosave status" even though there

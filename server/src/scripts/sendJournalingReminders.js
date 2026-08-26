@@ -62,7 +62,12 @@ async function run() {
   for (const user of users) {
     const [hasToday, recentEntries] = await Promise.all([
       JournalEntry.exists({ userId: user._id, createdAt: { $gte: todayStart } }),
-      JournalEntry.find({ userId: user._id }).sort({ createdAt: -1 }).limit(60).select("createdAt"),
+      // See the matching comment in dashboard/routes.js -- capping at 60
+      // *documents* (rather than a generous span of calendar time) silently
+      // truncates the streak for anyone journaling more than once a day.
+      // Already select()-ed down to just createdAt, so a much higher limit
+      // (~10 years of entries) is still a cheap query.
+      JournalEntry.find({ userId: user._id }).sort({ createdAt: -1 }).limit(3650).select("createdAt"),
     ]);
     if (hasToday) {
       skipped += 1;
