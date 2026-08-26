@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { BookOpen, Clock, Lightbulb, Mail, Sparkles } from "lucide-react";
+import { BookOpen, Clock, Lightbulb, Mail, Shuffle, Sparkles } from "lucide-react";
 import { apiFetch, describeError } from "../api";
 import EntryModal, { EntryModalById } from "../components/EntryModal";
 import FirstTimeTip from "../components/FirstTimeTip";
@@ -215,6 +215,7 @@ export default function JournalPage() {
   const [supportTab, setSupportTab] = useState("health");
   const [draftRestoredAt, setDraftRestoredAt] = useState(null);
   const [onThisDay, setOnThisDay] = useState([]);
+  const [randomMemory, setRandomMemory] = useState(null);
   const [openMemory, setOpenMemory] = useState(null);
   const [themeCloud, setThemeCloud] = useState([]);
   const [rebuildingThemes, setRebuildingThemes] = useState(false);
@@ -229,6 +230,18 @@ export default function JournalPage() {
     return trimmed ? trimmed.split(/\s+/).length : 0;
   }, [content]);
   const suggestedMood = useMemo(() => suggestMoodFromText(content), [content]);
+
+  // "A memory from your past" -- a genuinely random past entry (never
+  // today's own), the fallback for the sidebar's nostalgia slot on the
+  // (much more common) days On This Day has nothing for this exact
+  // calendar date. Re-callable on demand ("Show me another") since a
+  // random pick has no reason to stay fixed once shown. See GET
+  // /api/journal/random-memory.
+  function loadRandomMemory() {
+    apiFetch("/api/journal/random-memory")
+      .then((data) => setRandomMemory(data?.entry || null))
+      .catch(() => {});
+  }
 
   useEffect(() => {
     apiFetch("/api/health-data/overview")
@@ -245,6 +258,7 @@ export default function JournalPage() {
     apiFetch("/api/journal/on-this-day")
       .then((data) => setOnThisDay(data?.entries || []))
       .catch(() => {});
+    loadRandomMemory();
     // Theme cloud -- word-frequency across this user's ENTIRE history (see
     // GET /api/journal/theme-cloud), meant as writing fuel ("what do I tend
     // to write about") while composing, not another analytics view. See the
@@ -281,6 +295,7 @@ export default function JournalPage() {
     } finally {
       hydratedFromDraft.current = true;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Debounced autosave -- waits for a short pause in typing rather than
@@ -691,6 +706,39 @@ export default function JournalPage() {
                   <p className="text-sm mt-1">{entry.title || truncateAtWord(entry.content, 70)}</p>
                 </button>
               ))}
+            </div>
+          )}
+
+          {/* Fallback nostalgia slot for the (much more common) days On This
+              Day has no exact-date match -- one random past entry instead of
+              leaving the slot empty. Never both at once, so this sidebar
+              never shows two competing "look at the past" widgets. */}
+          {onThisDay.length === 0 && randomMemory && (
+            <div className="pb-3 border-b border-ink/10 space-y-2">
+              <h3 className="font-medium flex items-center gap-1.5">
+                <Shuffle size={14} className="text-ink/50" />
+                A memory from your past
+              </h3>
+              <button
+                type="button"
+                onClick={() => setOpenMemory(randomMemory)}
+                className="w-full text-left surface p-2.5 hover:bg-ink/10 transition"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-ink/50">
+                    {new Date(randomMemory.createdAt).toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </span>
+                  <span className="h-1.5 w-1.5 rounded-full" style={moodDotStyle(randomMemory.mood)} />
+                </div>
+                <p className="text-sm mt-1">{randomMemory.title || truncateAtWord(randomMemory.content, 70)}</p>
+              </button>
+              <button type="button" onClick={loadRandomMemory} className="text-[11px] text-ink/45 hover:text-ink/75">
+                Show me another
+              </button>
             </div>
           )}
 

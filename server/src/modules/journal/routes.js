@@ -275,6 +275,38 @@ router.get(
   }),
 );
 
+// "A memory from your past" -- On This Day only ever has something to show
+// on the handful of days each year that line up with an exact past
+// anniversary, so most days it's empty and the Write page's sidebar just
+// has nothing in that slot. This is the fallback: one genuinely random past
+// entry (never today's own, so it can't just echo whatever you're about to
+// write), re-rollable on demand. Deliberately implemented as
+// countDocuments + a random skip on a real find() -- NOT a $sample
+// aggregation -- because content/title/tags/themes are encrypted at rest
+// (see models/JournalEntry.js) and only decrypt through Mongoose's own
+// document getters; an aggregation pipeline returns raw plain objects that
+// bypass those getters entirely and would leak ciphertext to the client.
+router.get(
+  "/random-memory",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const filter = visibleFilter({ userId: req.user._id, createdAt: { $lt: startOfToday } });
+
+    const total = await JournalEntry.countDocuments(filter);
+    if (total === 0) return res.json({ entry: null, total: 0 });
+
+    const skip = Math.floor(Math.random() * total);
+    const entry = await JournalEntry.findOne(filter)
+      .sort({ createdAt: 1 })
+      .skip(skip)
+      .select("_id content mood title tags isKeepsake createdAt");
+
+    res.json({ entry, total });
+  }),
+);
+
 // Time capsules -- letters to a future version of yourself (see
 // JournalEntry.revealAt). Split into two lists: `waiting` capsules only ever
 // expose mood/createdAt/revealAt -- never title or content, since the whole
