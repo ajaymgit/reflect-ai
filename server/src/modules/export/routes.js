@@ -167,4 +167,41 @@ router.get(
   }),
 );
 
+// Health data's own CSV, same reasoning as /journal.csv: the JSON export
+// above already includes every health row, but a raw JSON blob isn't
+// something most people can open and actually work with -- someone who
+// wants to chart their own sleep/steps/stress trend in Excel wants a plain
+// spreadsheet, not a nested export file they'd have to reshape first. No
+// visibleJournalFilter here -- HealthData has no time-capsule concept (that
+// guard only ever applied to JournalEntry), so this is a plain per-user
+// query same as every other HealthData read in the app.
+router.get(
+  "/health.csv",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const healthRows = await HealthData.find({ userId: req.user._id }).sort({ date: 1 });
+
+    const header = ["Date", "Steps", "Sleep hours", "Stress score", "Resting heart rate", "Source"].map(csvEscape).join(
+      ",",
+    );
+    const csvRows = healthRows.map((h) =>
+      [
+        new Date(h.date).toISOString().slice(0, 10),
+        h.steps ?? "",
+        h.sleepHours ?? "",
+        h.stressScore ?? "",
+        h.restingHeartRate ?? "",
+        h.source || "",
+      ]
+        .map(csvEscape)
+        .join(","),
+    );
+    const csv = [header, ...csvRows].join("\r\n");
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="reflectai-health-${Date.now()}.csv"`);
+    res.status(200).send(`﻿${csv}`);
+  }),
+);
+
 export default router;

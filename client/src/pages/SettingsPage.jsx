@@ -526,6 +526,7 @@ function ExportSection() {
   const [busyAll, setBusyAll] = useState(false);
   const [busyCsv, setBusyCsv] = useState(false);
   const [busyKeepsakes, setBusyKeepsakes] = useState(false);
+  const [busyHealth, setBusyHealth] = useState(false);
   const [error, setError] = useState("");
 
   // Shared by both downloads -- fetched manually (not via the shared
@@ -617,6 +618,26 @@ function ExportSection() {
           className="ui-button-ghost px-4 py-2.5 min-h-11 text-sm disabled:opacity-60"
         >
           {busyKeepsakes ? "Preparing..." : "Download as CSV"}
+        </button>
+      </div>
+      {/* Health readings (steps/sleep/stress/resting heart rate) as their own
+          CSV -- same "a raw JSON export isn't something most people can
+          chart in Excel" reasoning as the two journal CSVs above, just for
+          the Health page's own data instead of journal entries. */}
+      <div className="flex items-center justify-between gap-3 flex-wrap mt-3 pt-3 border-t border-ink/10">
+        <div>
+          <p className="text-sm font-medium">Health data</p>
+          <p className="text-xs text-ink/70 mt-1 max-w-md">
+            Every steps, sleep, stress, and heart rate reading you have logged or synced, as a CSV.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => downloadFile("/api/export/health.csv", `reflectai-health-${today}.csv`, setBusyHealth)}
+          disabled={busyHealth}
+          className="ui-button-ghost px-4 py-2.5 min-h-11 text-sm disabled:opacity-60"
+        >
+          {busyHealth ? "Preparing..." : "Download as CSV"}
         </button>
       </div>
       {error && <p className="text-xs text-red-300 mt-2">{error}</p>}
