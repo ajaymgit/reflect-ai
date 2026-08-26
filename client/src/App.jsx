@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import AppShell from "./components/AppShell";
 import AuthRedirect from "./components/AuthRedirect";
 import ProtectedRoute from "./components/ProtectedRoute";
+import { applyStoredTheme } from "./utils/theme";
 
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
@@ -35,14 +36,7 @@ export default function App() {
   // every page (including this 404) starts themed correctly instead of only
   // the ones nested under AppShell.
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem("equoria-settings");
-      const settings = raw ? JSON.parse(raw) : null;
-      const validModes = new Set(["midnight", "daylight", "organic-light", "organic-dark"]);
-      document.body.setAttribute("data-theme-mode", validModes.has(settings?.themeMode) ? settings.themeMode : "daylight");
-    } catch {
-      document.body.setAttribute("data-theme-mode", "daylight");
-    }
+    applyStoredTheme();
   }, []);
 
   const routeFallback = (

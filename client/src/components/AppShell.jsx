@@ -6,6 +6,7 @@ import { apiFetch } from "../api";
 import { useAuth } from "../context/AuthContext";
 import Onboarding from "./Onboarding";
 import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
+import { applyStoredTheme } from "../utils/theme";
 
 const pageTitles = {
   "/dashboard": "Home",
@@ -115,16 +116,18 @@ export default function AppShell() {
     setShowOnboarding(false);
   }
 
+  // Was theme-mode-only (just the data-theme-mode attribute) -- but the
+  // Appearance hue overrides (--user-dark/--user-light/--paper-raised/
+  // --paper-sunken) had no equivalent anywhere outside SettingsPage.jsx's
+  // own effects, so a customization only ever rendered while Settings
+  // itself was mounted. Landing directly on any other route (a bookmark, a
+  // hard refresh, a shared link) showed the theme's uncustomized colors
+  // even though a customization was saved -- confirmed live. applyStoredTheme
+  // (see utils/theme.js) covers both the mode and the three hue overrides in
+  // one read of localStorage, run on every route change so it's also
+  // correct after switching themes/colors in another tab.
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem("equoria-settings");
-      const settings = raw ? JSON.parse(raw) : null;
-      const validModes = new Set(["midnight", "daylight", "organic-light", "organic-dark"]);
-      const themeMode = validModes.has(settings?.themeMode) ? settings.themeMode : "daylight";
-      document.body.setAttribute("data-theme-mode", themeMode);
-    } catch {
-      document.body.setAttribute("data-theme-mode", "daylight");
-    }
+    applyStoredTheme();
   }, [location.pathname]);
 
   return (

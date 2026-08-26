@@ -6,6 +6,7 @@ import { apiFetch, describeError } from "../api";
 import { useAuth } from "../context/AuthContext";
 import PasswordInput from "../components/PasswordInput";
 import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
+import { DEFAULT_DARK_HUE, DEFAULT_LIGHT_HUE, DEFAULT_SURFACE_HUE, hslToHex, hslToRgbTriplet } from "../utils/theme";
 
 // Same stagger/entrance pattern the other main pages use -- Settings was
 // one of the last three destinations (with JournalHistory and More) still
@@ -36,22 +37,12 @@ function SectionCard({ icon: Icon, title, children }) {
   );
 }
 
-// Hue (0-360) for each slider's default position -- chosen to match this
-// app's actual current background/accent tones, so the sliders start
-// wherever the app already looks before this feature is touched, instead of
-// snapping to an arbitrary color the first time someone opens Settings.
-// Matches the actual --user-dark/--user-light fallback values (#F4EFE2
-// ivory base at ~43deg / #3D4FD1 indigo "signal" accent at ~233deg) defined
-// in index.css, so the sliders and their "Button" preview start exactly
-// where the app already looks rather than snapping to an arbitrary color
-// the first time someone opens Settings.
-const DEFAULT_DARK_HUE = 43;
-const DEFAULT_LIGHT_HUE = 233;
-// Matches DEFAULT_DARK_HUE -- cards/sidebar (--paper-raised/--paper-sunken)
-// default to the same warm-white family as the page background, so the
-// slider starts at "no visible tint" instead of introducing a color shift
-// the app didn't have a moment ago.
-const DEFAULT_SURFACE_HUE = 43;
+// Hue (0-360) defaults and the hex/rgb-triplet conversions now live in
+// utils/theme.js (imported above) -- shared with applyStoredTheme(), which
+// AppShell.jsx/App.jsx call on every route mount so a saved customization
+// still renders on pages Settings never touched. Keeping one implementation
+// means dragging a slider here and loading a fresh page elsewhere can never
+// quietly disagree on what a given hue actually renders as.
 
 const defaultSettings = {
   themeMode: "daylight",
@@ -59,33 +50,6 @@ const defaultSettings = {
   lightHue: DEFAULT_LIGHT_HUE,
   surfaceHue: DEFAULT_SURFACE_HUE,
 };
-
-// h: 0-360, s/l: 0-100. Plain HSL->hex, no library needed for one conversion.
-function hslToHex(h, s, l) {
-  s /= 100;
-  l /= 100;
-  const k = (n) => (n + h / 30) % 12;
-  const a = s * Math.min(l, 1 - l);
-  const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
-  const toHex = (n) => Math.round(255 * f(n)).toString(16).padStart(2, "0");
-  return `#${toHex(0)}${toHex(8)}${toHex(4)}`;
-}
-
-// Same math as hslToHex, but returns "R G B" (space-separated, no #) --
-// the format --paper-raised/--paper-sunken are already declared in
-// (index.css), which is what lets Tailwind's `bg-paper-raised` etc.
-// `<alpha-value>` opacity modifier work. hslToHex's hex string can't be
-// dropped into that format, so this is a separate conversion, not a
-// wrapper around it.
-function hslToRgbTriplet(h, s, l) {
-  s /= 100;
-  l /= 100;
-  const k = (n) => (n + h / 30) % 12;
-  const a = s * Math.min(l, 1 - l);
-  const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
-  const toChannel = (n) => Math.round(255 * f(n));
-  return `${toChannel(0)} ${toChannel(8)} ${toChannel(4)}`;
-}
 
 function loadSettings() {
   try {
