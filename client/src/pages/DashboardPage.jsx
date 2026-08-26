@@ -81,6 +81,53 @@ function WellnessSparkline({ trend }) {
   );
 }
 
+// Circular progress ring for the wellness score -- researched against how
+// Oura and Whoop present their own single daily 0-100 score (Readiness /
+// Recovery): both frame it as a simple circular dial someone reads at a
+// glance, not a bare number sitting in a text column. This is exactly the
+// same shape of data (one daily score, meant for an at-a-glance check), so
+// the ring treatment carries over directly. The ring always maps the full
+// 0-100 range even though the score's real floor/ceiling is 35-95 (see
+// wellnessFromStress in dashboard/routes.js) -- matching how Oura/Whoop
+// actually draw their rings against the full scale, not the score's own
+// clamped range, since a ring that could never visually empty or fill
+// would just read as broken rather than "healthy."
+function WellnessRing({ score, reducedMotion }) {
+  const size = 104;
+  const stroke = 9;
+  const r = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * r;
+  const hasScore = Number.isFinite(score);
+  const pct = hasScore ? Math.max(0, Math.min(100, score)) : 0;
+  const offset = circumference * (1 - pct / 100);
+  return (
+    <div className="relative inline-flex items-center justify-center shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90" aria-hidden="true">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgb(var(--ink) / 0.08)" strokeWidth={stroke} />
+        {hasScore && (
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            stroke="rgb(var(--ember))"
+            strokeWidth={stroke}
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            style={reducedMotion ? undefined : { transition: "stroke-dashoffset 0.8s cubic-bezier(0.16, 1, 0.3, 1)" }}
+          />
+        )}
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <p className="ui-hero-number text-3xl text-accent-ember">
+          <AnimatedNumber value={hasScore ? score : "--"} />
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // "2h ago" / "Yesterday" / "Mon" / "Mar 4" -- previously every recent-entry
 // row showed the same absolute date regardless of recency.
 function relativeDay(dateStr) {
@@ -375,14 +422,9 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <>
-                  {/* Hero-number scale -- same tier Health's stress score
-                      and Retrospect's top-mood callout use, so the one
-                      number on this page someone actually opens Dashboard
-                      to check gets real weight instead of matching the
-                      section-header size everything else on the page uses. */}
-                  <p className="ui-hero-number text-4xl lg:text-5xl mt-1 text-accent-ember">
-                    <AnimatedNumber value={data?.dailyWellnessScore ?? "--"} />
-                  </p>
+                  <div className="mt-2">
+                    <WellnessRing score={data?.dailyWellnessScore} reducedMotion={reducedMotion} />
+                  </div>
                   <WellnessSparkline trend={data?.wellnessTrend || []} />
                 </>
               )}
