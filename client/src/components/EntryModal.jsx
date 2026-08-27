@@ -389,13 +389,30 @@ export function EntryModalById({ entryId, onClose, apiFetch, onUpdated, onDelete
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entryId]);
 
+  // Same dialog a11y (Escape-to-close, focus-in/focus-restore) as the loaded
+  // EntryModal below -- these two transient states are full-screen modal
+  // overlays too, just briefer-lived ones, and previously fell outside
+  // useDialogA11y entirely: a screen-reader user landed here with no "this
+  // is a dialog" announcement, and a keyboard user's only way out was
+  // clicking the backdrop (no Escape handler at all).
+  const errorDialogRef = useDialogA11y(onClose, { active: !!error });
+  const loadingDialogRef = useDialogA11y(onClose, { active: !entry && !error });
+
   if (error) {
     return (
       <div
         className="fixed inset-0 z-[200] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
         onClick={onClose}
       >
-        <div className="ui-card rounded-2xl p-6 text-sm text-ink/70" onClick={(e) => e.stopPropagation()}>
+        <div
+          ref={errorDialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Couldn't load entry"
+          tabIndex={-1}
+          className="ui-card rounded-2xl p-6 text-sm text-ink/70 outline-none"
+          onClick={(e) => e.stopPropagation()}
+        >
           {error}
         </div>
       </div>
@@ -408,8 +425,17 @@ export function EntryModalById({ entryId, onClose, apiFetch, onUpdated, onDelete
         className="fixed inset-0 z-[200] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
         onClick={onClose}
       >
-        <div className="ui-card rounded-2xl p-6 text-sm text-ink/60" onClick={(e) => e.stopPropagation()}>
-          Loading entry...
+        <div
+          ref={loadingDialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Loading entry"
+          aria-live="polite"
+          tabIndex={-1}
+          className="ui-card rounded-2xl p-6 text-sm text-ink/60 outline-none"
+          onClick={(e) => e.stopPropagation()}
+        >
+          Loading entry…
         </div>
       </div>
     );

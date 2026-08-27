@@ -1064,7 +1064,7 @@ function MemorySearch({ presetQuery }) {
           onChange={(e) => setQuery(e.target.value)}
         />
         <button type="submit" className="px-4 min-h-11 ui-button-primary shrink-0" disabled={busy}>
-          {busy ? "..." : "Search"}
+          {busy ? "…" : "Search"}
         </button>
       </form>
 

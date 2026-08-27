@@ -544,7 +544,7 @@ export default function ChatPage() {
                   onClick={() => setMessage(lastUserThread)}
                   className="w-full text-left text-sm rounded-xl px-3 py-2 bg-ink/5 border border-ink/10 hover:bg-ink/10"
                 >
-                  Continue thread: "{lastUserThread.slice(0, 90)}{lastUserThread.length > 90 ? "..." : ""}"
+                  Continue thread: “{lastUserThread.slice(0, 90)}{lastUserThread.length > 90 ? "…" : ""}”
                 </button>
               </div>
             )}

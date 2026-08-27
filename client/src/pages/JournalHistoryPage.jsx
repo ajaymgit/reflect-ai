@@ -305,7 +305,7 @@ export default function JournalHistoryView() {
             )}
           </div>
           <button type="submit" className="px-4 min-h-11 ui-button-primary shrink-0" disabled={searchBusy}>
-            {searchBusy ? "..." : "Search"}
+            {searchBusy ? "…" : "Search"}
           </button>
         </motion.form>
 
@@ -486,7 +486,7 @@ export default function JournalHistoryView() {
                             if (e.key === "Escape") setEditingTag(null);
                           }}
                           disabled={renameBusy}
-                          className="w-24 bg-transparent text-xs outline-none disabled:opacity-60"
+                          className="w-24 bg-transparent text-xs outline-none focus:ring-2 focus:ring-signal/50 rounded disabled:opacity-60"
                         />
                         <button
                           type="submit"
