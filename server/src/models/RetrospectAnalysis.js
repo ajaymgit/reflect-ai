@@ -51,5 +51,16 @@ const retrospectSchema = new mongoose.Schema(
   },
 );
 
+// Every query against this collection (latest-analysis lookups in
+// retrospect/service.js and chat/service.js, the full-history export in
+// export/routes.js) filters by userId, and two of those also sort by
+// createdAt -- exactly the { userId, createdAt } compound index pattern
+// already used on JournalEntry/ChatSession/AuditLog. This model was missing
+// it, meaning every one of those reads did a full collection scan instead of
+// an index seek. Harmless at demo-account scale, but grows linearly worse
+// with real usage since it's on the hot path for the Retrospect page and
+// Chat's context-building.
+retrospectSchema.index({ userId: 1, createdAt: -1 });
+
 export default mongoose.model("RetrospectAnalysis", retrospectSchema);
 

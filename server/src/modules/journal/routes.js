@@ -191,7 +191,12 @@ router.patch(
     const from = req.validated.body.from.toLowerCase();
     const to = req.validated.body.to.toLowerCase();
 
-    const entries = await JournalEntry.find(visibleFilter({ userId: req.user._id }));
+    // Only tags are read or written here -- .select("tags") skips loading
+    // (and decrypting) every entry's full content/embedding just to check a
+    // tags array, which matters once someone has hundreds of entries. Saving
+    // a partially-selected document is safe in Mongoose: only the paths you
+    // actually assign (tags, below) get written back.
+    const entries = await JournalEntry.find(visibleFilter({ userId: req.user._id })).select("tags");
     let changed = 0;
     for (const entry of entries) {
       const current = (entry.tags || []).map((t) => String(t).trim());
