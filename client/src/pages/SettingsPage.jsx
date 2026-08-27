@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Bell, Download, HeartPulse, KeyRound, LogOut, Palette, ShieldCheck, Trash2, UserRound } from "lucide-react";
+import { Bell, Download, HeartPulse, KeyRound, Lock, LogOut, Palette, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { apiFetch, describeError } from "../api";
 import { useAuth } from "../context/AuthContext";
 import PasswordInput from "../components/PasswordInput";
+import PinInput from "../components/PinInput";
 import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
+import useAppLock from "../hooks/useAppLock";
 import {
   DEFAULT_DARK_HUE,
   DEFAULT_LIGHT_HUE,
@@ -468,6 +470,16 @@ export default function SettingsPage() {
                 page. */}
             <SectionCard icon={ShieldCheck} title="Two-factor authentication">
               <TwoFactorSection user={user} setUser={setUser} />
+            </SectionCard>
+
+            {/* Client-only, no server route at all -- separate from 2FA/
+                password above in the same way Change password got its own
+                card: this is a device-level "quick glance" deterrent (locks
+                the app after the tab closes), not part of the account's
+                real security boundary. See useAppLock.js for the full
+                reasoning. */}
+            <SectionCard icon={Lock} title="App lock">
+              <AppLockSection userId={user?.id} />
             </SectionCard>
 
             <SectionCard icon={HeartPulse} title="Integrations">
@@ -1227,6 +1239,185 @@ function TwoFactorSection({ user, setUser }) {
               className="text-xs text-ink/70 hover:text-ink"
               onClick={() => { setShowDisable(false); setDisablePassword(""); setError(""); }}
             >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
+// Client-only convenience lock -- see hooks/useAppLock.js for the full
+// threat-model reasoning (salted SHA-256 PIN hash in localStorage, unlocked
+// flag in sessionStorage, always layered on top of -- never instead of --
+// the real JWT/account-password boundary). There is no server route backing
+// this at all, so unlike a forgotten account password there's no "email me
+// a reset link" escape hatch for a forgotten PIN -- ProtectedRoute's "Log
+// out instead" on the lock screen is the only way back in if it's
+// forgotten, which is also why every change here (setting a new PIN when
+// one's already active, or turning it off) requires re-proving the current
+// PIN first, same as ChangePasswordSection requires the current password.
+function AppLockSection({ userId }) {
+  const appLock = useAppLock(userId);
+  const [mode, setMode] = useState(null); // null | "set" | "change" | "disable"
+  const [currentPin, setCurrentPin] = useState("");
+  const [newPin, setNewPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  function resetForm() {
+    setMode(null);
+    setCurrentPin("");
+    setNewPin("");
+    setConfirmPin("");
+    setError("");
+  }
+
+  async function handleSet(e) {
+    e.preventDefault();
+    if (busy) return;
+    if (newPin.length < 4) {
+      setError("PIN must be at least 4 characters.");
+      return;
+    }
+    if (newPin !== confirmPin) {
+      setError("PINs don't match.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    if (appLock.isEnabled) {
+      const ok = await appLock.tryUnlock(currentPin);
+      if (!ok) {
+        setError("Current PIN is incorrect.");
+        setBusy(false);
+        return;
+      }
+    }
+    await appLock.setPin(newPin);
+    resetForm();
+    setBusy(false);
+  }
+
+  async function handleDisable(e) {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    const ok = await appLock.tryUnlock(currentPin);
+    if (!ok) {
+      setError("Current PIN is incorrect.");
+      setBusy(false);
+      return;
+    }
+    appLock.disable();
+    resetForm();
+    setBusy(false);
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <p className="text-sm font-medium">{appLock.isEnabled ? "On" : "Off"}</p>
+          <p className="text-xs text-ink/70 mt-1 max-w-md">
+            {appLock.isEnabled
+              ? "A PIN is required to open Reflect on this device after the tab has been closed."
+              : "Require a PIN before Reflect opens on this device -- a quick-glance deterrent, separate from your account password."}
+          </p>
+        </div>
+        {!appLock.isEnabled && mode !== "set" && (
+          <button
+            type="button"
+            onClick={() => setMode("set")}
+            className="ui-button-ghost px-4 py-2.5 min-h-11 text-sm"
+          >
+            Set a PIN
+          </button>
+        )}
+        {appLock.isEnabled && !mode && (
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setMode("change")}
+              className="ui-button-ghost px-4 py-2.5 min-h-11 text-sm"
+            >
+              Change PIN
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("disable")}
+              className="ui-button-danger px-4 py-2.5 min-h-11 text-sm"
+            >
+              Turn off
+            </button>
+          </div>
+        )}
+      </div>
+
+      {error && (
+        <p role="alert" className="text-xs text-red-300 mt-2">
+          {error}
+        </p>
+      )}
+
+      {(mode === "set" || mode === "change") && (
+        <form onSubmit={handleSet} className="space-y-2 mt-3">
+          {mode === "change" && (
+            <PinInput
+              placeholder="Current PIN"
+              value={currentPin}
+              onChange={(e) => setCurrentPin(e.target.value)}
+              required
+            />
+          )}
+          <PinInput
+            placeholder="New PIN"
+            value={newPin}
+            onChange={(e) => setNewPin(e.target.value)}
+            required
+          />
+          <PinInput
+            placeholder="Confirm new PIN"
+            value={confirmPin}
+            onChange={(e) => setConfirmPin(e.target.value)}
+            required
+          />
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={busy}
+              className="ui-button-primary px-4 py-2.5 min-h-11 text-sm disabled:opacity-60"
+            >
+              {busy ? "Saving..." : mode === "change" ? "Update PIN" : "Save PIN"}
+            </button>
+            <button type="button" onClick={resetForm} className="text-xs text-ink/70 hover:text-ink">
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
+      {mode === "disable" && (
+        <form onSubmit={handleDisable} className="mt-3 space-y-2 border-t border-ink/10 pt-3">
+          <p className="text-xs text-ink/70">Enter your current PIN to turn off app lock.</p>
+          <PinInput
+            placeholder="Current PIN"
+            value={currentPin}
+            onChange={(e) => setCurrentPin(e.target.value)}
+            required
+          />
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={busy}
+              className="ui-button-danger px-4 py-2.5 min-h-11 text-sm disabled:opacity-60"
+            >
+              {busy ? "Turning off..." : "Confirm turn off"}
+            </button>
+            <button type="button" onClick={resetForm} className="text-xs text-ink/70 hover:text-ink">
               Cancel
             </button>
           </div>
