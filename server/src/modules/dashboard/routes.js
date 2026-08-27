@@ -134,7 +134,19 @@ router.get(
       HealthData.find({ userId: req.user._id, date: { $gte: trendStart } }).sort({ date: 1 }).select("date stressScore"),
     ]);
 
-    const recentJournals = rangeJournals.slice(0, 8);
+    // Previously sourced from rangeJournals (bounded by the `range` query
+    // param, which the client always sends as "week" -- see DashboardPage's
+    // `useState("week")` with no setter ever called). A "Recent entries"
+    // widget reading its data from a "this week" filter meant anyone who
+    // hadn't journaled in the last 7 days saw an empty "Nothing written this
+    // week yet" card on their home page even with dozens of older entries
+    // one click away in History -- the widget's own label promises "recent",
+    // not "this week". allRecentJournals (fetched above, uncapped by date,
+    // already used for hasAnyEntries/emotionDistribution/retrospectAlert) is
+    // the correct source: the actual N most recent entries regardless of
+    // when they were written. No extra query needed, just re-pointing which
+    // already-fetched list feeds this card.
+    const recentJournals = allRecentJournals.slice(0, 8);
     const streak = getStreakDays(streakJournals, { tzOffsetMinutes });
     const avgStress = healthRows.length
       ? Math.round(healthRows.reduce((sum, item) => sum + (item.stressScore || 0), 0) / healthRows.length)

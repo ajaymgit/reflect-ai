@@ -715,12 +715,13 @@ export default function DashboardPage() {
                       )}
                     </button>
                   ))}
+                {/* recentEntries is now sourced server-side from the actual
+                    most recent entries regardless of date (see
+                    dashboard/routes.js) -- it's empty here if and only if
+                    hasAnyEntries is also false, so this no longer needs a
+                    separate "wrote before, just not this week" branch. */}
                 {(data?.recentEntries || []).length === 0 && (
-                  <p className="text-sm text-ink/50 py-3 sm:col-span-2">
-                    {data?.hasAnyEntries
-                      ? "Nothing written this week yet -- write one above, or check History for older entries."
-                      : "No entries yet -- write your first one above."}
-                  </p>
+                  <p className="text-sm text-ink/50 py-3 sm:col-span-2">No entries yet -- write your first one above.</p>
                 )}
                 {(data?.recentEntries || []).length > 0 &&
                   (data?.recentEntries || []).filter((e) => entryFilter === "all" || e.isKeepsake).length === 0 && (

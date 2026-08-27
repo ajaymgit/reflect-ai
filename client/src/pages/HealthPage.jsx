@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Area,
@@ -66,6 +66,37 @@ const CORRELATION_METRIC_COLOR = {
 // single strongest-|r| lag -- shared by the bar view and the scatter grid so
 // both show the exact same "best" reading per metric instead of drifting out
 // of sync if this logic were duplicated slightly differently in two places.
+// Recharts draws an XAxis with dataKey="date" as an evenly-spaced category
+// axis by default (not a real time scale) -- so two rows sitting 16 real
+// days apart (e.g. Apple Health synced Aug 1, then not again until Aug 17,
+// which is a completely normal gap for anyone who paused syncing/logging
+// for a couple weeks) get drawn exactly as close together as two rows one
+// day apart. That silently misrepresents a gap in someone's own data as an
+// unbroken trend -- the same "chart shouldn't lie about scale" standard
+// this page's MoodOverlayChart comment already documents for the dual-axis
+// overlay it replaced. This fills every missing calendar day between the
+// first and last row with a null-valued placeholder so each chart's x-axis
+// spacing matches real elapsed time, and (since none of these charts pass
+// connectNulls except the mood line, which intentionally bridges the
+// separate, expected sparseness of journal entries) bars/areas actually
+// stop rendering across a real logging gap instead of interpolating through
+// it.
+function denseByDay(rows) {
+  if (!rows?.length) return rows || [];
+  const byDay = new Map(rows.map((r) => [isoDay(new Date(r.date)), r]));
+  const first = new Date(rows[0].date);
+  const last = new Date(rows[rows.length - 1].date);
+  first.setHours(0, 0, 0, 0);
+  last.setHours(0, 0, 0, 0);
+  const out = [];
+  for (let d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) {
+    const existing = byDay.get(isoDay(d));
+    const iso = new Date(d).toISOString();
+    out.push(existing ? { ...existing, ts: new Date(existing.date).getTime() } : { date: iso, ts: new Date(iso).getTime(), steps: null, sleep: null, stress: null, heartRate: null, mood: null });
+  }
+  return out;
+}
+
 function strongestPerMetric(correlations) {
   const byMetric = new Map();
   for (const c of correlations || []) {
@@ -113,6 +144,12 @@ export default function HealthPage() {
   }, []);
 
   const topCorrelations = strongestPerMetric(data?.correlations);
+  // Gap-filled version of data.weekly, calendar-day-dense, for the four
+  // charts below -- MetricHero's "vs your week" comparisons further up
+  // still use the raw sparse data.weekly (via average()), since a plain
+  // average shouldn't change just because the chart rendering underneath it
+  // now makes gaps visually honest.
+  const denseWeekly = useMemo(() => denseByDay(data?.weekly), [data?.weekly]);
   // The Apple Health companion app (see Settings -> Integrations) was
   // previously the ONLY way a HealthData row ever got created -- anyone
   // trying the web app on its own had no way to put a number in at all, so
@@ -254,12 +291,12 @@ export default function HealthPage() {
                 value. Steps as bars (left axis), mood as an overlaid line
                 (right axis, 0-5) -- the visual gap or overlap between the
                 two IS the correlation. */}
-            <MoodOverlayChart data={data?.weekly || []} onPointClick={setSelectedDate} />
+            <MoodOverlayChart data={denseWeekly} onPointClick={setSelectedDate} />
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <TrendChart
                 title="Steps"
-                data={data?.weekly || []}
+                data={denseWeekly}
                 dataKey="steps"
                 accent={METRIC_ACCENT.steps}
                 valueLabel="steps"
@@ -268,7 +305,7 @@ export default function HealthPage() {
               />
               <TrendChart
                 title="Stress"
-                data={data?.weekly || []}
+                data={denseWeekly}
                 dataKey="stress"
                 accent={METRIC_ACCENT.stress}
                 valueLabel="/ 100"
@@ -277,7 +314,7 @@ export default function HealthPage() {
               />
               <TrendChart
                 title="Sleep"
-                data={data?.weekly || []}
+                data={denseWeekly}
                 dataKey="sleep"
                 accent={METRIC_ACCENT.sleep}
                 valueLabel="hours"
@@ -756,8 +793,37 @@ function MoodOverlayChart({ data, onPointClick }) {
   );
 }
 
+// Splits a calendar-dense series into separate contiguous runs of real
+// (non-null) values for this metric, rather than passing the whole
+// null-filled array to one <Area> and relying on Recharts to break its path
+// at each null. Verified live that Recharts 3.x's Area fill/stroke path
+// generation doesn't reliably split at null the way it's commonly assumed
+// to (a real multi-week gap in this account's own data still rendered as
+// one smooth interpolated ramp across it, even with type="linear" and
+// connectNulls={false} explicitly set) -- so instead each <Area> below only
+// ever receives the real points for one contiguous run. There's nothing to
+// interpolate across a gap when the gap's rows simply aren't in that run's
+// own data at all; the shared category-axis `data` on the parent
+// <AreaChart> (still the full dense series) is what keeps every run
+// positioned at its correct real-calendar-day slot relative to the others.
+function splitRuns(data, key) {
+  const runs = [];
+  let current = [];
+  for (const row of data || []) {
+    if (Number.isFinite(row?.[key])) {
+      current.push(row);
+    } else if (current.length) {
+      runs.push(current);
+      current = [];
+    }
+  }
+  if (current.length) runs.push(current);
+  return runs;
+}
+
 function TrendChart({ title, data, dataKey, accent, valueLabel, axisLabel, onPointClick }) {
   const gradientId = `trend-grad-${dataKey}`;
+  const runs = splitRuns(data, dataKey);
   return (
     <div className="rounded-xl border border-ink/10 p-3">
       <p className="text-sm text-ink/80">{title}</p>
@@ -782,8 +848,21 @@ function TrendChart({ title, data, dataKey, accent, valueLabel, axisLabel, onPoi
                 <stop offset="95%" stopColor={accent.color} stopOpacity={0.02} />
               </linearGradient>
             </defs>
+            {/* type="number" on a real ts (epoch ms), not the default
+                category axis keyed by "date" -- category positioning is by
+                array index, which is exactly what let the split real-only
+                runs above render at the wrong x position relative to each
+                other (each run's own points were indexed from 0 within
+                its own short array instead of lining up with the other
+                run's real dates). A numeric axis positions every run's
+                points by actual elapsed time instead, so multiple <Area>
+                runs sharing one domain line up correctly and a real gap
+                between them reads as real horizontal distance. */}
             <XAxis
-              dataKey="date"
+              dataKey="ts"
+              type="number"
+              domain={["dataMin", "dataMax"]}
+              scale="time"
               tickFormatter={(v) => new Date(v).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
               tick={{ fill: "rgb(var(--ink) / 0.55)", fontSize: 11 }}
               axisLine={false}
@@ -801,17 +880,26 @@ function TrendChart({ title, data, dataKey, accent, valueLabel, axisLabel, onPoi
               }
               contentStyle={{ background: "rgb(var(--paper-raised))", border: "1px solid rgb(var(--ink) / 0.15)", borderRadius: 8, fontSize: 11 }}
             />
-            <Area
-              type="monotone"
-              dataKey={dataKey}
-              stroke={accent.color}
-              strokeWidth={2}
-              fill={`url(#${gradientId})`}
-              dot={false}
-              activeDot={{ r: 5 }}
-              animationDuration={600}
-              animationEasing="ease-out"
-            />
+            {/* One <Area> per real contiguous run (see splitRuns above)
+                instead of one <Area> fed the whole null-filled series --
+                Recharts wasn't reliably breaking the path at null even with
+                type="linear" and connectNulls={false} explicit, so a real
+                multi-week gap in this person's own data (no sync, no manual
+                entry) rendered as one smooth ramp straight across it. */}
+            {runs.map((run, i) => (
+              <Area
+                key={i}
+                data={run}
+                type="linear"
+                dataKey={dataKey}
+                stroke={accent.color}
+                strokeWidth={2}
+                fill={`url(#${gradientId})`}
+                dot={false}
+                activeDot={{ r: 5 }}
+                isAnimationActive={false}
+              />
+            ))}
           </AreaChart>
         </ResponsiveContainer>
       </div>
