@@ -101,7 +101,16 @@ const authLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => `${req.ip}:${String(req.body?.email || "").toLowerCase()}`,
+  // .trim() here matches emailField's own .trim().toLowerCase() transform
+  // (authSchemas.js) -- these limiters run BEFORE validateRequest in the
+  // route chain, so they necessarily read the raw, untrimmed req.body.email
+  // rather than the normalized req.validated.body.email. Without the trim,
+  // padding the email with whitespace (" demo@reflectai.com",
+  // "demo@reflectai.com ", etc.) hashes to a different rate-limit key on
+  // every attempt while Zod's own transform still normalizes it down to the
+  // same real account before the actual login/lookup -- a trivial way to
+  // get an unlimited number of fresh 10-attempt buckets against one account.
+  keyGenerator: (req) => `${req.ip}:${String(req.body?.email || "").trim().toLowerCase()}`,
   message: { code: "RATE_LIMITED", message: "Too many attempts. Try again shortly." },
 });
 
@@ -117,7 +126,9 @@ const emailLoginLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => String(req.body?.email || "").toLowerCase() || "unknown",
+  // Same untrimmed-vs-emailField.trim() gap as authLimiter/forgotPasswordLimiter
+  // above -- fixed the same way.
+  keyGenerator: (req) => String(req.body?.email || "").trim().toLowerCase() || "unknown",
   message: { code: "RATE_LIMITED", message: "Too many attempts for this account. Try again shortly." },
 });
 
@@ -142,7 +153,16 @@ const forgotPasswordLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => `${req.ip}:${String(req.body?.email || "").toLowerCase()}`,
+  // .trim() here matches emailField's own .trim().toLowerCase() transform
+  // (authSchemas.js) -- these limiters run BEFORE validateRequest in the
+  // route chain, so they necessarily read the raw, untrimmed req.body.email
+  // rather than the normalized req.validated.body.email. Without the trim,
+  // padding the email with whitespace (" demo@reflectai.com",
+  // "demo@reflectai.com ", etc.) hashes to a different rate-limit key on
+  // every attempt while Zod's own transform still normalizes it down to the
+  // same real account before the actual login/lookup -- a trivial way to
+  // get an unlimited number of fresh 10-attempt buckets against one account.
+  keyGenerator: (req) => `${req.ip}:${String(req.body?.email || "").trim().toLowerCase()}`,
   message: { code: "RATE_LIMITED", message: "Too many reset requests. Try again shortly." },
 });
 
@@ -177,6 +197,25 @@ const sensitivePasswordCheckLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => String(req.user?._id || req.ip),
   message: { code: "RATE_LIMITED", message: "Too many incorrect password attempts. Try again shortly." },
+});
+
+// /2fa/verify checks a 6-digit TOTP code (1,000,000 possibilities) the exact
+// same way /2fa/login does -- and /2fa/login is deliberately throttled by
+// twoFactorLoginLimiter above specifically because an unthrottled brute
+// force could exhaust that space well within a code's ~30-90s validity
+// window. This route had no limiter at all: someone with a valid access
+// token (their own, or a stolen/short-lived one) could hammer
+// POST /2fa/verify against the pending secret with no cap whatsoever. Keyed
+// on req.user._id (always populated -- requireAuth runs first) rather than
+// IP, same reasoning as sensitivePasswordCheckLimiter: the cap has to hold
+// per-account even if guesses are spread across many source IPs.
+const twoFactorSetupLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => String(req.user?._id || req.ip),
+  message: { code: "RATE_LIMITED", message: "Too many incorrect codes. Try setup again." },
 });
 
 router.post(
@@ -544,6 +583,7 @@ router.post(
 router.post(
   "/2fa/verify",
   requireAuth,
+  twoFactorSetupLimiter,
   validateRequest(twoFactorVerifySchema),
   asyncHandler(async (req, res) => {
     const fullUser = await User.findById(req.user._id).select("_id twoFactorPendingSecret twoFactorEnabled");

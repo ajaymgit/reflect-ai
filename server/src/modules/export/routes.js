@@ -86,7 +86,22 @@ router.get(
 // "let me look back through what I wrote" actually wants) is a friendlier
 // second option, not a replacement.
 function csvEscape(value) {
-  const str = String(value ?? "");
+  let str = String(value ?? "");
+  // CSV/"formula injection" (OWASP CSV Injection): RFC 4180 quoting below
+  // only protects the CSV *structure* (commas/quotes/newlines) -- it does
+  // nothing to stop Excel/Sheets from evaluating a cell as a formula on
+  // open, because that interpretation happens after CSV parsing, on the
+  // unquoted string value itself. Journal title/content/tags are entirely
+  // free-form user text (not a fixed-choice field like mood), so a real
+  // entry that happens to start with "=", "+", "-", or "@" -- someone
+  // literally writing "=1+1 is the only thing that made sense today", or
+  // this app's own tab-character-joined tags list -- would export as a live
+  // formula rather than inert text, and a malicious one could exfiltrate
+  // data or run OS commands via known DDE/HYPERLINK-based CSV payloads.
+  // Standard mitigation: prefix a leading single quote so spreadsheet apps
+  // render the cell as plain text starting with that character instead of
+  // evaluating it, same fix GitHub/Google Sheets/many export libraries use.
+  if (/^[=+\-@\t\r]/.test(str)) str = `'${str}`;
   // Quote-and-double-up any field containing a comma, quote, or newline --
   // the standard CSV escaping rule (RFC 4180). Every field gets wrapped
   // regardless, simpler and still fully valid than only quoting when

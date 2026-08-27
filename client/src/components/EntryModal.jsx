@@ -159,6 +159,11 @@ export default function EntryModal({ entry, onClose, onUpdated, onDeleted }) {
   }
 
   async function saveEdit() {
+    // Same re-entrancy guard as everywhere else this session -- the Save
+    // button disables on `saving`, but that only takes effect after React
+    // commits the re-render, so a fast double-click can still fire two
+    // overlapping PATCH /api/journal/:id requests for one edit.
+    if (saving) return;
     const trimmedContent = draft.content.trim();
     if (!trimmedContent) {
       setError("Content can't be empty.");
