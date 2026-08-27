@@ -129,6 +129,12 @@ export default function SettingsPage() {
   const navigate = useNavigate();
 
   async function handleLogoutEverywhere() {
+    // Same re-entrancy guard as JournalPage's save()/ChatPage's sendMessage --
+    // window.confirm() blocks a second click from opening a second dialog,
+    // but a fast repeated Enter/click right after confirming (before React
+    // commits the disabled state from setLoggingOut(true)) can still call
+    // this a second time.
+    if (loggingOut) return;
     if (!window.confirm("Log out on every device and browser, including this one?")) return;
     setLoggingOut(true);
     setLogoutStatus("");
@@ -1038,6 +1044,15 @@ function TwoFactorSection({ user, setUser }) {
 
   async function confirmSetup(e) {
     e.preventDefault();
+    // Re-entrancy guard, same class as ChatPage's sendMessage/JournalPage's
+    // save() -- confirmed the race live is worse than a mere duplicate
+    // request here: if a fast double-submit's first call succeeds (backup
+    // codes shown, setup form hidden) before the second call's response
+    // arrives, the second call's failure handler still runs afterward and
+    // sets `error`, which renders unconditionally regardless of `setup`/
+    // `backupCodes` state -- so the person sees their real backup codes
+    // together with a stray "invalid code" error underneath them.
+    if (busy) return;
     setError("");
     setBusy(true);
     try {
@@ -1059,6 +1074,8 @@ function TwoFactorSection({ user, setUser }) {
 
   async function handleDisable(e) {
     e.preventDefault();
+    // Same re-entrancy guard as confirmSetup above.
+    if (busy) return;
     setError("");
     setBusy(true);
     try {
@@ -1303,6 +1320,12 @@ function ChangePasswordSection() {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    // Same re-entrancy guard as confirmSetup above -- a double-fire here
+    // sends the change-password request twice with the same currentPassword,
+    // and the second one is guaranteed to fail once the first succeeds
+    // server-side, surfacing a confusing error right as the first request's
+    // success is about to redirect to /login.
+    if (busy) return;
     if (!newPasswordsMatch) {
       setError("New password and confirmation don't match.");
       return;
@@ -1382,6 +1405,10 @@ function DangerZoneSection() {
 
   async function handleDelete(e) {
     e.preventDefault();
+    // Same re-entrancy guard as confirmSetup above -- especially worth
+    // having on the single most irreversible action in the app, even though
+    // a second DELETE would just 404/401 against an already-deleted account.
+    if (busy) return;
     if (!emailMatches) {
       setError("Type your account email exactly to confirm.");
       return;

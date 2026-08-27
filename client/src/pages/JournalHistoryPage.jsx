@@ -144,6 +144,13 @@ export default function JournalHistoryView() {
 
   async function runSearch(e) {
     e?.preventDefault();
+    // Same re-entrancy guard as everywhere else this session (JournalPage's
+    // save(), ChatPage's sendMessage) -- the Search button is disabled while
+    // searchBusy, but that only takes effect after React commits the
+    // re-render, so a fast repeated Enter in the search box can still fire
+    // two overlapping GET /api/journal/search requests for what was meant to
+    // be one search.
+    if (searchBusy) return;
     const q = searchQuery.trim();
     if (!q) {
       setSearchActive(false);
@@ -174,6 +181,11 @@ export default function JournalHistoryView() {
   }
 
   async function commitTagRename(from, to) {
+    // Same re-entrancy guard as runSearch above -- the inline editor's Save/
+    // Delete buttons disable while renameBusy, but a fast repeated Enter on
+    // the rename form can still fire two overlapping PATCH
+    // /api/journal/tags/rename requests before that disabled state commits.
+    if (renameBusy) return;
     setRenameBusy(true);
     setRenameError("");
     try {
