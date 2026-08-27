@@ -409,7 +409,12 @@ function LogHealthDataForm({ onSaved }) {
         {saving ? "Saving..." : "Save today"}
       </button>
       {status && (
-        <p className={`sm:col-span-4 text-xs ${status === "Saved" ? "text-ember-soft" : "text-red-300"}`}>{status}</p>
+        <p
+          role={status === "Saved" ? "status" : "alert"}
+          className={`sm:col-span-4 text-xs ${status === "Saved" ? "text-ember-soft" : "text-red-300"}`}
+        >
+          {status}
+        </p>
       )}
     </form>
   );

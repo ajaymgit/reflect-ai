@@ -443,7 +443,7 @@ export default function SettingsPage() {
                   {loggingOut ? "Logging out..." : "Log out everywhere"}
                 </button>
               </div>
-              {logoutStatus && <p className="text-xs text-red-300 mt-2">{logoutStatus}</p>}
+              {logoutStatus && <p role="alert" className="text-xs text-red-300 mt-2">{logoutStatus}</p>}
             </SectionCard>
 
             {/* Previously the only way to change a password at all was the
@@ -660,7 +660,7 @@ function ExportSection() {
           {busyHealth ? "Preparing..." : "Download as CSV"}
         </button>
       </div>
-      {error && <p className="text-xs text-red-300 mt-2">{error}</p>}
+      {error && <p role="alert" className="text-xs text-red-300 mt-2">{error}</p>}
     </div>
   );
 }
@@ -768,6 +768,7 @@ function ReminderSection({ user, setUser }) {
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2, ease: "easeOut" }}
                 className="text-xs text-emerald-300"
+                role="status"
               >
                 Saved
               </motion.span>
@@ -775,7 +776,7 @@ function ReminderSection({ user, setUser }) {
           </AnimatePresence>
         </div>
       )}
-      {error && <p className="text-xs text-red-300 mt-2">{error}</p>}
+      {error && <p role="alert" className="text-xs text-red-300 mt-2">{error}</p>}
     </div>
   );
 }
@@ -855,7 +856,7 @@ function WeeklyDigestSection({ user, setUser }) {
           )}
         </AnimatePresence>
       </div>
-      {error && <p className="text-xs text-red-300 mt-2">{error}</p>}
+      {error && <p role="alert" className="text-xs text-red-300 mt-2">{error}</p>}
     </div>
   );
 }
@@ -923,7 +924,7 @@ function AppleHealthSection() {
         </button>
       </div>
 
-      {error && <p className="text-xs text-red-300 mt-2">{error}</p>}
+      {error && <p role="alert" className="text-xs text-red-300 mt-2">{error}</p>}
 
       {token && (
         <div className="mt-3 space-y-3 border-t border-ink/10 pt-3">
@@ -1071,7 +1072,7 @@ function TwoFactorSection({ user, setUser }) {
         )}
       </div>
 
-      {error && <p className="text-xs text-red-300 mt-2">{error}</p>}
+      {error && <p role="alert" className="text-xs text-red-300 mt-2">{error}</p>}
 
       {setup && (
         <form onSubmit={confirmSetup} className="mt-3 space-y-2 border-t border-ink/10 pt-3">
@@ -1280,7 +1281,7 @@ function ChangePasswordSection() {
         autoComplete="new-password"
       />
       <p className="text-xs text-ink/50">At least 8 characters, with an uppercase letter, a lowercase letter, and a number.</p>
-      {error && <p className="text-xs text-red-300">{error}</p>}
+      {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
       <button
         type="submit"
         disabled={busy || !currentPassword || !newPasswordsMatch}
@@ -1373,7 +1374,7 @@ function DangerZoneSection() {
             onChange={(e) => setEmailConfirm(e.target.value)}
             required
           />
-          {error && <p className="text-xs text-red-300">{error}</p>}
+          {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
           <div className="flex gap-2">
             <button
               type="submit"

@@ -52,13 +52,17 @@ export default function ForgotPasswordPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
-              {error && <p className="text-red-300 text-sm">{error}</p>}
+              {error && <p role="alert" className="text-red-300 text-sm">{error}</p>}
               <button className="w-full p-3 ui-button-primary" disabled={submitting}>
                 {submitting ? "Sending..." : "Send reset link"}
               </button>
             </>
           )}
-          {submitted && <p className="text-sm text-ember-soft">{status}</p>}
+          {submitted && (
+            <p role="status" className="text-sm text-ember-soft">
+              {status}
+            </p>
+          )}
           <p className="text-sm text-ink/70">
             <Link className="text-signal hover:text-signal-soft" to="/login">
               Back to login

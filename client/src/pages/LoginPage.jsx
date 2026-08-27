@@ -108,7 +108,9 @@ export default function LoginPage() {
               <h2 className="ui-title mt-1">Sign in to Equoria</h2>
             </div>
             {infoMessage && (
-              <p className="text-sm text-emerald-300 bg-emerald-500/10 rounded-lg px-3 py-2">{infoMessage}</p>
+              <p role="status" className="text-sm text-emerald-300 bg-emerald-500/10 rounded-lg px-3 py-2">
+                {infoMessage}
+              </p>
             )}
             <input
               className="ui-input"
@@ -124,7 +126,7 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
-            {error && <p className="text-red-300 text-sm">{error}</p>}
+            {error && <p role="alert" className="text-red-300 text-sm">{error}</p>}
             <button className="w-full p-3 ui-button-primary" disabled={submitting}>
               {submitting ? "Signing in..." : "Login"}
             </button>
@@ -159,7 +161,7 @@ export default function LoginPage() {
               autoFocus
               required
             />
-            {error && <p className="text-red-300 text-sm">{error}</p>}
+            {error && <p role="alert" className="text-red-300 text-sm">{error}</p>}
             <button className="w-full p-3 ui-button-primary" disabled={submitting}>
               {submitting ? "Verifying..." : "Verify"}
             </button>

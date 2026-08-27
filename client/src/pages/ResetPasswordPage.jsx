@@ -75,7 +75,7 @@ export default function ResetPasswordPage() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
               />
-              {error && <p className="text-red-300 text-sm">{error}</p>}
+              {error && <p role="alert" className="text-red-300 text-sm">{error}</p>}
               <button className="w-full p-3 ui-button-primary" disabled={submitting}>
                 {submitting ? "Updating..." : "Update password"}
               </button>
@@ -83,7 +83,7 @@ export default function ResetPasswordPage() {
           )}
           {done && (
             <div className="space-y-3">
-              <p className="text-sm text-ember-soft">
+              <p role="status" className="text-sm text-ember-soft">
                 Your password has been updated. You've been signed out everywhere for security -- please log in
                 again with your new password.
               </p>

@@ -260,7 +260,7 @@ export default function EntryModal({ entry, onClose, onUpdated, onDeleted }) {
           </div>
         </div>
 
-        {error && <p className="text-xs text-red-300 mt-3">{error}</p>}
+        {error && <p role="alert" className="text-xs text-red-300 mt-3">{error}</p>}
 
         {pendingDelete ? (
           <div className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3.5">

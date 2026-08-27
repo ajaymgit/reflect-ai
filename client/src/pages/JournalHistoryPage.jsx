@@ -299,7 +299,7 @@ export default function JournalHistoryView() {
 
         {searchActive ? (
           <>
-            {searchError && <p className="text-sm text-red-300">{searchError}</p>}
+            {searchError && <p role="alert" className="text-sm text-red-300">{searchError}</p>}
             {!searchError && searchMode === "unavailable" && (
               <p className="text-xs text-ink/50">
                 Semantic search isn't set up for your entries yet -- run the embedding backfill on the server
@@ -555,7 +555,7 @@ export default function JournalHistoryView() {
                     </button>
                   )}
                 </div>
-                {renameError && <p className="text-xs text-red-300 mt-2">{renameError}</p>}
+                {renameError && <p role="alert" className="text-xs text-red-300 mt-2">{renameError}</p>}
               </div>
             )}
           </div>
@@ -563,7 +563,7 @@ export default function JournalHistoryView() {
         )}
         </AnimatePresence>
 
-        {error && <p className="text-sm text-red-300">{error}</p>}
+        {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
 
         {loading ? (
           <div className="grid sm:grid-cols-2 gap-3">

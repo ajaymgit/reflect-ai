@@ -735,7 +735,10 @@ export default function ChatPage() {
               {savingQuickEntry ? "Saving..." : "Save journal entry"}
             </button>
             {quickEntryStatus && (
-              <p className={`text-sm ${quickEntryStatus.startsWith("Saved") ? "text-ember-soft" : "text-red-300"}`}>
+              <p
+                role={quickEntryStatus.startsWith("Saved") ? "status" : "alert"}
+                className={`text-sm ${quickEntryStatus.startsWith("Saved") ? "text-ember-soft" : "text-red-300"}`}
+              >
                 {quickEntryStatus}
               </p>
             )}

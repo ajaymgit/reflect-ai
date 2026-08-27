@@ -114,7 +114,7 @@ export default function RegisterPage() {
               onChange={(e) => setWebsite(e.target.value)}
             />
           </div>
-          {error && <p className="text-red-300 text-sm">{error}</p>}
+          {error && <p role="alert" className="text-red-300 text-sm">{error}</p>}
           <button className="w-full p-3 ui-button-primary" disabled={submitting}>
             {submitting ? "Creating account..." : "Register"}
           </button>

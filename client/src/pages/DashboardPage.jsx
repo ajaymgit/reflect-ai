@@ -291,7 +291,12 @@ function QuickLogHealthForm({ onSaved }) {
         {saving ? "Saving..." : "Log today"}
       </button>
       {status && (
-        <p className={`text-xs ${status === "Saved" ? "text-ember-soft" : "text-red-300"}`}>{status}</p>
+        <p
+          role={status === "Saved" ? "status" : "alert"}
+          className={`text-xs ${status === "Saved" ? "text-ember-soft" : "text-red-300"}`}
+        >
+          {status}
+        </p>
       )}
     </form>
   );

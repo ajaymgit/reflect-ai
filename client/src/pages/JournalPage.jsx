@@ -1050,7 +1050,7 @@ function MemorySearch({ presetQuery }) {
         </button>
       </form>
 
-      {error && <p className="text-xs text-red-300">{error}</p>}
+      {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
       {mode === "unavailable" && (
         <p className="text-xs text-ink/50">
           Semantic search isn't set up for your entries yet -- run the embedding backfill on the server
