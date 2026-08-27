@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Flame, X } from "lucide-react";
 import { motion } from "framer-motion";
 import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
+import useDialogA11y from "../hooks/useDialogA11y";
 
 // Celebrates the moment a journaling streak actually crosses 7/30/100 days --
 // previously the streak-glow CSS tiers (see index.css's .streak-glow-1/2/3)
@@ -49,6 +50,12 @@ export default function StreakMilestone({ streak }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [streak]);
 
+  // Called unconditionally (before the `if (!milestone) return null` below,
+  // per the rules of hooks) with `active: !!milestone` so the hook's own
+  // Escape listener/focus management only actually engages once there's a
+  // real milestone card on screen.
+  const dialogRef = useDialogA11y(() => milestone && dismiss(), { active: !!milestone });
+
   if (!milestone) return null;
 
   function dismiss() {
@@ -65,10 +72,15 @@ export default function StreakMilestone({ streak }) {
       onClick={dismiss}
     >
       <motion.div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Streak milestone: ${milestone.label}`}
+        tabIndex={-1}
         initial={reducedMotion ? undefined : { opacity: 0, y: 24, scale: 0.9 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={reducedMotion ? undefined : { type: "spring", stiffness: 340, damping: 22 }}
-        className={`ui-card streak-glow-${milestone.tier} rounded-2xl p-6 max-w-sm w-full text-center relative`}
+        className={`ui-card streak-glow-${milestone.tier} rounded-2xl p-6 max-w-sm w-full text-center relative outline-none`}
         onClick={(e) => e.stopPropagation()}
       >
         <button

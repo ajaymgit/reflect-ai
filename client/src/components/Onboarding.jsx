@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Clock, Gem, LineChart, PenSquare } from "lucide-react";
+import useDialogA11y from "../hooks/useDialogA11y";
 
 // First-run onboarding -- previously a brand-new account landed straight on
 // Chat or Dashboard with zero explanation that Keepsakes exist, that entries
@@ -37,6 +38,11 @@ export default function Onboarding({ onDone }) {
   const [step, setStep] = useState(0);
   const slide = SLIDES[step];
   const isLast = step === SLIDES.length - 1;
+  // Escape reads as "I get it, skip the rest" here -- same action as the
+  // Skip button already in the header -- rather than doing nothing, which
+  // is what every other overlay in the app did before this pass except
+  // EntryModal.
+  const dialogRef = useDialogA11y(onDone, { active: true });
 
   return (
     <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -49,7 +55,14 @@ export default function Onboarding({ onDone }) {
           stat/kicker/timestamp in the app marks "this is metadata") instead
           of a generic dot strip -- same information, in this app's own
           typographic language rather than a borrowed one. */}
-      <div className="ui-card rounded-2xl p-8 max-w-md w-full relative">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Welcome tour: ${slide.title}`}
+        tabIndex={-1}
+        className="ui-card rounded-2xl p-8 max-w-md w-full relative outline-none"
+      >
         <div className="flex items-center justify-between">
           <p className="ui-mono text-xs text-ink/45">
             {String(step + 1).padStart(2, "0")} / {String(SLIDES.length).padStart(2, "0")}

@@ -7,6 +7,7 @@ import DayEntryPreview from "./DayEntryPreview";
 import { apiFetch } from "../api";
 import { MOOD_HEX } from "../utils/moodColors";
 import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
+import useDialogA11y from "../hooks/useDialogA11y";
 
 // Renamed from "Core Memories" to "Keepsakes" (filename unchanged to avoid a
 // risky rename-on-disk of a file with 3D/graphics dependencies; the export
@@ -53,6 +54,7 @@ export default function MoodGlobeLauncher({ variant = "card" }) {
   }, []);
 
   const orbs = useMemo(() => buildKeepsakeOrbs(days || []), [days]);
+  const dialogRef = useDialogA11y(() => setOpen(false), { active: open });
 
   function handleOpen() {
     setSelectedDate(null);
@@ -144,10 +146,15 @@ export default function MoodGlobeLauncher({ variant = "card" }) {
             onClick={() => setOpen(false)}
           >
             <motion.div
+              ref={dialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Keepsakes"
+              tabIndex={-1}
               initial={reducedMotion ? undefined : { opacity: 0, y: 12, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full max-w-3xl"
+              className="w-full max-w-3xl outline-none"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-3 gap-4">

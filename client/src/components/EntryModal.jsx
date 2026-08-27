@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { apiFetch as sharedApiFetch, describeError } from "../api";
 import { MOODS, MOOD_LABELS, moodDotStyle } from "../utils/moodColors";
 import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
+import useDialogA11y from "../hooks/useDialogA11y";
 
 // How long a delete stays undoable before it actually hits the server, in
 // seconds -- see the pendingDelete state machine below.
@@ -76,14 +77,11 @@ export default function EntryModal({ entry, onClose, onUpdated, onDeleted }) {
     clearDeleteTimer();
   }, [entry?._id]);
 
-  useEffect(() => {
-    function onKey(e) {
-      if (e.key === "Escape") requestClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingDelete]);
+  // requestClose is a function declaration (hoisted within this component),
+  // so referencing it here -- before its textual definition below -- is
+  // safe: this hook only ever invokes it from an event handler that fires
+  // well after the component body has finished running once.
+  const dialogRef = useDialogA11y(requestClose, { active: !!current });
 
   if (!current) return null;
 
@@ -201,10 +199,15 @@ export default function EntryModal({ entry, onClose, onUpdated, onDeleted }) {
       onClick={requestClose}
     >
       <motion.div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={current.title || "Journal entry"}
+        tabIndex={-1}
         initial={reducedMotion ? undefined : { opacity: 0, y: 12, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
-        className="ui-card rounded-2xl p-5 md:p-6 w-full max-w-2xl max-h-[85vh] overflow-y-auto scroll-area"
+        className="ui-card rounded-2xl p-5 md:p-6 w-full max-w-2xl max-h-[85vh] overflow-y-auto scroll-area outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4">
