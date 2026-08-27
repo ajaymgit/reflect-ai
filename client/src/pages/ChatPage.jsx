@@ -111,6 +111,11 @@ export default function ChatPage() {
         if (draft?.content) {
           setQuickEntry(draft.content);
           setMood(draft.mood || "calm");
+          // Same class of gap just fixed on JournalPage's draft (isCapsule
+          // wasn't restored there either): the Keepsake toggle wasn't saved
+          // to this draft at all, so a crashed/reloaded tab silently
+          // dropped that flag even though the note content itself survived.
+          setIsKeepsake(draft.isKeepsake === true);
         }
       }
     } catch {
@@ -123,14 +128,14 @@ export default function ChatPage() {
     if (!hydratedDraft.current) return;
     try {
       if (quickEntry.trim()) {
-        localStorage.setItem(CHAT_DRAFT_KEY, JSON.stringify({ content: quickEntry, mood }));
+        localStorage.setItem(CHAT_DRAFT_KEY, JSON.stringify({ content: quickEntry, mood, isKeepsake }));
       } else {
         localStorage.removeItem(CHAT_DRAFT_KEY);
       }
     } catch {
       // ignore
     }
-  }, [quickEntry, mood]);
+  }, [quickEntry, mood, isKeepsake]);
 
   const suggestedQuickMood = useMemo(() => suggestMoodFromText(quickEntry), [quickEntry]);
 
@@ -215,7 +220,15 @@ export default function ChatPage() {
 
   async function sendMessage(e) {
     e.preventDefault();
-    if (!message.trim()) return;
+    // `loading` guard here, not just the disabled Send button -- the same
+    // double-submit class of bug already fixed for journal saves (see
+    // JournalPage's save()). The button's disabled state is set from
+    // `loading`, but that only takes effect after React commits the
+    // re-render; a fast Enter-key repeat (or Enter immediately followed by
+    // a Send click) can call sendMessage a second time before that commit
+    // happens, firing two POST /api/chat/message for what was meant to be
+    // one message and appending two turns to the transcript.
+    if (loading || !message.trim()) return;
     setLoading(true);
     setStatusText(chatMode === "analysis" ? "Analyzing patterns..." : "Thinking...");
     const userMsg = message;

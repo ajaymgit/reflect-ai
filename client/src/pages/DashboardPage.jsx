@@ -154,8 +154,7 @@ function relativeDay(dateStr) {
 // text) plus a one-line read on the numbers, not just the raw figures --
 // the point is to actually answer "how am I doing" without a click, not
 // just relocate the Health page's numbers one level up.
-function HealthSnapshotCard({ summary, onLogged }) {
-  const hasData = summary && (summary.averageSleep || summary.averageSteps || summary.averageStress);
+function HealthSnapshotCard({ summary, hasData, onLogged }) {
   const stressRead =
     summary?.averageStress == null
       ? null
@@ -237,6 +236,7 @@ function QuickLogHealthForm({ onSaved }) {
 
   async function save(e) {
     e.preventDefault();
+    if (saving) return;
     const body = {};
     if (steps !== "") body.steps = Number(steps);
     if (sleepHours !== "") body.sleepHours = Number(sleepHours);
@@ -601,7 +601,18 @@ export default function DashboardPage() {
             leaving Home. */}
         <div className="grid md:grid-cols-2 gap-4">
           <motion.div variants={iVariants} className="h-full">
-            <HealthSnapshotCard summary={data?.quickHealthSummary} onLogged={loadSummary} />
+            <HealthSnapshotCard
+              summary={data?.quickHealthSummary}
+              // dailyWellnessScore is null exactly when the server found
+              // zero HealthData rows in range (see dashboard/routes.js) --
+              // the correct "has any data" signal, unlike checking whether
+              // the averages themselves are truthy (a week that genuinely
+              // averages to 0 steps/sleep/stress -- a real, if rare,
+              // possibility -- would otherwise misread as "no data yet"
+              // and show the quick-log form over real numbers).
+              hasData={data?.dailyWellnessScore != null}
+              onLogged={loadSummary}
+            />
           </motion.div>
           <motion.div variants={iVariants} className="h-full">
             <RetrospectPreviewCard retro={retro} />

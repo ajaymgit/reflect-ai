@@ -309,6 +309,16 @@ export default function JournalPage() {
         setMood(draft.mood || "reflective");
         setTags(draft.tags || "");
         setIsKeepsake(draft.isKeepsake === true);
+        // isCapsule/capsuleDate used to be left out of the saved draft
+        // entirely -- confirmed live: composing a Time Capsule entry, then
+        // losing the tab before hitting Save, silently restored as a normal
+        // (immediately-visible) entry with the capsule toggle back off. For
+        // a feature whose entire premise is "sealed until reveal, even from
+        // me," recovering a draft that quietly drops that intent is worse
+        // than not autosaving at all -- someone could hit Save on the
+        // restored draft believing it was still sealed.
+        setIsCapsule(draft.isCapsule === true);
+        setCapsuleDate(draft.capsuleDate || "");
         setDraftRestoredAt(draft.savedAt || null);
       }
     } catch {
@@ -331,7 +341,10 @@ export default function JournalPage() {
     draftSaveTimer.current = setTimeout(() => {
       const savedAt = new Date().toISOString();
       try {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify({ title, content, mood, tags, isKeepsake, savedAt }));
+        localStorage.setItem(
+          DRAFT_KEY,
+          JSON.stringify({ title, content, mood, tags, isKeepsake, isCapsule, capsuleDate, savedAt }),
+        );
         setDraftRestoredAt(savedAt);
       } catch {
         // localStorage unavailable/full -- autosave is a convenience, not
@@ -339,7 +352,7 @@ export default function JournalPage() {
       }
     }, 600);
     return () => clearTimeout(draftSaveTimer.current);
-  }, [title, content, mood, tags, isKeepsake]);
+  }, [title, content, mood, tags, isKeepsake, isCapsule, capsuleDate]);
 
   function discardDraft() {
     if (!window.confirm("Discard this draft? This can't be undone.")) return;
@@ -349,6 +362,11 @@ export default function JournalPage() {
     setTags("");
     setIsKeepsake(false);
     setMood("reflective");
+    // isCapsule/capsuleDate weren't being reset here either -- discarding a
+    // draft should clear everything about it, not leave a stray "Sealed as
+    // a Time Capsule" toggle on next to an now-empty composer.
+    setIsCapsule(false);
+    setCapsuleDate("");
     setDraftRestoredAt(null);
   }
 

@@ -343,6 +343,7 @@ function LogHealthDataForm({ onSaved }) {
 
   async function save(e) {
     e.preventDefault();
+    if (saving) return;
     const body = {};
     if (steps !== "") body.steps = Number(steps);
     if (sleepHours !== "") body.sleepHours = Number(sleepHours);

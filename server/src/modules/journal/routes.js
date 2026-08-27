@@ -556,7 +556,14 @@ router.post(
   "/recompute-themes",
   requireAuth,
   asyncHandler(async (req, res) => {
-    const entries = await JournalEntry.find({ userId: req.user._id });
+    // visibleFilter here for the same reason PATCH /:id above uses it: a
+    // sealed, not-yet-due time capsule shouldn't be read and re-saved by
+    // this route either. This never returned content or themes to the
+    // caller, so there was no direct leak, but it did quietly touch a
+    // capsule's stored document (recomputing themes from its decrypted
+    // content) before its reveal date -- the same class of "tampering with
+    // a sealed capsule" this app's other routes explicitly guard against.
+    const entries = await JournalEntry.find(visibleFilter({ userId: req.user._id }));
     let changed = 0;
     for (const entry of entries) {
       const next = extractThemes(entry.content);
