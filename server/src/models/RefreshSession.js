@@ -17,6 +17,23 @@ const refreshSessionSchema = new mongoose.Schema(
     // reuse of an already-superseded token.
     previousJti: { type: String, default: null },
     previousJtiExpiresAt: { type: Date, default: null },
+    // Raw User-Agent header from the request that created this session
+    // (login/register), used only to render a human-readable "Chrome on
+    // macOS" label in Settings -> Active sessions -- see humanizeUserAgent()
+    // in auth/routes.js. Never used for any security decision (User-Agent is
+    // trivially spoofable), purely a display convenience. Capped well under
+    // any realistic real-world UA string length so a malicious/malformed
+    // header can't be used to stuff an oversized document into this
+    // collection.
+    userAgent: { type: String, default: "", maxlength: 512 },
+    // Bumped on every successful /refresh (and set at creation) -- lets
+    // Active sessions show "last active 2 hours ago" per device and sort by
+    // recency, rather than only ever showing when the session was first
+    // created. Deliberately NOT bumped by ordinary access-token-authenticated
+    // requests (that would mean a DB write on nearly every API call this app
+    // makes) -- refresh only happens every ~15 minutes at most per device, so
+    // this stays a reasonably fresh "last active" signal without that cost.
+    lastUsedAt: { type: Date, default: Date.now },
   },
   { timestamps: true },
 );

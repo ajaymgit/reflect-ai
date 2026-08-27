@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Bell, Download, HeartPulse, KeyRound, Lock, LogOut, Palette, ShieldCheck, Trash2, UserRound } from "lucide-react";
+import { Bell, Download, HeartPulse, KeyRound, Lock, LogOut, Monitor, Palette, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { apiFetch, describeError } from "../api";
 import { useAuth } from "../context/AuthContext";
@@ -454,6 +454,17 @@ export default function SettingsPage() {
               {logoutStatus && <p role="alert" className="text-xs text-red-300 mt-2">{logoutStatus}</p>}
             </SectionCard>
 
+            {/* The granular counterpart to "Log out everywhere" above --
+                that's an all-or-nothing wipe; this lets someone actually see
+                what's signed in (an old laptop, a browser they don't
+                recognize) and end just that one. Its own card rather than
+                folded into Security, same reasoning every other split here
+                already follows: this has its own list + per-row actions, not
+                a single button. */}
+            <SectionCard icon={Monitor} title="Active sessions">
+              <ActiveSessionsSection />
+            </SectionCard>
+
             {/* Previously the only way to change a password at all was the
                 forgot-password email flow -- no way to just rotate it while
                 already logged in. Its own card rather than folding into
@@ -544,6 +555,112 @@ function AppearancePreview({ darkHue, darkToneValue, lightHue, lightToneValue, s
           Button
         </button>
       </div>
+    </div>
+  );
+}
+
+// "5 minutes ago" / "3 hours ago" / "2 days ago" -- coarser than
+// DashboardPage's relativeDay (that one distinguishes "Yesterday" and a
+// weekday name; a session's last-active time doesn't need that precision,
+// just a quick "is this still me right now" read).
+function relativeTime(dateStr) {
+  const diffMs = Date.now() - new Date(dateStr).getTime();
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} ${minutes === 1 ? "minute" : "minutes"} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} ${hours === 1 ? "hour" : "hours"} ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} ${days === 1 ? "day" : "days"} ago`;
+  return new Date(dateStr).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+// Backed by GET/DELETE /api/auth/sessions -- see the server route's own
+// comment for why revoking a device isn't instant (it stops that device from
+// refreshing but can't reach back and kill an access token it already holds,
+// so it takes up to one access-token lifetime -- 15 minutes -- to fully take
+// effect). Reflected honestly in the confirm() copy below rather than
+// implying an immediate kick.
+function ActiveSessionsSection() {
+  const [sessions, setSessions] = useState(null);
+  const [error, setError] = useState("");
+  const [revokingId, setRevokingId] = useState(null);
+
+  function load() {
+    setError("");
+    apiFetch("/api/auth/sessions")
+      .then((data) => setSessions(data.sessions || []))
+      .catch((err) => setError(describeError(err)));
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function revoke(session) {
+    if (revokingId) return;
+    const label = session.device === "Unknown device" ? "this session" : session.device;
+    if (
+      !window.confirm(
+        `Sign out ${label}? It'll be signed out the next time it needs to refresh -- within about 15 minutes.`,
+      )
+    ) {
+      return;
+    }
+    setRevokingId(session.id);
+    setError("");
+    try {
+      await apiFetch(`/api/auth/sessions/${session.id}`, { method: "DELETE" });
+      setSessions((prev) => (prev || []).filter((s) => s.id !== session.id));
+    } catch (err) {
+      setError(describeError(err));
+    } finally {
+      setRevokingId(null);
+    }
+  }
+
+  if (sessions === null && !error) {
+    return <p className="text-sm text-ink/60">Loading sessions...</p>;
+  }
+
+  return (
+    <div>
+      <p className="text-xs text-ink/70 max-w-md">
+        Every device currently signed in to your account. If you don't recognize one, sign it out.
+      </p>
+      {error && <p role="alert" className="text-xs text-red-300 mt-2">{error}</p>}
+      {sessions && sessions.length > 0 && (
+        <div className="mt-3 divide-y divide-ink/8">
+          {sessions.map((session) => (
+            <div key={session.id} className="flex items-center justify-between gap-3 py-2.5 flex-wrap">
+              <div className="min-w-0">
+                <p className="text-sm font-medium flex items-center gap-1.5">
+                  {session.device}
+                  {session.isCurrent && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-signal/20 text-ink/70 font-normal">
+                      This device
+                    </span>
+                  )}
+                </p>
+                <p className="text-xs text-ink/50 mt-0.5">Active {relativeTime(session.lastUsedAt)}</p>
+              </div>
+              {!session.isCurrent && (
+                <button
+                  type="button"
+                  onClick={() => revoke(session)}
+                  disabled={revokingId === session.id}
+                  className="shrink-0 text-xs px-3 py-1.5 rounded-lg border border-ink/15 bg-ink/5 hover:bg-red-500/10 hover:border-red-400/30 hover:text-red-300 transition disabled:opacity-50"
+                >
+                  {revokingId === session.id ? "Signing out..." : "Sign out"}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {sessions && sessions.length === 0 && (
+        <p className="text-xs text-ink/50 mt-3">No active sessions found.</p>
+      )}
     </div>
   );
 }

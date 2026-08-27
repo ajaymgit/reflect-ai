@@ -2,6 +2,7 @@ import { Router } from "express";
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 import rateLimit from "express-rate-limit";
 import User from "../../models/User.js";
 import RefreshSession from "../../models/RefreshSession.js";
@@ -45,14 +46,54 @@ function hashResetToken(rawToken) {
   return crypto.createHash("sha256").update(rawToken).digest("hex");
 }
 
+// Turns a raw User-Agent header into a short "Chrome on macOS" style label
+// for Settings -> Active sessions. Deliberately not a real UA-parsing library
+// (this project has no npm registry access in its sandbox test environment,
+// and a handful of regexes covering the browsers/platforms real users
+// actually show up with is plenty for a display-only label with no security
+// weight) -- order matters below since several UA substrings overlap (Edge
+// and Opera both contain "Chrome"; iPad/iPhone both contain "Mobile").
+function humanizeUserAgent(ua) {
+  const raw = String(ua || "");
+  if (!raw.trim()) return "Unknown device";
+
+  let browser = "a browser";
+  if (/Edg\//.test(raw)) browser = "Edge";
+  else if (/OPR\//.test(raw)) browser = "Opera";
+  else if (/Firefox\//.test(raw)) browser = "Firefox";
+  else if (/CriOS\//.test(raw)) browser = "Chrome"; // Chrome on iOS
+  else if (/Chrome\//.test(raw)) browser = "Chrome";
+  else if (/Safari\//.test(raw) && /Version\//.test(raw)) browser = "Safari";
+
+  let platform = "an unknown device";
+  if (/iPhone/.test(raw)) platform = "iPhone";
+  else if (/iPad/.test(raw)) platform = "iPad";
+  else if (/Android/.test(raw)) platform = "Android";
+  else if (/Mac OS X/.test(raw)) platform = "macOS";
+  else if (/Windows/.test(raw)) platform = "Windows";
+  else if (/Linux/.test(raw)) platform = "Linux";
+
+  return `${browser} on ${platform}`;
+}
+
 // Starts a brand new rotation chain for one login/register call and returns
-// the refresh token for it. Each call creates its own RefreshSession
+// the refresh token for it, plus the session's own id (needed by callers to
+// also stamp the paired access token with the same sid -- see
+// signAccessToken's comment). Each call creates its own RefreshSession
 // document, so signing in on a second device never touches the first
 // device's session -- each has an independent currentJti/previousJti chain.
-async function issueRefreshToken(user) {
+// `req` is optional (register/login always have one; nothing else calls
+// this) and only used to snapshot the requesting device's User-Agent for
+// Settings -> Active sessions.
+async function issueRefreshToken(user, req) {
   const jti = crypto.randomUUID();
-  const session = await RefreshSession.create({ userId: user._id, currentJti: jti });
-  return signRefreshToken({ userId: user._id, tv: user.tokenVersion ?? 0, sid: session._id, jti });
+  const session = await RefreshSession.create({
+    userId: user._id,
+    currentJti: jti,
+    userAgent: req?.headers?.["user-agent"] || "",
+  });
+  const refreshToken = signRefreshToken({ userId: user._id, tv: user.tokenVersion ?? 0, sid: session._id, jti });
+  return { refreshToken, sid: session._id };
 }
 
 // A short-lived, single-purpose token proving "this request already
@@ -71,9 +112,9 @@ function signTwoFactorPendingToken(user) {
   );
 }
 
-async function issueLoginTokens(user) {
-  const token = signAccessToken(user);
-  const refreshToken = await issueRefreshToken(user);
+async function issueLoginTokens(user, req) {
+  const { refreshToken, sid } = await issueRefreshToken(user, req);
+  const token = signAccessToken(user, { sid });
   return {
     token,
     refreshToken,
@@ -249,8 +290,8 @@ router.post(
     }
 
     const user = await User.create({ name, email, passwordHash });
-    const token = signAccessToken(user);
-    const refreshToken = await issueRefreshToken(user);
+    const { refreshToken, sid } = await issueRefreshToken(user, req);
+    const token = signAccessToken(user, { sid });
 
     res.status(201).json({
       token,
@@ -291,7 +332,7 @@ router.post(
       return res.json({ twoFactorRequired: true, twoFactorToken: signTwoFactorPendingToken(user) });
     }
 
-    res.json(await issueLoginTokens(user));
+    res.json(await issueLoginTokens(user, req));
   }),
 );
 
@@ -414,19 +455,28 @@ router.post(
       // refreshing around the same moment). Don't rotate again -- hand back
       // a token for the CURRENT jti so this requester converges onto the
       // same valid state instead of being left holding a token that would
-      // look like reuse the next time it tries to refresh.
+      // look like reuse the next time it tries to refresh. Still worth
+      // bumping lastUsedAt -- this device genuinely was just active, even
+      // though its own request lost the race to rotate first.
+      await RefreshSession.updateOne({ _id: session._id }, { lastUsedAt: now });
       const convergedRefreshToken = signRefreshToken({
         userId: user._id,
         tv: currentVersion,
         sid: session._id,
         jti: session.currentJti,
       });
-      return res.json({ token: signAccessToken(user), refreshToken: convergedRefreshToken });
+      return res.json({
+        token: signAccessToken(user, { sid: session._id }),
+        refreshToken: convergedRefreshToken,
+      });
     }
 
     // Normal path: rotate. The just-used jti becomes the grace-period
     // "previous" one for a short window (absorbing benign races) and a new
-    // jti becomes current.
+    // jti becomes current. lastUsedAt updates here too, in the same write --
+    // this is the path an ordinary, non-racing refresh takes every ~15
+    // minutes, so it's the main source of "last active" freshness for
+    // Settings -> Active sessions.
     const newJti = crypto.randomUUID();
     const updatedSession = await RefreshSession.findByIdAndUpdate(
       session._id,
@@ -434,6 +484,7 @@ router.post(
         previousJti: session.currentJti,
         previousJtiExpiresAt: new Date(now.getTime() + 30 * 1000),
         currentJti: newJti,
+        lastUsedAt: now,
       },
       { new: true },
     );
@@ -443,7 +494,10 @@ router.post(
       sid: updatedSession._id,
       jti: newJti,
     });
-    res.json({ token: signAccessToken(user), refreshToken: newRefreshToken });
+    res.json({
+      token: signAccessToken(user, { sid: updatedSession._id }),
+      refreshToken: newRefreshToken,
+    });
   }),
 );
 
@@ -466,6 +520,71 @@ router.post(
     // them out opportunistically.
     await RefreshSession.deleteMany({ userId: req.user._id });
     res.json({ ok: true, tokenVersion: updated.tokenVersion });
+  }),
+);
+
+// Lists every device with an active (non-expired, non-revoked) session --
+// one RefreshSession row per login, see issueRefreshToken above. This is the
+// granular counterpart to "Log out everywhere": that revokes every session at
+// once via a tokenVersion bump, this lets someone see the list first and
+// revoke just the one they don't recognize. Sorted most-recently-active
+// first so the device someone's looking at it from usually sorts near the
+// top too.
+router.get(
+  "/sessions",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const sessions = await RefreshSession.find({ userId: req.user._id }).sort({ lastUsedAt: -1 });
+    res.json({
+      sessions: sessions.map((s) => ({
+        id: s._id,
+        device: humanizeUserAgent(s.userAgent),
+        lastUsedAt: s.lastUsedAt,
+        createdAt: s.createdAt,
+        // req.sessionId comes from the access token's own "sid" claim (see
+        // requireAuth) -- undefined for a token issued before that existed,
+        // in which case no row will ever match and that's an honest "can't
+        // tell" rather than a wrong guess.
+        isCurrent: req.sessionId ? String(s._id) === String(req.sessionId) : false,
+      })),
+    });
+  }),
+);
+
+// Revokes one specific session rather than every session at once (see GET
+// /sessions above). Ownership-checked by filtering on userId, not just _id --
+// same IDOR guard every other per-resource route in this app uses -- so
+// nobody can revoke a session belonging to a different account by guessing
+// or enumerating ids.
+//
+// Important scope note, reflected in the client copy too: this deletes the
+// RefreshSession row, which stops that device from refreshing -- it does NOT
+// immediately invalidate whatever access token that device already holds.
+// Access tokens are short-lived (15 minutes, see tokens.js) and are
+// authorized purely by tokenVersion, checked fresh on every request; there's
+// no per-session check on the access-token path, so revoking one session
+// here can't reach back and kill an already-issued token without either
+// bumping tokenVersion for every device (that's what Log out everywhere is
+// for) or adding a DB round-trip to every single authenticated request just
+// to support revoking individual devices. A revoked device is fully signed
+// out within, at most, one access-token lifetime.
+router.delete(
+  "/sessions/:id",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    // Same INVALID_ID pre-check journal/routes.js's own /:id routes use --
+    // an id that isn't a well-formed ObjectId would otherwise reach
+    // RefreshSession.deleteOne() and throw a raw Mongoose CastError, which
+    // errorHandler.js has no client-safe message for and would surface as a
+    // generic 500 instead of an honest 400.
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      throw new AppError("INVALID_ID", "Not a valid session id.", 400);
+    }
+    const result = await RefreshSession.deleteOne({ _id: req.params.id, userId: req.user._id });
+    if (result.deletedCount === 0) {
+      throw new AppError("NOT_FOUND", "Session not found.", 404);
+    }
+    res.json({ ok: true });
   }),
 );
 
@@ -705,7 +824,7 @@ router.post(
     }
 
     if (verifyTotp(user.twoFactorSecret, code)) {
-      return res.json(await issueLoginTokens(user));
+      return res.json(await issueLoginTokens(user, req));
     }
 
     const submittedHash = hashBackupCode(code);
@@ -715,7 +834,7 @@ router.post(
       await User.findByIdAndUpdate(user._id, {
         $pull: { twoFactorBackupCodeHashes: submittedHash },
       });
-      return res.json(await issueLoginTokens(user));
+      return res.json(await issueLoginTokens(user, req));
     }
 
     throw new AppError("AUTH_INVALID", "Incorrect code.", 401);

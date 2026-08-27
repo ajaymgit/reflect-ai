@@ -10,12 +10,16 @@ import { env } from "../config/env.js";
 export const ACCESS_TOKEN_TTL = "15m";
 export const REFRESH_TOKEN_TTL = "30d";
 
-export function signAccessToken(user) {
-  return jwt.sign(
-    { userId: user._id, tv: user.tokenVersion ?? 0, type: "access" },
-    env.JWT_SECRET,
-    { expiresIn: ACCESS_TOKEN_TTL },
-  );
+// sid is optional and purely informational here (unlike on the refresh
+// token, requireAuth does NOT use it to authorize the request -- tokenVersion
+// alone still decides whether an access token is valid, exactly as before).
+// It's threaded through so GET /api/auth/sessions can tell "this is the
+// device you're looking at it from right now" apart from every other active
+// session, without the client having to decode its own JWT to find out.
+export function signAccessToken(user, { sid } = {}) {
+  const payload = { userId: user._id, tv: user.tokenVersion ?? 0, type: "access" };
+  if (sid) payload.sid = String(sid);
+  return jwt.sign(payload, env.JWT_SECRET, { expiresIn: ACCESS_TOKEN_TTL });
 }
 
 // Refresh tokens carry a "sid" (the RefreshSession document tracking this

@@ -53,6 +53,13 @@ export async function requireAuth(req, _res, next) {
       return next(new AppError("AUTH_INVALID", "Session expired. Please login again.", 401));
     }
     req.user = user;
+    // Purely informational (see signAccessToken's comment) -- undefined for
+    // tokens issued before this existed, or if a caller ever calls
+    // signAccessToken without a sid. Only consumed by GET /api/auth/sessions
+    // to mark which row is "this device" -- nothing security-relevant reads
+    // it, so a missing value here just means that one response can't say
+    // which session is current, not a broken auth check.
+    req.sessionId = decoded.sid || null;
     return next();
   } catch (_error) {
     return next(new AppError("TOKEN_EXPIRED", "Session expired. Please login again.", 401));
