@@ -22,6 +22,7 @@ import {
   twoFactorLoginSchema,
   twoFactorDisableSchema,
   deleteAccountSchema,
+  changePasswordSchema,
   reminderPreferencesSchema,
   digestPreferencesSchema,
 } from "../../shared/validators/authSchemas.js";
@@ -572,6 +573,39 @@ router.post(
       },
     });
     res.json({ ok: true });
+  }),
+);
+
+// Change password while already logged in -- previously the only way to
+// change a password at all was the forgot-password email flow, which is a
+// real gap: someone who just wants to rotate their password on a whim (not
+// because they've lost access) shouldn't have to trigger a password-reset
+// email to do it. Same current-password confirmation gate as /2fa/disable
+// and DELETE /account above (re-fetches passwordHash since requireAuth's
+// req.user projection omits it), and deliberately mirrors reset-password's
+// own revocation behavior: bumping tokenVersion and clearing every
+// RefreshSession forces every device -- including the one that just made
+// this change -- to log in again with the new password. No "keep this
+// session" special case exists anywhere else in this app's session model
+// (logout-all doesn't spare the calling device either), so this doesn't
+// invent one.
+router.post(
+  "/change-password",
+  requireAuth,
+  validateRequest(changePasswordSchema),
+  asyncHandler(async (req, res) => {
+    const fullUser = await User.findById(req.user._id).select("_id passwordHash");
+    const ok = await bcrypt.compare(req.validated.body.currentPassword, fullUser.passwordHash);
+    if (!ok) {
+      throw new AppError("AUTH_INVALID", "Incorrect current password.", 401);
+    }
+    const passwordHash = await bcrypt.hash(req.validated.body.newPassword, 10);
+    await User.findByIdAndUpdate(req.user._id, {
+      $set: { passwordHash },
+      $inc: { tokenVersion: 1 },
+    });
+    await RefreshSession.deleteMany({ userId: req.user._id });
+    res.json({ ok: true, message: "Password changed. Please log in again." });
   }),
 );
 

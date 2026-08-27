@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { apiFetch, describeError } from "../api";
 import { useAuth } from "../context/AuthContext";
 import PasswordInput from "../components/PasswordInput";
@@ -12,6 +12,14 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const { setToken, setUser } = useAuth();
   const navigate = useNavigate();
+  // Populated by any flow that force-logs-out and redirects here with a
+  // reason (currently just change-password, which invalidates every session
+  // -- including the one that made the change -- as soon as it succeeds).
+  // Read once on mount: React Router keeps this in history state, not the
+  // URL, so it survives a refresh-free redirect but doesn't linger as a
+  // query param someone could bookmark or re-trigger.
+  const location = useLocation();
+  const [infoMessage] = useState(location.state?.message || "");
 
   // Set once /login responds with { twoFactorRequired: true, twoFactorToken }
   // instead of real tokens -- switches the form into a second step asking
@@ -99,6 +107,9 @@ export default function LoginPage() {
               <p className="ui-kicker">Welcome back</p>
               <h2 className="ui-title mt-1">Sign in to Equoria</h2>
             </div>
+            {infoMessage && (
+              <p className="text-sm text-emerald-300 bg-emerald-500/10 rounded-lg px-3 py-2">{infoMessage}</p>
+            )}
             <input
               className="ui-input"
               type="email"

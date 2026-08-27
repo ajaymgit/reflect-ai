@@ -100,6 +100,21 @@ export const deleteAccountSchema = z.object({
   query: z.object({}).optional(),
 });
 
+// Change-password (while already logged in) -- distinct from
+// resetPasswordSchema, which authenticates via a one-time emailed token
+// instead of the current password. currentPassword only needs .min(1) (the
+// real check is bcrypt.compare against the stored hash, not a shape rule);
+// newPassword reuses the same passwordField strength rules every other
+// password-setting path in the app enforces.
+export const changePasswordSchema = z.object({
+  body: z.object({
+    currentPassword: z.string().min(1),
+    newPassword: passwordField,
+  }),
+  params: z.object({}).optional(),
+  query: z.object({}).optional(),
+});
+
 export const reminderPreferencesSchema = z.object({
   body: z.object({
     enabled: z.boolean(),

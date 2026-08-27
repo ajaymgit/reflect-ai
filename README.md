@@ -62,7 +62,7 @@ Not wired to an in-process scheduler -- run manually or via cron:
 
 ## API Overview
 
-- Auth: `/api/auth/register`, `/api/auth/login`, `/api/auth/me`, `/api/auth/2fa/*`, `/api/auth/reminder-preferences`, `/api/auth/digest-preferences`, `/api/auth/account` (DELETE -- self-serve account deletion)
+- Auth: `/api/auth/register`, `/api/auth/login`, `/api/auth/me`, `/api/auth/2fa/*`, `/api/auth/change-password`, `/api/auth/reminder-preferences`, `/api/auth/digest-preferences`, `/api/auth/account` (DELETE -- self-serve account deletion)
 - Dashboard: `/api/dashboard/summary`, `/api/dashboard/mood-calendar`
 - Journal: `/api/journal/quick-entry`, `/api/journal/entries`, `/api/journal/recent`, `/api/journal/search`, `/api/journal/capsules`, `/api/journal/tags/rename`
 - Retrospect: `/api/retrospect/analysis`

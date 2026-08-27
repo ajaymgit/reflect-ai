@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Bell, Download, HeartPulse, LogOut, Palette, ShieldCheck, Trash2, UserRound } from "lucide-react";
+import { Bell, Download, HeartPulse, KeyRound, LogOut, Palette, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { apiFetch, describeError } from "../api";
 import { useAuth } from "../context/AuthContext";
@@ -444,6 +444,16 @@ export default function SettingsPage() {
                 </button>
               </div>
               {logoutStatus && <p className="text-xs text-red-300 mt-2">{logoutStatus}</p>}
+            </SectionCard>
+
+            {/* Previously the only way to change a password at all was the
+                forgot-password email flow -- no way to just rotate it while
+                already logged in. Its own card rather than folding into
+                "Security" above for the same density reason 2FA got split
+                out: this has its own multi-field form, not a one-button
+                action. */}
+            <SectionCard icon={KeyRound} title="Change password">
+              <ChangePasswordSection />
             </SectionCard>
 
             {/* Split out from Security into its own card -- previously both
@@ -1205,6 +1215,80 @@ function SelectOption({ title, detail, value, onChange }) {
       </div>
       <p className="text-xs text-ink/70 mt-2">{detail}</p>
     </div>
+  );
+}
+
+// Backed by POST /api/auth/change-password. The server bumps tokenVersion
+// and clears every RefreshSession on success (same revocation behavior as
+// reset-password and logout-all), which means this device's own session
+// tokens are invalidated by the very request that just succeeded -- so a
+// successful response here always logs out and redirects to login, there's
+// no "stay signed in" path to build for.
+function ChangePasswordSection() {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const newPasswordsMatch = newPassword.length > 0 && newPassword === confirmPassword;
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!newPasswordsMatch) {
+      setError("New password and confirmation don't match.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await apiFetch("/api/auth/change-password", {
+        method: "POST",
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      logout();
+      navigate("/login", { state: { message: "Password changed. Please log in again." } });
+    } catch (err) {
+      setError(describeError(err));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-2">
+      <PasswordInput
+        placeholder="Current password"
+        value={currentPassword}
+        onChange={(e) => setCurrentPassword(e.target.value)}
+        required
+        autoComplete="current-password"
+      />
+      <PasswordInput
+        placeholder="New password"
+        value={newPassword}
+        onChange={(e) => setNewPassword(e.target.value)}
+        required
+        autoComplete="new-password"
+      />
+      <PasswordInput
+        placeholder="Confirm new password"
+        value={confirmPassword}
+        onChange={(e) => setConfirmPassword(e.target.value)}
+        required
+        autoComplete="new-password"
+      />
+      <p className="text-xs text-ink/50">At least 8 characters, with an uppercase letter, a lowercase letter, and a number.</p>
+      {error && <p className="text-xs text-red-300">{error}</p>}
+      <button
+        type="submit"
+        disabled={busy || !currentPassword || !newPasswordsMatch}
+        className="ui-button-primary px-4 py-2.5 min-h-11 text-sm disabled:opacity-60"
+      >
+        {busy ? "Changing..." : "Change password"}
+      </button>
+    </form>
   );
 }
 
