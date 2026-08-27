@@ -13,6 +13,7 @@
     "send-capsule-notifications": "node src/scripts/sendCapsuleReadyNotifications.js",
     "embed-journals": "node src/scripts/embedJournalEntries.js",
     "seed-demo-journal": "node src/scripts/seedDemoJournal.js",
+    "seed-showcase": "node src/scripts/seedShowcaseAccount.js",
     "clear-retrospect-cache": "node src/scripts/clearRetrospectCache.js",
     "recompute-themes": "node src/scripts/recomputeThemes.js",
     "test": "vitest run",
