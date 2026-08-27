@@ -35,12 +35,25 @@ async function apiFetchOnce(path, options = {}) {
       }
       return data;
     } catch (error) {
+      // Only retry genuine network failures (fetch() itself throwing, e.g.
+      // a dropped connection) -- those never carry a `.status`, since no
+      // response was ever received. A defined `.status` means the server
+      // did respond and this function deliberately threw (wrong password,
+      // a validation error, a rate limit, a 500). Retrying those used to
+      // happen unconditionally here, which silently double-fired every
+      // failed request: a mistyped password consumed two hits against the
+      // login rate limiter instead of one, and any POST that failed with a
+      // 5xx after already writing to the database (a real possibility, not
+      // hypothetical) could create a duplicate. Confirmed live: a 401 from
+      // a wrong password used to show up ~350ms slower than a 429, because
+      // it was quietly retrying once before surfacing the error at all.
+      const isNetworkFailure = error?.status === undefined;
       const isLastAttempt = attempt === 1;
-      if (!isLastAttempt) {
+      if (isNetworkFailure && !isLastAttempt) {
         await sleep(350);
         continue;
       }
-      if (error?.message?.includes("Failed to fetch")) {
+      if (isNetworkFailure && error?.message?.includes("Failed to fetch")) {
         throw new Error("Connection issue. Please wait a second and try again.");
       }
       throw error;
