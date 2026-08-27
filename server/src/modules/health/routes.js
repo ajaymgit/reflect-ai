@@ -45,6 +45,34 @@ function getStatus(stressScore = 0) {
   return "Good";
 }
 
+// Shared by /sync and /manual-entry -- both rely on findOneAndUpdate's
+// upsert to enforce "one HealthData row per user per day" (see the unique
+// index comment in models/HealthData.js), but that upsert isn't atomic
+// against two near-simultaneous writes for the same day: both requests can
+// race to see no existing row and both attempt an insert, in which case the
+// unique index correctly lets exactly one succeed and makes the other throw
+// a MongoDB E11000 duplicate-key error instead of silently creating a
+// second row. This wraps that race: on a duplicate-key error, the losing
+// request's row now definitely exists (the winner just created it), so a
+// second findOneAndUpdate WITHOUT upsert applies this request's own update
+// on top of it -- the net result is the same as if the two requests had
+// been strictly sequential, and no request ever fails or silently loses its
+// data because of timing.
+async function upsertHealthDataDay(filter, update) {
+  try {
+    return await HealthData.findOneAndUpdate(
+      filter,
+      { $set: update, $setOnInsert: filter },
+      { upsert: true, new: true },
+    );
+  } catch (err) {
+    if (err?.code === 11000) {
+      return HealthData.findOneAndUpdate(filter, { $set: update }, { new: true });
+    }
+    throw err;
+  }
+}
+
 function dayKey(date) {
   const d = new Date(date);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -198,11 +226,7 @@ router.post(
     if (sleepHours !== undefined) update.sleepHours = sleepHours;
     if (restingHeartRate !== undefined) update.restingHeartRate = restingHeartRate;
 
-    const row = await HealthData.findOneAndUpdate(
-      { userId: req.user._id, date },
-      { $set: update, $setOnInsert: { userId: req.user._id, date } },
-      { upsert: true, new: true },
-    );
+    const row = await upsertHealthDataDay({ userId: req.user._id, date }, update);
 
     res.json({ ok: true, date: row.date, steps: row.steps, sleepHours: row.sleepHours, restingHeartRate: row.restingHeartRate, stressScore: row.stressScore });
   }),
@@ -238,11 +262,7 @@ router.post(
     if (sleepHours !== undefined) update.sleepHours = sleepHours;
     if (restingHeartRate !== undefined) update.restingHeartRate = restingHeartRate;
 
-    const row = await HealthData.findOneAndUpdate(
-      { userId: req.user._id, date },
-      { $set: update, $setOnInsert: { userId: req.user._id, date } },
-      { upsert: true, new: true },
-    );
+    const row = await upsertHealthDataDay({ userId: req.user._id, date }, update);
 
     res.json({
       ok: true,

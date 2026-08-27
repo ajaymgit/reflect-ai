@@ -56,7 +56,22 @@ const healthDataSchema = new mongoose.Schema(
   },
 );
 
-healthDataSchema.index({ userId: 1, date: -1 });
+// unique: true turns this into the actual data-integrity guarantee every
+// caller assumes ("one HealthData row per user per calendar day") rather
+// than just a performance index. Both /sync (Apple Health companion app)
+// and /manual-entry rely on findOneAndUpdate(..., { upsert: true }) against
+// this exact { userId, date } shape to enforce that -- but findOneAndUpdate's
+// upsert is NOT atomic against a race without a unique index backing the
+// filter: two near-simultaneous writes for the same day (a manual entry
+// landing at the same moment as the phone's background sync, or a fast
+// double-submit before either request's upsert has committed) could each
+// fail to see the other's insert and create two separate rows for one
+// calendar day. Every average/correlation in health/routes.js,
+// correlation.js, and dashboard/routes.js assumes exactly one row per day
+// and would silently double-weight that day if a duplicate ever existed.
+// See the retry-on-duplicate-key wrapper in health/routes.js's upsertHealthDataDay,
+// which handles the resulting E11000 error from the losing side of the race.
+healthDataSchema.index({ userId: 1, date: -1 }, { unique: true });
 
 export default mongoose.model("HealthData", healthDataSchema);
 
