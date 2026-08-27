@@ -899,9 +899,18 @@ function AppleHealthSection() {
     }
   }
 
-  function copyToken() {
-    navigator.clipboard?.writeText(token);
-    setCopied(true);
+  // clipboard.writeText() can throw synchronously (not just reject its
+  // promise) when the document isn't focused or clipboard permission is
+  // denied -- confirmed live, where an uncaught throw here meant the button
+  // silently never flipped to "Copied" with no feedback at all. Wrapped so a
+  // failed copy surfaces as an actual error instead of doing nothing.
+  async function copyToken() {
+    try {
+      await navigator.clipboard.writeText(token);
+      setCopied(true);
+    } catch {
+      setError("Couldn't copy automatically -- select and copy the token manually.");
+    }
   }
 
   return (
@@ -985,6 +994,34 @@ function TwoFactorSection({ user, setUser }) {
   const [disablePassword, setDisablePassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [codesCopied, setCodesCopied] = useState(false);
+
+  // See copyToken's comment in AppleHealthSection above -- same
+  // clipboard.writeText() footgun (can throw synchronously rather than just
+  // reject), fixed the same way here.
+  async function copyBackupCodes() {
+    try {
+      await navigator.clipboard.writeText(backupCodes.join("\n"));
+      setCodesCopied(true);
+    } catch {
+      setError("Couldn't copy automatically -- select and copy the codes manually, or use Download instead.");
+    }
+  }
+
+  // Plain-text download rather than anything fancier -- these are meant to
+  // be printed or dropped in a password manager, not opened as a document.
+  function downloadBackupCodes() {
+    const blob = new Blob(
+      [`Equoria two-factor backup codes\nEach code works once. Keep this somewhere safe.\n\n${backupCodes.join("\n")}\n`],
+      { type: "text/plain" },
+    );
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "equoria-backup-codes.txt";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   async function startSetup() {
     setError("");
@@ -1009,6 +1046,7 @@ function TwoFactorSection({ user, setUser }) {
         body: JSON.stringify({ token: code }),
       });
       setBackupCodes(data.backupCodes);
+      setCodesCopied(false);
       setUser((prev) => ({ ...prev, twoFactorEnabled: true }));
       setSetup(null);
       setCode("");
@@ -1114,9 +1152,36 @@ function TwoFactorSection({ user, setUser }) {
               <span key={c}>{c}</span>
             ))}
           </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={copyBackupCodes}
+              className="ui-button-ghost px-3 py-2 text-xs overflow-hidden"
+            >
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.span
+                  key={codesCopied ? "copied" : "copy"}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.15, ease: "easeOut" }}
+                  className="inline-block"
+                >
+                  {codesCopied ? "Copied" : "Copy all"}
+                </motion.span>
+              </AnimatePresence>
+            </button>
+            <button
+              type="button"
+              onClick={downloadBackupCodes}
+              className="ui-button-ghost px-3 py-2 text-xs"
+            >
+              Download .txt
+            </button>
+          </div>
           <button
             type="button"
-            className="ui-button-ghost px-4 py-2.5 min-h-11 text-sm"
+            className="ui-button-primary px-4 py-2.5 min-h-11 text-sm"
             onClick={() => setBackupCodes(null)}
           >
             I've saved these codes
