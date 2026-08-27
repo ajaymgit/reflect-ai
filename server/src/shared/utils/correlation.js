@@ -51,12 +51,27 @@ export function pearsonCorrelation(xs, ys) {
   return num / Math.sqrt(denomX * denomY);
 }
 
-function describeCorrelation({ metric, lag, r, n }) {
+// `testedCount` is the number of distinct (metric, lag) combinations that
+// had enough paired days to even compute an r for -- up to 16 (4 metrics x
+// 4 lags). `top` is picked as the single strongest |r| among all of those,
+// which is exactly the setup for a multiple-comparisons false positive: with
+// enough attempts, *something* will look "strong" by chance even when
+// nothing real is going on, especially with only 6-8 paired days feeding
+// each one. Stating that one winner as a flat fact ("Days with higher steps
+// tend to be followed by higher mood...") would be the same kind of
+// dishonest-by-omission chart this app has fixed before (see HealthPage's
+// dense-fill gap-honesty work) -- just in prose instead of pixels. Naming
+// how many comparisons were checked keeps the sentence honest without
+// requiring an actual multiple-comparisons correction (Bonferroni etc. would
+// need a much larger n than a personal journal realistically has).
+function describeCorrelation({ metric, lag, r, n }, testedCount) {
   const strength = Math.abs(r) >= 0.6 ? "a strong" : Math.abs(r) >= 0.4 ? "a moderate" : "a weak";
   const direction = r > 0 ? "higher" : "lower";
   const metricLabel = METRICS.find((m) => m.key === metric)?.label || metric;
   const when = lag === 0 ? "that same day" : lag === 1 ? "the next day" : `${lag} days later`;
-  return `Days with higher ${metricLabel} tend to be followed by ${direction} mood ${when} -- ${strength} correlation (r=${r.toFixed(2)}, n=${n} days).`;
+  const comparisonNote =
+    testedCount > 1 ? `, strongest of ${testedCount} patterns checked` : "";
+  return `Days with higher ${metricLabel} tend to be followed by ${direction} mood ${when} -- ${strength} correlation (r=${r.toFixed(2)}, n=${n} days${comparisonNote}).`;
 }
 
 // Tries every (metric, lag) combination up to maxLagDays and returns every
@@ -119,6 +134,6 @@ export function computeHealthMoodCorrelations({ healthRows, journalRows, maxLagD
   return {
     results,
     top,
-    description: top ? describeCorrelation(top) : null,
+    description: top ? describeCorrelation(top, results.length) : null,
   };
 }
