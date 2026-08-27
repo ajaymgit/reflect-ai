@@ -45,6 +45,32 @@ function getStatus(stressScore = 0) {
   return "Good";
 }
 
+// Both /sync and /manual-entry only ever send whichever signals they
+// actually have for a given calendar day -- a phone syncing steps mid-
+// afternoon has no sleep number yet; someone correcting yesterday's step
+// count by hand isn't resubmitting their resting heart rate. estimateStressScore
+// was being called with ONLY this request's own body every time, so a
+// partial follow-up write for a day that already had a fuller row (e.g. an
+// Apple Health sync with restingHeartRate + sleepHours, then a same-day
+// manual steps-only correction) silently reset stressScore to the
+// no-signals baseline (50) -- discarding a real, still-correct heart-rate/
+// sleep-based score even though neither of those fields changed or were
+// ever asked to change. This fetches whatever's already stored for that day
+// and falls back to it for any signal the current request didn't send, so
+// the derived stressScore reflects the day's best-known data, not just
+// whatever happened to be in this one request.
+async function resolveStressInputs(userId, date, { restingHeartRate, sleepHours, heartRateVariability }) {
+  const existing = await HealthData.findOne({ userId, date }).select("restingHeartRate sleepHours");
+  return {
+    restingHeartRate: restingHeartRate !== undefined ? restingHeartRate : existing?.restingHeartRate,
+    sleepHours: sleepHours !== undefined ? sleepHours : existing?.sleepHours,
+    // Not a persisted field (see models/HealthData.js) -- HRV only ever
+    // exists for the duration of the request that sent it, so there's
+    // nothing stored to fall back to.
+    heartRateVariability,
+  };
+}
+
 // Shared by /sync and /manual-entry -- both rely on findOneAndUpdate's
 // upsert to enforce "one HealthData row per user per day" (see the unique
 // index comment in models/HealthData.js), but that upsert isn't atomic
@@ -216,11 +242,16 @@ router.post(
       return res.status(400).json({ code: "NO_DATA", message: "At least one of steps, sleepHours, restingHeartRate is required." });
     }
 
+    const stressInputs = await resolveStressInputs(req.user._id, date, {
+      restingHeartRate,
+      sleepHours,
+      heartRateVariability,
+    });
     const update = {
       source: "apple_health",
       completeness: Number((providedCount / 3).toFixed(2)),
       confidence: 0.9,
-      stressScore: estimateStressScore({ restingHeartRate, sleepHours, heartRateVariability }),
+      stressScore: estimateStressScore(stressInputs),
     };
     if (steps !== undefined) update.steps = steps;
     if (sleepHours !== undefined) update.sleepHours = sleepHours;
@@ -252,11 +283,12 @@ router.post(
 
     const providedCount = [steps, sleepHours, restingHeartRate].filter((v) => v !== undefined).length;
 
+    const stressInputs = await resolveStressInputs(req.user._id, date, { restingHeartRate, sleepHours });
     const update = {
       source: "manual",
       completeness: Number((providedCount / 3).toFixed(2)),
       confidence: 0.7,
-      stressScore: estimateStressScore({ restingHeartRate, sleepHours }),
+      stressScore: estimateStressScore(stressInputs),
     };
     if (steps !== undefined) update.steps = steps;
     if (sleepHours !== undefined) update.sleepHours = sleepHours;
