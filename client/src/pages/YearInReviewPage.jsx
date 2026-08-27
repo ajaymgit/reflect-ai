@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Download } from "lucide-react";
+import { Download, Printer } from "lucide-react";
 import { apiFetch } from "../api";
 import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
 import { moodDotStyle } from "../utils/moodColors";
@@ -229,15 +229,37 @@ export default function YearInReviewPage() {
           <p className="ui-kicker">Your year, reflected</p>
           <h1 className="ui-title text-3xl mt-2">The past 12 months</h1>
           <p className="text-sm text-ink/60 mt-2">Journaling since {memberSince}</p>
-          <button
-            type="button"
-            onClick={handleShare}
-            disabled={sharing}
-            className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-ink/15 bg-ink/5 hover:bg-ink/10 text-xs disabled:opacity-60"
-          >
-            <Download size={13} />
-            {sharing ? "Preparing..." : "Save as image"}
-          </button>
+          {/* Two different export shapes for two different uses -- "Save as
+              image" (above, existing) is a square, high-contrast social-share
+              card meant to be posted somewhere, drawn from a handful of the
+              headline numbers only. "Print / Save as PDF" is the opposite:
+              the browser's own print dialog turning this actual page (every
+              stat, mood breakdown, and the correlation highlight, not just
+              the top 3 numbers) into a real document to keep or file away --
+              no canvas redraw, no new dependency, just window.print() plus
+              the @media print rules in index.css that hide the nav/buttons
+              and force plain black-on-white regardless of the active theme.
+              Chrome/Safari/Firefox all offer "Save as PDF" as a destination
+              right inside that native dialog. */}
+          <div className="no-print mt-4 flex items-center justify-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={handleShare}
+              disabled={sharing}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-ink/15 bg-ink/5 hover:bg-ink/10 text-xs disabled:opacity-60"
+            >
+              <Download size={13} />
+              {sharing ? "Preparing..." : "Save as image"}
+            </button>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-ink/15 bg-ink/5 hover:bg-ink/10 text-xs"
+            >
+              <Printer size={13} />
+              Print / Save as PDF
+            </button>
+          </div>
         </motion.div>
 
         {/* .ui-card-hero + .ui-hero-number -- the true hero of the whole

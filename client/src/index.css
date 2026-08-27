@@ -692,3 +692,68 @@ a.ui-card:focus-visible {
   border: 3px solid #fff;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.4);
 }
+
+/* Print stylesheet -- backs Year in Review's "Save as PDF" button (see
+   YearInReviewPage.jsx), which is just window.print() plus this: Chrome,
+   Safari, and Firefox all offer "Save as PDF" as a destination right inside
+   their native print dialog, so there's no PDF-generation library to add
+   (jsPDF, pdf-lib, etc. would all be a new dependency this sandbox can't even
+   verify installs cleanly) and no server round-trip -- the browser already
+   knows how to turn a styled DOM into a PDF, this just makes sure what it
+   turns into a PDF is a clean one-column summary instead of a lossy
+   screenshot of the app chrome. `.no-print` hides anything that only makes
+   sense on-screen (nav, buttons, the print trigger itself); the rest resets
+   this app's dark-mode-capable, ember/signal-accented card system back to
+   plain black-on-white, since a themed background color that looks intentional
+   on a screen just reads as "printer ran low on ink" on paper. Scoped to
+   `@media print` only -- none of this touches the normal on-screen appearance. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  html,
+  body {
+    background: #fff !important;
+  }
+  /* Every themed surface (page gradient, card backgrounds, borders, ring
+     glows) is driven by CSS custom properties resolved from the active
+     theme -- overriding them at the print media query, rather than trying
+     to override every individual .ui-card/.ui-card-hero/.page-gradient rule
+     that consumes them, guarantees paper stays white and text stays black
+     regardless of whether someone prints from Midnight, the custom hue
+     theme, or anything added later that also reads these same variables. */
+  /* `body`, not `:root` -- the Midnight theme (and any custom-hue override)
+     sets these same variables on `body[data-theme-mode="..."]`, which has
+     higher specificity than a bare `:root`, so a `:root` override here would
+     lose to an active dark theme's variables and print dark-on-dark. `body`
+     plus !important is the only combination that reliably wins regardless
+     of which theme (or custom hue override) is active when Print is
+     clicked. */
+  body {
+    --ink: 20 20 20 !important;
+    --paper: 255 255 255 !important;
+    --paper-raised: 255 255 255 !important;
+    --paper-sunken: 255 255 255 !important;
+  }
+  .page-gradient,
+  .living-bg {
+    background: #fff !important;
+  }
+  .ui-card,
+  .ui-card-hero,
+  .ui-quote {
+    box-shadow: none !important;
+    border: 1px solid #ccc !important;
+    break-inside: avoid;
+  }
+  /* Chrome/Safari default to printing a page header/footer with the URL and
+     timestamp, and browsers vary in whether backgrounds/box-shadows print at
+     all by default -- print-color-adjust asks the ones that respect it
+     (Chrome, Safari) to keep the mood-dot / chip background colors that
+     still appear above (chips, mood dots) instead of silently dropping them
+     to transparent. */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

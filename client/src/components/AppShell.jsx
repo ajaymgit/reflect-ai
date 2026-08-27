@@ -139,7 +139,7 @@ export default function AppShell() {
           polish this system deliberately avoids everywhere else (flat
           surfaces, real borders, no blur), so the nav shouldn't be the one
           place that still has it. */}
-      <aside className="hidden md:flex md:flex-col md:w-60 md:shrink-0 border-r border-ink/10 bg-paper-raised px-4 py-5 md:sticky md:top-0 md:h-screen md:overflow-y-auto scroll-area">
+      <aside className="no-print hidden md:flex md:flex-col md:w-60 md:shrink-0 border-r border-ink/10 bg-paper-raised px-4 py-5 md:sticky md:top-0 md:h-screen md:overflow-y-auto scroll-area">
         {/* Real wordmark presence: bigger serif "Reflect", small gold accent
             mark standing in for a logo, "Equoria" demoted to a quiet mono
             sub-label underneath instead of leading. */}
@@ -210,7 +210,7 @@ export default function AppShell() {
         </div>
       </div>
 
-      <nav className="md:hidden fixed bottom-0 inset-x-0 border-t border-ink/10 bg-paper-sunken z-30">
+      <nav className="no-print md:hidden fixed bottom-0 inset-x-0 border-t border-ink/10 bg-paper-sunken z-30">
         <div className="grid grid-cols-5 gap-1 px-2 py-2">
           {mobilePrimaryItems.map(({ to, label, Icon }) => {
             const isActive = to === "/more" ? isMoreActive : location.pathname === to;
