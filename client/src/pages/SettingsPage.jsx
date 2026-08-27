@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Bell, Download, HeartPulse, LogOut, Palette, ShieldCheck, UserRound } from "lucide-react";
+import { Bell, Download, HeartPulse, LogOut, Palette, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { apiFetch, describeError } from "../api";
 import { useAuth } from "../context/AuthContext";
@@ -460,6 +460,16 @@ export default function SettingsPage() {
 
             <SectionCard icon={Download} title="Your data">
               <ExportSection />
+            </SectionCard>
+
+            {/* Genuinely new capability, not a reskin -- previously the
+                Privacy Policy's own "Your control over your data" section
+                admitted there was no self-serve deletion at all ("contact
+                whoever operates your instance"). A journal app whose whole
+                pitch is "this is YOUR private data" should let the person it
+                belongs to actually erase it themselves. */}
+            <SectionCard icon={Trash2} title="Danger zone">
+              <DangerZoneSection />
             </SectionCard>
           </motion.div>
         </div>
@@ -1194,6 +1204,115 @@ function SelectOption({ title, detail, value, onChange }) {
         </select>
       </div>
       <p className="text-xs text-ink/70 mt-2">{detail}</p>
+    </div>
+  );
+}
+
+// Backed by DELETE /api/auth/account -- see server/src/modules/auth/routes.js
+// for the actual cascade (journal entries, health data, chat sessions,
+// retrospect analyses, audit log rows, refresh sessions, reset tokens, then
+// the account itself). Two separate confirmations before the request even
+// fires, deliberately more friction than any other destructive action in
+// this app (2FA disable and Log out everywhere only ask for one of these):
+// the current password (so a stolen session token alone can't do this) AND
+// typing the account's own email address (so a reflexive double-click on a
+// button that was already visible can't do it either -- this is the only
+// irreversible action in the whole app with no undo window at all, unlike
+// e.g. EntryModal's 5-second-grace delete).
+function DangerZoneSection() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const [confirming, setConfirming] = useState(false);
+  const [password, setPassword] = useState("");
+  const [emailConfirm, setEmailConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const emailMatches = user?.email && emailConfirm.trim().toLowerCase() === user.email.toLowerCase();
+
+  async function handleDelete(e) {
+    e.preventDefault();
+    if (!emailMatches) {
+      setError("Type your account email exactly to confirm.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await apiFetch("/api/auth/account", { method: "DELETE", body: JSON.stringify({ password }) });
+      logout();
+      navigate("/login");
+    } catch (err) {
+      setError(describeError(err));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <p className="text-sm font-medium">Delete account</p>
+          <p className="text-xs text-ink/70 mt-1 max-w-md">
+            Permanently erases every journal entry (including sealed time capsules), health reading, chat
+            conversation, and Retrospect analysis tied to this account. There is no undo -- consider using{" "}
+            <span className="text-ink/85">Your data</span> above to export a copy first.
+          </p>
+        </div>
+        {!confirming && (
+          <button
+            type="button"
+            onClick={() => setConfirming(true)}
+            className="ui-button-danger px-4 py-2.5 min-h-11 text-sm"
+          >
+            Delete account
+          </button>
+        )}
+      </div>
+
+      {confirming && (
+        <form onSubmit={handleDelete} className="mt-3 space-y-2 border-t border-ink/10 pt-3">
+          <p className="text-xs text-ink/70">
+            This can't be undone. Enter your password and type your email address ({user?.email}) to confirm.
+          </p>
+          <PasswordInput
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+          <input
+            type="email"
+            className="ui-input"
+            placeholder={user?.email}
+            value={emailConfirm}
+            onChange={(e) => setEmailConfirm(e.target.value)}
+            required
+          />
+          {error && <p className="text-xs text-red-300">{error}</p>}
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={busy || !emailMatches}
+              className="ui-button-danger px-4 py-2.5 min-h-11 text-sm disabled:opacity-60"
+            >
+              {busy ? "Deleting..." : "Permanently delete my account"}
+            </button>
+            <button
+              type="button"
+              className="text-xs text-ink/70 hover:text-ink"
+              onClick={() => {
+                setConfirming(false);
+                setPassword("");
+                setEmailConfirm("");
+                setError("");
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }

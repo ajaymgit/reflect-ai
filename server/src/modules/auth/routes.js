@@ -6,6 +6,11 @@ import rateLimit from "express-rate-limit";
 import User from "../../models/User.js";
 import RefreshSession from "../../models/RefreshSession.js";
 import PasswordResetToken from "../../models/PasswordResetToken.js";
+import JournalEntry from "../../models/JournalEntry.js";
+import HealthData from "../../models/HealthData.js";
+import ChatSession from "../../models/ChatSession.js";
+import RetrospectAnalysis from "../../models/RetrospectAnalysis.js";
+import AuditLog from "../../models/AuditLog.js";
 import { env } from "../../shared/config/env.js";
 import { validateRequest } from "../../shared/middleware/validateRequest.js";
 import {
@@ -16,6 +21,7 @@ import {
   twoFactorVerifySchema,
   twoFactorLoginSchema,
   twoFactorDisableSchema,
+  deleteAccountSchema,
   reminderPreferencesSchema,
   digestPreferencesSchema,
 } from "../../shared/validators/authSchemas.js";
@@ -618,6 +624,70 @@ router.post(
     }
 
     throw new AppError("AUTH_INVALID", "Incorrect code.", 401);
+  }),
+);
+
+// Self-serve account deletion -- previously the only path was "contact
+// whoever operates your instance" (see PrivacyPolicyPage's "Your control
+// over your data" section, now updated alongside this route), which is a
+// real gap for an app whose whole pitch is that this is YOUR private
+// journal: the person who owns this data should be able to actually erase
+// it themselves, not depend on an operator to do it by hand. Requires the
+// current password (same reasoning as /2fa/disable above) so a stolen
+// access/refresh token alone can't destroy an account -- this is the single
+// most irreversible action in the entire app, more so than any individual
+// delete elsewhere, so it gets the strictest confirmation gate available.
+//
+// A hard delete, not a soft "deactivate" flag: every collection that has
+// this account's own userId gets wiped (journal entries -- including sealed
+// time capsules, since there's no reason those should outlive the account
+// that sealed them -- health data, chat sessions, retrospect analyses,
+// audit log rows, refresh sessions, and any outstanding password-reset
+// tokens), then the User document itself last. Genuinely irreversible --
+// there is no undo, unlike the 5-second-grace journal-entry delete
+// elsewhere in this app.
+router.delete(
+  "/account",
+  requireAuth,
+  validateRequest(deleteAccountSchema),
+  asyncHandler(async (req, res) => {
+    // The demo account is a shared fixture every evaluator/faculty member
+    // relies on (see README's "Demo Flow for Faculty" and seed.js) -- letting
+    // it delete itself through this same self-serve path would silently
+    // break the demo for everyone else, with no non-technical way to
+    // recreate it. This is the one account this route deliberately refuses
+    // to delete; every other account is free to.
+    if (req.user.email === env.DEMO_EMAIL) {
+      throw new AppError(
+        "AUTH_INVALID",
+        "The shared demo account can't be deleted from here.",
+        403,
+      );
+    }
+
+    // req.user (from requireAuth) deliberately omits passwordHash from its
+    // projection -- same reason /2fa/disable above re-fetches it rather than
+    // trusting req.user.passwordHash directly, which would silently be
+    // `undefined` and make bcrypt.compare always fail closed.
+    const fullUser = await User.findById(req.user._id).select("_id passwordHash");
+    const ok = await bcrypt.compare(req.validated.body.password, fullUser.passwordHash);
+    if (!ok) {
+      throw new AppError("AUTH_INVALID", "Incorrect password.", 401);
+    }
+
+    const userId = req.user._id;
+    await Promise.all([
+      JournalEntry.deleteMany({ userId }),
+      HealthData.deleteMany({ userId }),
+      ChatSession.deleteMany({ userId }),
+      RetrospectAnalysis.deleteMany({ userId }),
+      AuditLog.deleteMany({ userId }),
+      RefreshSession.deleteMany({ userId }),
+      PasswordResetToken.deleteMany({ userId }),
+    ]);
+    await User.findByIdAndDelete(userId);
+
+    res.json({ ok: true });
   }),
 );
 

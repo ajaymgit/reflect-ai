@@ -59,8 +59,9 @@ export default function PrivacyPolicyPage() {
           <h2 className="font-medium">Your control over your data</h2>
           <p className="text-sm text-ink/75 leading-relaxed">
             Settings -&gt; Your data lets you export everything -- every journal entry, health reading, retrospect
-            analysis, and chat message -- as a single file at any time. There is currently no self-serve account
-            deletion; contact whoever operates your instance to request full deletion.
+            analysis, and chat message -- as a single file at any time. Settings -&gt; Danger zone lets you
+            permanently delete your account and everything tied to it yourself, with no need to contact anyone --
+            this is irreversible, so exporting a copy first is worth doing if you might want one later.
           </p>
         </section>
 

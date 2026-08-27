@@ -88,6 +88,18 @@ export const twoFactorDisableSchema = z.object({
   query: z.object({}).optional(),
 });
 
+// Same shape as twoFactorDisableSchema (just a password) -- deleting an
+// account is at least as consequential as turning off 2FA, so it gets the
+// same "prove you still have the password, not just a live session token"
+// gate. See DELETE /api/auth/account below.
+export const deleteAccountSchema = z.object({
+  body: z.object({
+    password: z.string().min(1),
+  }),
+  params: z.object({}).optional(),
+  query: z.object({}).optional(),
+});
+
 export const reminderPreferencesSchema = z.object({
   body: z.object({
     enabled: z.boolean(),
