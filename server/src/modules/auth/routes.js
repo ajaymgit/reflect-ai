@@ -160,6 +160,25 @@ const twoFactorLoginLimiter = rateLimit({
   message: { code: "RATE_LIMITED", message: "Too many incorrect codes. Please log in again." },
 });
 
+// /2fa/disable, /change-password, and DELETE /account all gate a sensitive
+// action behind "prove you still know the current password" -- but unlike
+// /login (authLimiter + emailLoginLimiter) or /2fa/login
+// (twoFactorLoginLimiter), none of them had ANY throttle on that guess.
+// requireAuth already runs before this on every route it's applied to, so
+// req.user._id is always populated by the time this keyGenerator runs --
+// keying on the account itself (not IP) means the cap holds even against an
+// attacker who has a valid-but-stolen short-lived access token and spreads
+// guesses across many source IPs, the same reasoning emailLoginLimiter uses
+// for the unauthenticated login path.
+const sensitivePasswordCheckLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => String(req.user?._id || req.ip),
+  message: { code: "RATE_LIMITED", message: "Too many incorrect password attempts. Try again shortly." },
+});
+
 router.post(
   "/register",
   authLimiter,
@@ -557,6 +576,7 @@ router.post(
 router.post(
   "/2fa/disable",
   requireAuth,
+  sensitivePasswordCheckLimiter,
   validateRequest(twoFactorDisableSchema),
   asyncHandler(async (req, res) => {
     const fullUser = await User.findById(req.user._id).select("_id passwordHash");
@@ -592,6 +612,7 @@ router.post(
 router.post(
   "/change-password",
   requireAuth,
+  sensitivePasswordCheckLimiter,
   validateRequest(changePasswordSchema),
   asyncHandler(async (req, res) => {
     const fullUser = await User.findById(req.user._id).select("_id passwordHash");
@@ -683,6 +704,7 @@ router.post(
 router.delete(
   "/account",
   requireAuth,
+  sensitivePasswordCheckLimiter,
   validateRequest(deleteAccountSchema),
   asyncHandler(async (req, res) => {
     // The demo account is a shared fixture every evaluator/faculty member
