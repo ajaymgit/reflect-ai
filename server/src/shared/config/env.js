@@ -73,7 +73,15 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => (v === "replace_with_gemini_key" ? undefined : v)),
+  // AI_MODEL is a legacy shared override (applies to whichever single cloud
+  // provider was active back when only one could be configured at a time).
+  // OPENAI_MODEL/GEMINI_MODEL let each provider be pinned independently now
+  // that chat/retrospect can use both as sequential fallbacks -- see
+  // chat/service.js and retrospect/service.js. Resolution order for each:
+  // its own *_MODEL, then AI_MODEL, then a hardcoded cheap default.
   AI_MODEL: z.string().optional(),
+  OPENAI_MODEL: z.string().optional(),
+  GEMINI_MODEL: z.string().optional(),
   OLLAMA_BASE_URL: z.string().optional(),
   OLLAMA_MODEL: z.string().optional(),
   USE_OLLAMA: z.string().optional(),

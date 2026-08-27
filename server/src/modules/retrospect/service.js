@@ -1,3 +1,4 @@
+import OpenAI from "openai";
 import HealthData from "../../models/HealthData.js";
 import JournalEntry from "../../models/JournalEntry.js";
 import RetrospectAnalysis from "../../models/RetrospectAnalysis.js";
@@ -22,6 +23,29 @@ const ollamaModel = env.OLLAMA_MODEL || "llama3.2:3b";
 // points at Ollama's hosted API (https://ollama.com) rather than a local
 // instance.
 const ollamaAuthHeaders = env.OLLAMA_API_KEY ? { Authorization: `Bearer ${env.OLLAMA_API_KEY}` } : {};
+
+// Previously this feature had NO cloud fallback at all -- if Ollama was down
+// or unreachable, generation skipped straight to the heuristic analysis
+// (see heuristicAnalysis below) even when a perfectly good OPENAI_API_KEY or
+// GEMINI_API_KEY was configured and already working for Chat. Now Retrospect
+// tries the same three providers, in the same cost-ordered priority, as
+// chat/service.js -- Ollama, then Gemini, then OpenAI.
+const geminiModel = env.GEMINI_MODEL || env.AI_MODEL || "gemini-2.0-flash";
+const geminiClient = env.GEMINI_API_KEY
+  ? new OpenAI({
+      apiKey: env.GEMINI_API_KEY,
+      timeout: 12000,
+      maxRetries: 1,
+      baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+    })
+  : null;
+const openaiModel = env.OPENAI_MODEL || env.AI_MODEL || "gpt-4.1-mini";
+const openaiClient = env.OPENAI_API_KEY
+  ? new OpenAI({ apiKey: env.OPENAI_API_KEY, timeout: 12000, maxRetries: 1 })
+  : null;
+// Same reasoning as chat/service.js's CLOUD_MAX_OUTPUT_TOKENS -- the prompt
+// caps summary/pattern/question length by instruction, not enforcement.
+const CLOUD_MAX_OUTPUT_TOKENS = 400;
 
 // How long a generated analysis stays "fresh" before the next page load
 // triggers a regeneration. Keeps Retrospect responsive to new journal
@@ -92,6 +116,31 @@ async function callOllama(prompt) {
   }
   const data = await response.json();
   const text = String(data?.message?.content || "").replace(/```json|```/g, "").trim();
+  return parseJsonSafe(text);
+}
+
+// Mirrors chat/service.js's generateInsightWithCloud -- Gemini's OpenAI-
+// compat shim only implements chat.completions, real OpenAI uses the newer
+// Responses API, so useResponsesApi picks the right SDK call per provider.
+async function callCloud(client, { model, useResponsesApi }, prompt) {
+  let text = "";
+  if (useResponsesApi) {
+    const result = await client.responses.create({
+      model,
+      input: prompt,
+      temperature: 0.3,
+      max_output_tokens: CLOUD_MAX_OUTPUT_TOKENS,
+    });
+    text = String(result.output_text || "").replace(/```json|```/g, "").trim();
+  } else {
+    const result = await client.chat.completions.create({
+      model,
+      temperature: 0.3,
+      max_tokens: CLOUD_MAX_OUTPUT_TOKENS,
+      messages: [{ role: "user", content: prompt }],
+    });
+    text = String(result.choices?.[0]?.message?.content || "").replace(/```json|```/g, "").trim();
+  }
   return parseJsonSafe(text);
 }
 
@@ -189,26 +238,38 @@ async function runGeneration({ journals, health, healthQuality, correlationDescr
     restingHeartRate: h.restingHeartRate,
   }));
 
-  if (journals.length >= MIN_ENTRIES_FOR_AI && useOllama) {
-    try {
-      const prompt = buildPrompt({
-        journals: journalPayload,
-        health: healthPayload,
-        healthEligible: healthQuality.eligible,
-        correlationDescription,
-      });
-      const raw = await callOllama(prompt);
-      if (validatePayload(raw)) {
-        logInfo("Ollama generated retrospect analysis", { ollamaModel });
-        return { payload: raw, source: "ollama" };
+  if (journals.length >= MIN_ENTRIES_FOR_AI) {
+    const prompt = buildPrompt({
+      journals: journalPayload,
+      health: healthPayload,
+      healthEligible: healthQuality.eligible,
+      correlationDescription,
+    });
+
+    const providers = [
+      useOllama && { name: "ollama" },
+      geminiClient && { name: "gemini", client: geminiClient, model: geminiModel, useResponsesApi: false },
+      openaiClient && { name: "openai", client: openaiClient, model: openaiModel, useResponsesApi: true },
+    ].filter(Boolean);
+
+    for (const provider of providers) {
+      try {
+        const raw =
+          provider.name === "ollama"
+            ? await callOllama(prompt)
+            : await callCloud(provider.client, provider, prompt);
+        if (validatePayload(raw)) {
+          logInfo(`${provider.name} generated retrospect analysis`, { model: provider.model || ollamaModel });
+          return { payload: raw, source: provider.name };
+        }
+        logError(`${provider.name} retrospect response failed schema validation`, { provider: provider.name, raw });
+      } catch (error) {
+        logError(`${provider.name} retrospect generation failed`, {
+          provider: provider.name,
+          ...(provider.name === "ollama" ? { ollamaModel, ollamaBaseUrl } : { model: provider.model }),
+          error: error?.message || String(error),
+        });
       }
-      logError("Ollama retrospect response failed schema validation", { ollamaModel, raw });
-    } catch (error) {
-      logError("Ollama retrospect generation failed", {
-        ollamaModel,
-        ollamaBaseUrl,
-        error: error?.message || String(error),
-      });
     }
   }
 

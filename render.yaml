@@ -44,9 +44,11 @@ services:
         value: demo@reflectai.com
       - key: DEMO_PASSWORD
         sync: false
-      # Cloud LLM fallback (used if Ollama is unreachable or USE_OLLAMA is
-      # false) -- optional, chat/retrospect features degrade to a
-      # deterministic heuristic responder without either of these.
+      # Cloud LLM fallback chain, tried in this order: Ollama (below) ->
+      # Gemini -> OpenAI. Both are optional and independent -- set one, the
+      # other, or both for real redundancy if the primary provider has an
+      # outage. Chat/retrospect degrade to a deterministic heuristic
+      # responder only if every configured provider fails.
       - key: OPENAI_API_KEY
         sync: false
       - key: GEMINI_API_KEY

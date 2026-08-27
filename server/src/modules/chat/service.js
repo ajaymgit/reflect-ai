@@ -45,10 +45,14 @@ async function appendChatTurn(userId, turn) {
   return session;
 }
 
-const usingGeminiCompat = !env.OPENAI_API_KEY && !!env.GEMINI_API_KEY;
-const aiApiKey = env.OPENAI_API_KEY || env.GEMINI_API_KEY;
-const aiModel = env.AI_MODEL || (usingGeminiCompat ? "gemini-2.0-flash" : "gpt-4.1-mini");
-const aiTemperature = usingGeminiCompat ? 0.7 : 0.45;
+// Previously this app could only ever use ONE cloud provider at a time --
+// `usingGeminiCompat` picked Gemini only when OPENAI_API_KEY was absent, so
+// setting both keys silently ignored Gemini's entirely. Now every key that's
+// actually configured gets its own independent client, and generateInsight()
+// below tries all of them in order (Ollama -> Gemini -> OpenAI) instead of
+// picking exactly one at startup. Gemini is tried before OpenAI when both are
+// set purely as a cost default (2.0 Flash is normally the cheaper of the
+// two) -- there's no correctness reason for this order, just economics.
 const useOllama = String(env.USE_OLLAMA || "true").toLowerCase() !== "false";
 const ollamaBaseUrl = env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
 const ollamaModel = env.OLLAMA_MODEL || "llama3.2:3b";
@@ -57,14 +61,34 @@ const ollamaModel = env.OLLAMA_MODEL || "llama3.2:3b";
 // as a no-op ({}) when unset, so local Ollama (which never expects this
 // header) is unaffected.
 const ollamaAuthHeaders = env.OLLAMA_API_KEY ? { Authorization: `Bearer ${env.OLLAMA_API_KEY}` } : {};
-const openai = aiApiKey
+
+const geminiModel = env.GEMINI_MODEL || env.AI_MODEL || "gemini-2.0-flash";
+const geminiClient = env.GEMINI_API_KEY
   ? new OpenAI({
-      apiKey: aiApiKey,
+      apiKey: env.GEMINI_API_KEY,
       timeout: 12000,
       maxRetries: 1,
-      ...(usingGeminiCompat ? { baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/" } : {}),
+      // Gemini's OpenAI-compatibility shim only implements the classic
+      // chat.completions endpoint, not OpenAI's newer Responses API -- see
+      // the two separate call shapes in generateInsight() below.
+      baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
     })
   : null;
+
+const openaiModel = env.OPENAI_MODEL || env.AI_MODEL || "gpt-4.1-mini";
+const openaiTemperature = 0.45;
+const openaiClient = env.OPENAI_API_KEY
+  ? new OpenAI({ apiKey: env.OPENAI_API_KEY, timeout: 12000, maxRetries: 1 })
+  : null;
+
+// Hard ceiling on a single cloud response, mirroring Ollama's own
+// num_predict: 320 cap below. The prompt already instructs the model to
+// keep insight/question under 28/24 words, but that's a request, not an
+// enforced limit -- without this, a model that ignores it (or drifts into
+// repetition) could generate an arbitrarily long, and therefore arbitrarily
+// more expensive, response with nothing stopping it. 400 tokens is
+// generously above what a schema-conformant JSON reply actually needs.
+const CLOUD_MAX_OUTPUT_TOKENS = 400;
 const fallbackTemplates = [
   "I might be missing context, so I do not want to assume. What feels most important for you right now?",
   "I want to understand you properly. Which part of this should we explore first?",
@@ -1049,8 +1073,59 @@ async function generateInsightWithOllama(prompt) {
   return recoverOllamaConfidence(coerced);
 }
 
+// Shared by both cloud providers below -- Gemini's OpenAI-compat shim only
+// implements the classic chat.completions endpoint, while real OpenAI now
+// prefers its newer Responses API, so `useResponsesApi` picks the right SDK
+// call shape per provider. Returns null (not a thrown error) when the
+// response came back but couldn't be parsed/coerced into a valid payload --
+// that's a "try the next provider" outcome, not a network/auth failure.
+async function generateInsightWithCloud(client, { model, temperature, useResponsesApi, source }, prompt, context) {
+  let text = "";
+  if (useResponsesApi) {
+    const result = await client.responses.create({
+      model,
+      input: prompt,
+      temperature,
+      max_output_tokens: CLOUD_MAX_OUTPUT_TOKENS,
+    });
+    text = String(result.output_text || "").replace(/```json|```/g, "").trim();
+  } else {
+    const result = await client.chat.completions.create({
+      model,
+      temperature,
+      max_tokens: CLOUD_MAX_OUTPUT_TOKENS,
+      messages: [{ role: "user", content: prompt }],
+    });
+    text = String(result.choices?.[0]?.message?.content || "").replace(/```json|```/g, "").trim();
+  }
+  const parsed = parseJsonSafe(text);
+  if (validateAiPayload(parsed)) return { payload: parsed, source };
+  const coerced = coerceAiPayload(parsed);
+  if (coerced) return { payload: coerced, source };
+  const textPayload = textToPayload(text, context);
+  if (textPayload) return { payload: textPayload, source };
+  return null;
+}
+
+function geminiTemperature(context) {
+  const mode = context.settings?.mode || "quick";
+  const style = Number(context.settings?.responseStyle ?? 50);
+  return mode === "analysis" ? 0.45 : mode === "deep" ? 0.62 : style < 40 ? 0.58 : 0.5;
+}
+
 async function generateInsight(context, userMessage) {
-  if (!openai && !useOllama) {
+  // Every configured provider, in cost-ordered priority: Ollama Cloud/local
+  // first (cheapest, already the default), then Gemini, then OpenAI. Each
+  // one that has a key gets a real attempt -- this used to hard-pick at most
+  // one cloud provider at startup (whichever key happened to be set), so
+  // configuring both OPENAI_API_KEY and GEMINI_API_KEY silently ignored
+  // Gemini's. Now all three degrade into each other in order.
+  const providers = [
+    useOllama && { name: "ollama" },
+    geminiClient && { name: "gemini", client: geminiClient, model: geminiModel, useResponsesApi: false },
+    openaiClient && { name: "openai", client: openaiClient, model: openaiModel, useResponsesApi: true },
+  ].filter(Boolean);
+  if (providers.length === 0) {
     throw new AppError("AI_PARSE_FAILED", "AI key missing; AI generation unavailable", 502);
   }
   const prompt = `
@@ -1117,60 +1192,40 @@ ${userMessage}
 
   let lastError = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    if (useOllama) {
+    for (const provider of providers) {
       try {
-        const result = await generateInsightWithOllama(prompt);
-        return { payload: result, source: "ollama" };
+        if (provider.name === "ollama") {
+          const result = await generateInsightWithOllama(prompt);
+          return { payload: result, source: "ollama" };
+        }
+        const result = await generateInsightWithCloud(
+          provider.client,
+          {
+            model: provider.model,
+            temperature: provider.name === "gemini" ? geminiTemperature(context) : openaiTemperature,
+            useResponsesApi: provider.useResponsesApi,
+            source: provider.name,
+          },
+          prompt,
+          context,
+        );
+        if (result) return result;
+        // Response came back but couldn't be turned into a valid payload --
+        // move on to the next provider rather than retrying the same one.
       } catch (error) {
-        // Previously a bare `catch {}` -- the real reason Ollama failed
-        // (connection refused, bad JSON, model not found, non-2xx status)
-        // was discarded and never visible anywhere, making "why isn't it
-        // using Ollama" undiagnosable from the outside. Now logged, then
-        // still falls through to cloud LLM if configured, same as before.
+        // Previously a bare `catch {}` on the Ollama branch specifically --
+        // the real reason a provider failed (connection refused, bad JSON,
+        // model not found, non-2xx status, rate limit) was discarded and
+        // never visible anywhere. Now logged for every provider, then falls
+        // through to the next one in the list.
         lastError = error;
-        logError("Ollama generation attempt failed", {
+        logError(`${provider.name} generation attempt failed`, {
           attempt: attempt + 1,
-          ollamaBaseUrl,
-          ollamaModel,
+          provider: provider.name,
+          ...(provider.name === "ollama" ? { ollamaBaseUrl, ollamaModel } : { model: provider.model }),
           error: error?.message || String(error),
         });
       }
-    }
-
-    if (!openai) continue;
-
-    try {
-      let text = "";
-      if (usingGeminiCompat) {
-        const mode = context.settings?.mode || "quick";
-        const style = Number(context.settings?.responseStyle ?? 50);
-        const tunedTemp =
-          mode === "analysis" ? 0.45 : mode === "deep" ? 0.62 : style < 40 ? 0.58 : 0.5;
-        const result = await openai.chat.completions.create({
-          model: aiModel,
-          temperature: tunedTemp ?? aiTemperature,
-          messages: [{ role: "user", content: prompt }],
-        });
-        text = String(result.choices?.[0]?.message?.content || "").replace(/```json|```/g, "").trim();
-      } else {
-        const result = await openai.responses.create({
-          model: aiModel,
-          input: prompt,
-          temperature: aiTemperature,
-        });
-        text = String(result.output_text || "").replace(/```json|```/g, "").trim();
-      }
-      const parsed = parseJsonSafe(text);
-      const source = usingGeminiCompat ? "gemini" : "openai";
-      if (validateAiPayload(parsed)) return { payload: parsed, source };
-      const coerced = coerceAiPayload(parsed);
-      if (coerced) return { payload: coerced, source };
-      const textPayload = textToPayload(text, context);
-      if (textPayload) return { payload: textPayload, source };
-    } catch (error) {
-      lastError = error;
-      // Try the next attempt before failing hard.
-      continue;
     }
   }
   if (lastError?.status === 429 || /429/.test(String(lastError?.message || ""))) {
@@ -1310,7 +1365,7 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {}, 
   // heuristic/no-provider/total-failure paths, since those never produced a
   // raw model payload in the first place.
   let rawGeneratedPayload = null;
-  const aiAvailable = !!openai || useOllama;
+  const aiAvailable = !!geminiClient || !!openaiClient || useOllama;
 
   if (aiAvailable) {
     try {
