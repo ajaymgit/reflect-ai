@@ -106,6 +106,23 @@ Told Val about the brief at run club and she said "so the job's actually going f
 Slept well. First time in a while I didn't wake up already running tomorrow's meeting in my head.`,
   },
   {
+    // A second capsule, nearer-term than the closing "next September" one
+    // below -- opens two weeks out (well before the real Sep 30 close of
+    // this story, and before whenever this script actually gets run), so
+    // the showcase account has a genuine "arrived" letter to show alongside
+    // the far-future "still waiting" one, not just one or the other.
+    date: "2026-08-12",
+    mood: "reflective",
+    title: "Checking In With Two-Weeks-From-Now",
+    tags: ["future-self", "work", "check-in"],
+    revealAt: "2026-08-25",
+    content: `Sealing a short one today, mostly because last night's "ship it" high and this morning's low-grade dread about next week's Renata sync are living in the same body twenty-four hours apart, and I want a record of exactly how unresolved this still feels rather than a memory of it that's been smoothed over by whatever happens next.
+
+Future me, two weeks out: did the "small wins compound" theory actually hold, or did one good week turn out to be a fluke I'm now embarrassed about believing in? Is Renata's feedback style starting to make sense, or still landing like eleven contradictory notes at 6:40pm?
+
+Mostly I just want to know if it's gotten any less exhausting to constantly calibrate how much to trust my own read on things here. Two weeks isn't long. I know that. Asking anyway.`,
+  },
+  {
     date: "2026-08-13",
     mood: "stressed",
     title: "Renata's Notes",

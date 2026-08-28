@@ -42,20 +42,36 @@ function todayRange() {
   return { start, end };
 }
 
+// Vocabulary here mirrors the "letter to your future self" redesign applied
+// across the app's UI this pass (composer, Journal sidebar, Dashboard
+// banner, Year in Review stat) -- "A sealed entry" as a fallback title was
+// the exact self-contradiction fixed in the sidebar (an item that just
+// arrived is, by definition, no longer sealed), and "just became readable"
+// read like a system log line instead of matching "has arrived" everywhere
+// else. An email using the old wording would have been the one remaining
+// place in the app where the metaphor broke.
 function buildCapsuleEmail({ name, entries }) {
   const count = entries.length;
-  const subject = count === 1 ? "A time capsule just opened" : `${count} time capsules just opened`;
+  const subject = count === 1 ? "A letter you wrote has arrived" : `${count} letters you wrote have arrived`;
 
   const lines = entries.map((e) => {
-    const label = e.title || "A sealed entry";
+    const label = e.title || "A letter, untitled";
     return `"${label}" (written ${new Date(e.createdAt).toLocaleDateString()})`;
   });
 
   const intro =
     count === 1
-      ? `The letter you sealed to yourself -- ${lines[0]} -- just became readable.`
-      : `${count} letters you sealed to yourself just became readable: ${lines.join(", ")}.`;
+      ? `The letter you sealed to your future self -- ${lines[0]} -- has arrived.`
+      : `${count} letters you sealed to your future self have arrived: ${lines.join(", ")}.`;
 
+  // Left as "ReflectAI" / "Write page" here, matching every other outbound
+  // email in this codebase (password reset, weekly digest, daily reminder)
+  // -- the client nav has since moved to an "Equoria" wordmark, but that
+  // rebrand hasn't touched the backend/email layer anywhere yet. Renaming
+  // just this one email would make it the ONE outbound message from a
+  // different-looking sender than every other ReflectAI email someone gets,
+  // which reads more like a phishing mismatch than progress. Out of scope
+  // for a Time Capsule copy pass -- flagging, not silently fixing.
   const text = `Hi ${name},\n\n${intro} Open ReflectAI's Write page to read it.\n\n- ReflectAI`;
   const html = `<p>Hi ${name},</p><p>${intro} Open ReflectAI's Write page to read it.</p><p>- ReflectAI</p>`;
   return { subject, text, html };

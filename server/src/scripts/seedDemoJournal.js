@@ -489,6 +489,43 @@ Biscuit is asleep on my feet again, same as day one. Some things, at least, stay
   },
 ];
 
+// Two time capsules woven into the same narrative arc above, kept in a
+// separate array (not `entries`) so they're exempt from the 250-500 word
+// sanity check below -- a short, sealed note reads naturally shorter than a
+// full daily entry, and forcing one to 250+ words just to pass validation
+// would make it read padded. `revealDaysFromNow` is signed (negative =
+// already past, so the demo account has a real "arrived" capsule to show
+// without waiting; positive = still waiting) and computed off the same
+// `now` the rest of this script uses, so re-running the seed keeps both
+// states correct no matter when it's actually run.
+const capsuleEntries = [
+  {
+    daysAgo: 25,
+    revealDaysFromNow: -5,
+    mood: "reflective",
+    title: "For Whoever's Reading This Once Meridian Ships",
+    tags: ["future-self", "work"],
+    content: `Writing this in the middle of the worst week of the Meridian push, mostly so future-you has proof of what today actually felt like instead of a smoothed-over memory of it. Derek moved the review up again, my shoulders haven't come down from my ears in two days, and I skipped lunch for the third time this week.
+
+If you're reading this, the launch already happened -- it's on the other side now, whichever way it went. I want to know: did the thing about saying the true, less convenient thing in the moment actually stick, or did it stay a nice idea I wrote down once and let slide? Be honest with yourself about that, because I won't be there to know either way.
+
+Sealing this to open once things calm down. Curious what's obvious to you by then that isn't obvious to me right now.`,
+  },
+  {
+    daysAgo: 0,
+    revealDaysFromNow: 90,
+    mood: "reflective",
+    title: "Check-in: Did the Calmer Stretch Stay Calm",
+    tags: ["future-self", "check-in"],
+    isKeepsake: true,
+    content: `Closing out this month's writing with one more thing, sealed instead of just written down in the open like the rest of this month. Today I said work looks calmer for now, no seven-week push looming the way Meridian was. I want to know, in three months, whether that held or whether some new version of the same pattern quietly took its place.
+
+Specifically: are the Sunday calls with Mom still happening without being asked? Did the photo book actually get finished, or is it still half-laid-out in the same folder? And the big one -- when scope creeps again, because it probably will, did you say something the first time, or did old-you show back up and wait for the third?
+
+No pressure either way. Just curious what three months of quiet, ordinary practice actually adds up to, versus what one intense month of crisis-driven change made me believe it would.`,
+  },
+];
+
 function wordCount(text) {
   return String(text).trim().split(/\s+/).filter(Boolean).length;
 }
@@ -541,11 +578,31 @@ async function run() {
     };
   });
 
+  const capsuleDocs = capsuleEntries.map((e) => {
+    const createdAt = new Date(now - e.daysAgo * 24 * 60 * 60 * 1000);
+    createdAt.setHours(20, 30 + (e.daysAgo % 20), 0, 0);
+    const doc = {
+      userId: demo._id,
+      content: e.content.trim(),
+      mood: e.mood,
+      title: e.title,
+      tags: e.tags,
+      themes: extractThemes(e.content),
+      createdAt,
+      updatedAt: createdAt,
+      revealAt: new Date(now + e.revealDaysFromNow * 24 * 60 * 60 * 1000),
+    };
+    if (e.isKeepsake) doc.isKeepsake = true;
+    return doc;
+  });
+
   // .create() (not .insertMany()) -- content/title/tags/themes are encrypted
   // via Mongoose setters that only .create() reliably runs, same reasoning
   // documented in seed.js.
-  const created = await JournalEntry.create(docs);
-  console.log(`Seeded ${created.length} journal entries (${entries[0].daysAgo} days ago -> today).\n`);
+  const created = await JournalEntry.create([...docs, ...capsuleDocs]);
+  console.log(
+    `Seeded ${created.length} journal entries (${entries[0].daysAgo} days ago -> today), including ${capsuleDocs.length} time capsules.\n`,
+  );
 
   // Real embeddings so semantic search ("Memory Search" on the Journal page)
   // works over this seeded data exactly like it does for real entries --

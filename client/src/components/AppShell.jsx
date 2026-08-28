@@ -7,6 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import Onboarding from "./Onboarding";
 import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
 import { applyStoredTheme } from "../utils/theme";
+import { getSeenCapsuleIds } from "../utils/capsuleSeen";
 
 const pageTitles = {
   "/dashboard": "Home",
@@ -85,12 +86,35 @@ export default function AppShell() {
   const [streak, setStreak] = useState(0);
   const { user } = useAuth();
   const [showOnboarding, setShowOnboarding] = useState(false);
+  // A ready time capsule was previously only ever visible via Dashboard's
+  // banner -- silent from every other page, so someone who lands straight
+  // on Chat or Retrospect (a bookmark, a habit) could have a letter waiting
+  // and never know until they happened to open Home. This is the same
+  // "unseen" check Dashboard's banner uses (shared via utils/capsuleSeen.js
+  // so opening one from either place clears it in both), rendered as a
+  // small dot on the Journal nav item instead of a full banner -- present
+  // everywhere, without repeating the banner's real estate on every page.
+  const [hasUnseenCapsule, setHasUnseenCapsule] = useState(false);
 
   useEffect(() => {
     apiFetch(`/api/dashboard/summary?tzOffset=${new Date().getTimezoneOffset()}`)
       .then((data) => setStreak(data.journalingStreak || 0))
       .catch(() => {});
   }, []);
+
+  // Separate effect, re-run on every route change (not just mount) -- so
+  // opening a capsule from Dashboard's banner, then navigating to Chat,
+  // shows the nav badge already cleared instead of stuck on until a full
+  // page reload. Cheap: one small GET, not worth debouncing.
+  useEffect(() => {
+    apiFetch("/api/journal/capsules")
+      .then((data) => {
+        const seen = getSeenCapsuleIds();
+        const unseen = (data?.ready || []).some((c) => !seen.has(c._id));
+        setHasUnseenCapsule(unseen);
+      })
+      .catch(() => {});
+  }, [location.pathname]);
 
   // First-run onboarding -- shown once per account (see Onboarding.jsx),
   // tracked with a localStorage flag scoped to the account's id so a shared
@@ -178,7 +202,15 @@ export default function AppShell() {
                           style={{ background: "var(--user-light, rgb(var(--signal)))" }}
                         />
                       )}
-                      <Icon size={16} className={isActive ? "" : "text-ink-faint"} />
+                      <span className="relative inline-flex">
+                        <Icon size={16} className={isActive ? "" : "text-ink-faint"} />
+                        {to === "/journal/new" && hasUnseenCapsule && (
+                          <span
+                            className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-accent-ember"
+                            aria-label="A letter has arrived"
+                          />
+                        )}
+                      </span>
                       {label}
                       {to === "/journal/new" && streak > 0 && (
                         <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-accent-ember">
@@ -233,7 +265,7 @@ export default function AppShell() {
                 )}
                 <span className="relative inline-block">
                   <Icon size={14} className="mx-auto mb-1" />
-                  {to === "/journal/new" && streak > 0 && (
+                  {to === "/journal/new" && (streak > 0 || hasUnseenCapsule) && (
                     <span className="absolute -top-0.5 -right-1 h-1.5 w-1.5 rounded-full bg-accent-ember" />
                   )}
                 </span>

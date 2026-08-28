@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { BookOpen, Clock, Lightbulb, Mail, Shuffle, Sparkles } from "lucide-react";
+import { BookOpen, Lightbulb, Mail, Share2, Shuffle, Sparkles } from "lucide-react";
 import { apiFetch, describeError } from "../api";
 import EntryModal, { EntryModalById } from "../components/EntryModal";
 import FirstTimeTip from "../components/FirstTimeTip";
@@ -87,6 +87,119 @@ function daysSince(dateStr) {
   if (months < 12) return `${months} ${months === 1 ? "month" : "months"} ago`;
   const years = Math.round(days / 365.25);
   return `${years} ${years === 1 ? "year" : "years"} ago`;
+}
+
+// Same canvas-share-card pattern Year in Review's downloadShareCard uses
+// (own copy, not a shared import -- small enough that duplicating it per
+// page beats a shared util two call sites would have to stay in sync on).
+// The point: sealing a capsule is a genuinely shareable moment ("I wrote a
+// letter to my future self") that reveals nothing about the letter itself,
+// which is exactly the kind of curiosity-bait that makes someone else want
+// to try the same thing -- but only if there's something to actually post.
+function wrapTextLines(ctx, text, maxWidth) {
+  const words = text.split(" ");
+  const lines = [];
+  let line = "";
+  for (const word of words) {
+    const test = line ? `${line} ${word}` : word;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = test;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+async function downloadCapsuleShareCard({ revealAt }) {
+  const size = 1080;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+
+  const bgGrad = ctx.createLinearGradient(0, 0, 0, size);
+  bgGrad.addColorStop(0, "#FFFFFF");
+  bgGrad.addColorStop(1, "#E8E0CB");
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, size, size);
+
+  const accentGrad = ctx.createRadialGradient(size * 0.85, size * 0.1, 20, size * 0.85, size * 0.1, 460);
+  accentGrad.addColorStop(0, "rgba(61,79,209,0.16)");
+  accentGrad.addColorStop(1, "rgba(61,79,209,0)");
+  ctx.fillStyle = accentGrad;
+  ctx.fillRect(0, 0, size, size);
+
+  ctx.fillStyle = "#3D4FD1";
+  ctx.font = "600 26px 'JetBrains Mono', monospace";
+  ctx.fillText("EQUORIA", 80, 120);
+
+  ctx.fillStyle = "#17140F";
+  ctx.font = "600 58px 'Space Grotesk', sans-serif";
+  const headlineLines = wrapTextLines(ctx, "I sealed a letter to my future self.", size - 160);
+  let y = 260;
+  for (const line of headlineLines) {
+    ctx.fillText(line, 80, y);
+    y += 66;
+  }
+
+  const opens = new Date(revealAt);
+  const days = Math.max(0, Math.round((opens.getTime() - Date.now()) / 86400000));
+  const opensLabel = opens.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
+
+  const statY = y + 90;
+  ctx.fillStyle = "rgba(23,20,15,0.5)";
+  ctx.font = "20px 'JetBrains Mono', monospace";
+  ctx.fillText("OPENS IN", 80, statY);
+  ctx.fillStyle = "#17140F";
+  ctx.font = "600 96px 'Space Grotesk', sans-serif";
+  ctx.fillText(String(days), 80, statY + 100);
+  ctx.fillStyle = "rgba(23,20,15,0.55)";
+  ctx.font = "24px Inter, sans-serif";
+  ctx.fillText(`${days === 1 ? "day" : "days"} -- ${opensLabel}`, 80, statY + 140);
+
+  ctx.fillStyle = "rgba(23,20,15,0.4)";
+  ctx.font = "20px 'JetBrains Mono', monospace";
+  ctx.fillText("NO ONE, NOT EVEN ME, CAN READ IT UNTIL THEN", 80, size - 80);
+
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `equoria-time-capsule-${new Date().toISOString().slice(0, 10)}.png`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+// Quick-pick reveal dates for the composer's date field -- picking a random
+// future date is real friction for a first-time capsule (most people don't
+// have one in mind), and the occasions that actually make someone want to
+// write a letter to their future self are predictable: a fresh start, a
+// birthday-shaped "check in with yourself" gap, or just "later." Computed
+// off `new Date()` each render (cheap, no memo needed) so this stays correct
+// no matter when the page is opened, not baked in at build time.
+function isoDate(d) {
+  return d.toISOString().slice(0, 10);
+}
+function getOccasionOptions() {
+  const now = new Date();
+  const oneMonth = new Date(now);
+  oneMonth.setMonth(oneMonth.getMonth() + 1);
+  const sixMonths = new Date(now);
+  sixMonths.setMonth(sixMonths.getMonth() + 6);
+  const oneYear = new Date(now);
+  oneYear.setFullYear(oneYear.getFullYear() + 1);
+  const nextNewYear = new Date(now.getFullYear() + 1, 0, 1);
+  return [
+    { label: "In a month", date: isoDate(oneMonth), starter: "A month from now, I want to know if " },
+    { label: "In 6 months", date: isoDate(sixMonths), starter: "By the time you read this, I hope " },
+    { label: "Next New Year's", date: isoDate(nextNewYear), starter: "Here's what I'm hoping is true about you by the time this opens: " },
+    { label: "A year from now", date: isoDate(oneYear), starter: "A year is a long time. I want to know if " },
+  ];
 }
 
 // Same mid-word-cutoff problem as the server's recentEntries titles (see
@@ -247,6 +360,12 @@ export default function JournalPage() {
   // cloud, mood calendar) until that date, backed by the revealAt guards in
   // journal/routes.js and dashboard/routes.js.
   const [isCapsule, setIsCapsule] = useState(false);
+  // Set right after a successful capsule save (see save() below), cleared
+  // on the next save attempt -- backs the "Share" button that appears next
+  // to the status line for exactly this one moment, since capsuleDate
+  // itself gets reset to "" as soon as the form clears.
+  const [lastSealedCapsule, setLastSealedCapsule] = useState(null);
+  const [sharingCapsule, setSharingCapsule] = useState(false);
   const [capsuleDate, setCapsuleDate] = useState("");
   const [capsules, setCapsules] = useState({ waiting: [], ready: [] });
   const [status, setStatus] = useState("");
@@ -446,6 +565,7 @@ export default function JournalPage() {
     // short-circuits a re-entrant call here and disables the button below.
     setSaving(true);
     setStatus("Saving...");
+    setLastSealedCapsule(null);
     try {
       // Previously title/tags were never sent as real fields -- they were
       // mashed into the content string itself, so there was no way to
@@ -481,6 +601,7 @@ export default function JournalPage() {
       setDraftRestoredAt(null);
       localStorage.removeItem(DRAFT_KEY);
       setStatus(sealedUntil ? `Sealed until ${sealedUntil}` : isKeepsake ? "Saved as a Keepsake" : "Saved");
+      if (revealAt) setLastSealedCapsule({ revealAt });
       // Refresh the capsules list so a newly-sealed one shows up in the
       // "waiting" count right away instead of only after the next page load.
       if (revealAt) {
@@ -670,6 +791,40 @@ export default function JournalPage() {
               </label>
             )}
           </div>
+          {/* Quick-pick occasions -- most people sealing their first letter
+              don't already have a date in mind, and staring at a blank date
+              picker is real friction right at the moment someone's most
+              likely to abandon the idea. These set capsuleDate directly;
+              the date input above still works for anything more specific. */}
+          {isCapsule && (
+            <div className="flex items-center gap-1.5 flex-wrap -mt-1">
+              <span className="text-[11px] text-ink/45">Or pick a moment:</span>
+              {getOccasionOptions().map((opt) => (
+                <button
+                  key={opt.label}
+                  type="button"
+                  onClick={() => {
+                    setCapsuleDate(opt.date);
+                    // Only seeds the starter into an EMPTY textarea -- never
+                    // overwrites something already being written, the same
+                    // "don't clobber a draft" caution applyTemplate() above
+                    // uses (that one asks first since it replaces real
+                    // content; this one just never touches non-empty content
+                    // at all, so there's nothing to confirm).
+                    if (!content.trim()) setContent(opt.starter);
+                  }}
+                  aria-pressed={capsuleDate === opt.date}
+                  className={`text-[11px] px-2.5 py-1 rounded-full border transition ${
+                    capsuleDate === opt.date
+                      ? "border-[#a989b2]/60 bg-[#a989b2]/15 text-ink"
+                      : "border-ink/12 bg-ink/5 text-ink/55 hover:border-ink/25 hover:text-ink/80"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
           {isCapsule && (
             <p className="text-xs text-ink/55 -mt-1">This letter won't appear anywhere -- not even to you -- until it opens.</p>
           )}
@@ -736,7 +891,32 @@ export default function JournalPage() {
           {/* Was previously mislabeled "Autosave status" even though there
               is no autosave -- saving only happens when the button above is
               clicked. Also stayed blank ("Idle") until the first save. */}
-          {status && <p className="text-xs text-ink/60">Status: {status}</p>}
+          {status && (
+            <div className="flex items-center gap-3 flex-wrap">
+              <p className="text-xs text-ink/60">Status: {status}</p>
+              {lastSealedCapsule && (
+                <button
+                  type="button"
+                  disabled={sharingCapsule}
+                  onClick={async () => {
+                    setSharingCapsule(true);
+                    try {
+                      await downloadCapsuleShareCard(lastSealedCapsule);
+                    } catch {
+                      // best-effort, same as Year in Review's share card --
+                      // nothing useful to recover into beyond not showing one.
+                    } finally {
+                      setSharingCapsule(false);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 text-xs text-ink/60 hover:text-ink/85 disabled:opacity-60"
+                >
+                  <Share2 size={12} />
+                  {sharingCapsule ? "Preparing..." : "Share that you sealed one"}
+                </button>
+              )}
+            </div>
+          )}
         </motion.section>
 
         <motion.aside variants={iVariants} className="ui-card rounded-2xl p-4 space-y-3 h-fit">

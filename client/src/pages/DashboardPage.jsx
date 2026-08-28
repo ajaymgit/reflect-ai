@@ -12,6 +12,7 @@ import FirstTimeTip from "../components/FirstTimeTip";
 import StreakMilestone from "../components/StreakMilestone";
 import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
 import { MOOD_HEX } from "../utils/moodColors";
+import { getSeenCapsuleIds, markCapsuleSeen } from "../utils/capsuleSeen";
 
 const moodDotColor = MOOD_HEX;
 
@@ -321,33 +322,6 @@ function QuickLogHealthForm({ onSaved }) {
 }
 
 const MOOD_COLOR = MOOD_HEX;
-
-// A ready capsule (revealAt already passed) stays "ready" forever in GET
-// /api/journal/capsules -- there's no server-side read/acknowledged flag on
-// JournalEntry, so without something client-side, this banner would keep
-// announcing the same already-opened letter every single time Home loads.
-// localStorage-backed dismissal (same pattern FirstTimeTip.jsx already
-// uses elsewhere in this app) fixes that per-device: once you've opened a
-// capsule from this banner, its id is remembered and it drops out of the
-// "unseen" list, while a genuinely new capsule becoming ready later still
-// gets its own announcement.
-const CAPSULE_SEEN_KEY = "equoria-capsules-opened";
-function getSeenCapsuleIds() {
-  try {
-    return new Set(JSON.parse(localStorage.getItem(CAPSULE_SEEN_KEY) || "[]"));
-  } catch {
-    return new Set();
-  }
-}
-function markCapsuleSeen(id) {
-  try {
-    const seen = getSeenCapsuleIds();
-    seen.add(id);
-    localStorage.setItem(CAPSULE_SEEN_KEY, JSON.stringify(Array.from(seen)));
-  } catch {
-    // localStorage unavailable -- banner will just reappear next load.
-  }
-}
 
 // Teaser for the Retrospect page -- backed by its own GET
 // /api/retrospect/analysis (a separate, lightweight request; the endpoint

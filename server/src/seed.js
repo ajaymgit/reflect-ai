@@ -69,13 +69,48 @@ async function seed() {
     createdAt: new Date(now - (emotionalSeedEntries.length - i) * 24 * 60 * 60 * 1000),
     updatedAt: new Date(now - (emotionalSeedEntries.length - i) * 24 * 60 * 60 * 1000),
   }));
+
+  // Two time capsules -- one already past its revealAt (so the demo account
+  // has a real "arrived" state to show on Dashboard/Journal without waiting
+  // days for one to actually open) and one still waiting (so the "on its
+  // way" nudge has something to render too). Dates computed off `now`
+  // rather than hardcoded so this seed stays correct no matter when it's
+  // actually run.
+  const capsuleJournals = [
+    {
+      userId: demo._id,
+      title: "For the version of me reading this",
+      content:
+        "I don't know exactly what's changed by the time you read this, but I hope work feels lighter and you're sleeping better. Be proud of how far you've come.",
+      mood: "reflective",
+      tags: ["future-self", "hope"],
+      themes: ["identity", "future", "hope"],
+      isKeepsake: true,
+      createdAt: new Date(now - 40 * 24 * 60 * 60 * 1000),
+      updatedAt: new Date(now - 40 * 24 * 60 * 60 * 1000),
+      revealAt: new Date(now - 10 * 24 * 60 * 60 * 1000),
+    },
+    {
+      userId: demo._id,
+      title: "A note for later",
+      content:
+        "Sealing this one for a couple of months from now. Curious whether the thing I'm worried about right now even matters by the time you open it.",
+      mood: "calm",
+      tags: ["future-self", "check-in"],
+      themes: ["patience", "growth", "check-in"],
+      createdAt: new Date(now - 5 * 24 * 60 * 60 * 1000),
+      updatedAt: new Date(now - 5 * 24 * 60 * 60 * 1000),
+      revealAt: new Date(now + 60 * 24 * 60 * 60 * 1000),
+    },
+  ];
+
   // .create() with an array (not .insertMany()) -- insertMany's handling of
   // custom setters isn't reliably documented across Mongoose versions, and
   // content/tags/themes now depend on their setters running to get
   // encrypted before hitting the DB (see models/JournalEntry.js). .create()
   // is unambiguous: it constructs a real document (running every setter)
   // per entry.
-  await JournalEntry.create(journals);
+  await JournalEntry.create([...journals, ...capsuleJournals]);
 
   const health = Array.from({ length: 14 }).map((_, i) => ({
     userId: demo._id,
