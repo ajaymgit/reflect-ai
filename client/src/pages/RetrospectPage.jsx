@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, HelpCircle, Repeat, HeartPulse, PartyPopper } from "lucide-react";
+import { ArrowRight, HelpCircle, Repeat, HeartPulse, PartyPopper, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { apiFetch } from "../api";
 import { isoDay } from "../utils/date";
 import DayEntryPreview from "../components/DayEntryPreview";
@@ -39,6 +39,18 @@ const SCORE_COLOR = {
 };
 
 const MOOD_COLOR = MOOD_HEX;
+
+// signal for "improving" (the app's primary accent, no special alarm
+// needed for good news), ember for "declining" (the app's secondary
+// accent, reserved app-wide for things that deserve emphasis/attention) --
+// same accent-reuse convention as the loops/correlation/question badges
+// below, not a new color introduced just for this.
+const MOOD_TREND_META = {
+  improving: { label: "Improving", Icon: TrendingUp, className: "text-signal" },
+  declining: { label: "Declining", Icon: TrendingDown, className: "text-ember" },
+  steady: { label: "Steady", Icon: Minus, className: "text-ink/60" },
+  insufficient: { label: "Not enough data yet", Icon: Minus, className: "text-ink/40" },
+};
 
 const HEATMAP_DAYS = 182;
 
@@ -92,6 +104,90 @@ export default function RetrospectPage() {
       .sort((a, b) => b.count - a.count);
   }, [data?.moodHeatmap]);
 
+  const hasAnalysis = Boolean(data?.analysisSource) && data.analysisSource !== "none";
+  const confidencePct = hasAnalysis && Number.isFinite(data?.confidence) ? Math.round(data.confidence * 100) : null;
+
+  // Best/hardest single day within the same six-month window the heatmap
+  // already renders -- purely computed client-side from moodHeatmap (no
+  // backend change needed), a second, more specific way of reading the
+  // same underlying data the heatmap and mood balance already show in
+  // aggregate. Ties broken toward the more recent date. Requires a handful
+  // of different logged days before naming an "extreme" out of them.
+  const dayExtremes = useMemo(() => {
+    const rows = (data?.moodHeatmap || []).filter((r) => r.mood);
+    if (rows.length < 5) return null;
+    const scored = rows.map((r) => ({ ...r, score: moodToScore(r.mood) }));
+    const best = scored.reduce((a, b) => (b.score > a.score || (b.score === a.score && b.date > a.date) ? b : a));
+    const worst = scored.reduce((a, b) => (b.score < a.score || (b.score === a.score && b.date > a.date) ? b : a));
+    if (best.date === worst.date) return null;
+    return { best, worst };
+  }, [data?.moodHeatmap]);
+
+  // Previously one lead AI question (socraticQuestion) with a smaller,
+  // visually secondary list of computed ones (reflectivePrompts) tucked
+  // below it. Flattened into one equal-weight list so every question gets
+  // the same card treatment and its own "Continue" action -- "source"
+  // just changes the icon tint, not the size or prominence.
+  const reflectionQuestions = useMemo(() => {
+    const list = [];
+    if (data?.socraticQuestion) list.push({ text: data.socraticQuestion, source: "ai" });
+    for (const q of data?.reflectivePrompts || []) list.push({ text: q, source: "pattern" });
+    if (!list.length) list.push({ text: "What pattern feels most meaningful to reflect on next?", source: "ai" });
+    return list;
+  }, [data?.socraticQuestion, data?.reflectivePrompts]);
+
+  // Previously the only loading feedback on this whole page was the literal
+  // string "Analyzing entries..." in the pull-quote up top -- every chart
+  // and card below it (heatmap, timeline, mood balance, recurring themes,
+  // writing rhythm, behavioral loops) just rendered its own genuinely-empty
+  // state at the same time, which read as a mostly-broken page rather than
+  // one still waiting on a slower AI-backed analysis call. Matches the same
+  // skeleton shape as Dashboard's.
+  if (!data && !loadError) {
+    return (
+      <main className="ui-page">
+        <div className="max-w-6xl mx-auto space-y-4">
+          <div className="ui-quote py-1 space-y-2">
+            <div className="skeleton h-3 w-32" />
+            <div className="skeleton h-6 w-full max-w-lg" />
+          </div>
+          <div className="ui-card rounded-2xl p-4 grid grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="space-y-1.5">
+                <div className="skeleton h-6 w-12" />
+                <div className="skeleton h-2.5 w-16" />
+              </div>
+            ))}
+          </div>
+          <div className="ui-card-hero p-4 space-y-3">
+            <div className="skeleton h-4 w-40" />
+            <div className="skeleton h-40 w-full" />
+          </div>
+          <div className="grid lg:grid-cols-3 gap-4">
+            <div className="ui-card rounded-2xl p-4 lg:col-span-2 space-y-3">
+              <div className="skeleton h-4 w-40" />
+              <div className="skeleton h-56 w-full" />
+            </div>
+            <div className="space-y-4">
+              <div className="ui-card rounded-2xl p-4 space-y-3">
+                <div className="skeleton h-4 w-32" />
+                <div className="skeleton h-24 w-full" />
+              </div>
+              <div className="ui-card rounded-2xl p-4 space-y-3">
+                <div className="skeleton h-4 w-32" />
+                <div className="skeleton h-16 w-full" />
+              </div>
+              <div className="ui-card rounded-2xl p-4 space-y-3">
+                <div className="skeleton h-4 w-28" />
+                <div className="skeleton h-16 w-full" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="ui-page">
       <motion.div className="max-w-6xl mx-auto space-y-4" variants={cVariants} initial="hidden" animate="visible">
@@ -118,6 +214,51 @@ export default function RetrospectPage() {
           </p>
         </motion.div>
 
+        {/* Quick-stats strip -- previously dateRange, confidence, and
+            analysisSource were all returned by the API and never shown
+            anywhere, so there was no way to tell "this summary is from 20
+            fresh AI-analyzed entries" apart from "this is a cached result
+            from last week" or "there's no analysis yet." Grounds the
+            headline sentence above in real, checkable numbers instead of
+            asking for blind trust in it. */}
+        <motion.div variants={iVariants} className="ui-card rounded-2xl p-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div>
+              <p className="ui-hero-number text-2xl">{data?.timeline?.length ?? 0}</p>
+              <p className="ui-kicker mt-1">Entries analyzed</p>
+            </div>
+            <div>
+              <p className="text-base font-medium text-ink/90">{formatDateRange(data?.dateRange)}</p>
+              <p className="ui-kicker mt-1">Date range</p>
+            </div>
+            <div className="flex items-center gap-3">
+              {confidencePct !== null && <ConfidenceRing pct={confidencePct} />}
+              <div>
+                <p className="text-base font-medium text-ink/90">{sourceLabel(data?.analysisSource)}</p>
+                <p className="ui-kicker mt-1">Analysis basis{confidencePct !== null ? ` · ${confidencePct}%` : ""}</p>
+              </div>
+            </div>
+            {/* moodTrend -- real delta between the first and second half of
+                the same window (see server/src/modules/retrospect/routes.js),
+                not an AI impression -- "am I trending up or down" is one of
+                the most basic retrospective questions and this page didn't
+                answer it anywhere before. */}
+            <div className="flex items-center gap-2">
+              {(() => {
+                const trend = MOOD_TREND_META[data?.moodTrend?.direction] || MOOD_TREND_META.insufficient;
+                const { Icon } = trend;
+                return <Icon size={18} className={`${trend.className} shrink-0`} />;
+              })()}
+              <div>
+                <p className="text-base font-medium text-ink/90">
+                  {(MOOD_TREND_META[data?.moodTrend?.direction] || MOOD_TREND_META.insufficient).label}
+                </p>
+                <p className="ui-kicker mt-1">Mood trend</p>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
         {/* Mood heatmap -- "Year in Pixels"-style calendar of every day's
             mood, the single richest visual on this page. Backed by
             moodHeatmap (see server/src/modules/retrospect/routes.js), a
@@ -135,6 +276,53 @@ export default function RetrospectPage() {
           <MoodHeatmap entries={data?.moodHeatmap || []} onSelect={setSelectedDate} />
           <DayEntryPreview date={selectedDate} />
         </motion.div>
+
+        {/* Best/hardest single day within the same window the heatmap
+            above covers -- a more specific companion to that calendar and
+            to Mood balance's aggregate view. Clicking either reuses the
+            same selectedDate/DayEntryPreview wiring the heatmap squares
+            already use, so it opens right above rather than needing its
+            own separate preview. */}
+        {dayExtremes && (
+          <motion.div variants={iVariants} className="grid sm:grid-cols-2 gap-4">
+            <button
+              type="button"
+              onClick={() => setSelectedDate(dayExtremes.best.date)}
+              className="ui-card rounded-2xl p-4 text-left hover:bg-ink/5 transition"
+            >
+              <p className="ui-kicker">Best day, this window</p>
+              <p className="ui-hero-number text-2xl mt-1 capitalize" style={{ color: MOOD_COLOR[dayExtremes.best.mood] }}>
+                {dayExtremes.best.mood}
+              </p>
+              <p className="text-xs text-ink/50 mt-1">
+                {new Date(dayExtremes.best.rawDate || dayExtremes.best.date).toLocaleDateString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })}{" "}
+                · click to read
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedDate(dayExtremes.worst.date)}
+              className="ui-card rounded-2xl p-4 text-left hover:bg-ink/5 transition"
+            >
+              <p className="ui-kicker">Hardest day, this window</p>
+              <p className="ui-hero-number text-2xl mt-1 capitalize" style={{ color: MOOD_COLOR[dayExtremes.worst.mood] }}>
+                {dayExtremes.worst.mood}
+              </p>
+              <p className="text-xs text-ink/50 mt-1">
+                {new Date(dayExtremes.worst.rawDate || dayExtremes.worst.date).toLocaleDateString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })}{" "}
+                · click to read
+              </p>
+            </button>
+          </motion.div>
+        )}
 
         {/* items-start -- CSS grid stretches row items to match the tallest
             sibling by default, so the Emotional timeline card (a fixed h-64
@@ -248,21 +436,14 @@ export default function RetrospectPage() {
                 rhythm) without making the left column overshoot instead. */}
             <div className="ui-card rounded-2xl p-4 space-y-3">
               <h3 className="font-medium">Recurring themes</h3>
-              {/* Neutral pills instead of colored/tinted ones -- functions as
-                  tags, doesn't need its own accent color to read as a tag. */}
-              <div className="flex flex-wrap gap-2">
-                {(data?.recurringThemes || []).map((theme) => (
-                  <span
-                    key={theme}
-                    className="rounded-full border border-ink/15 bg-ink/5 px-3 py-1.5 text-xs capitalize text-ink/75"
-                  >
-                    {theme.replace(/_/g, " ")}
-                  </span>
-                ))}
-                {(data?.recurringThemes || []).length === 0 && (
-                  <p className="text-xs text-ink/50">Not enough entries yet to detect a recurring theme.</p>
-                )}
-              </div>
+              {/* Previously uniform pills -- every theme read as equally
+                  common regardless of whether it showed up once or eight
+                  times. themeFrequency (new field, see
+                  server/src/modules/retrospect/routes.js) carries the same
+                  ranked themes with counts attached, so this can be a real
+                  ranked bar list instead, same visual language as Mood
+                  balance above it. */}
+              <ThemeFrequency themes={data?.themeFrequency || []} />
             </div>
           </div>
 
@@ -285,45 +466,97 @@ export default function RetrospectPage() {
               <p className="text-xs text-ink/60 mt-1">When you actually tend to write.</p>
               <WritingRhythm rhythm={data?.writingRhythm} />
             </div>
+
+            {/* avgWordCount + per-entry wordCount are new fields (see
+                server/src/modules/retrospect/routes.js) computed from the
+                same 20 recent entries this page already has -- previously
+                nothing on this page spoke to how MUCH someone tends to
+                write, only mood and timing. */}
+            <div className="ui-card rounded-2xl p-4">
+              <h3 className="font-medium">Entry length</h3>
+              <p className="text-xs text-ink/60 mt-1">How much you tend to write, per entry.</p>
+              <WordCountTrend avg={data?.avgWordCount} timeline={data?.timeline} />
+            </div>
           </div>
         </motion.div>
 
-        {/* Previously three separate stacked cards (behavioral loops, health
-            correlation, socratic question) -- merged into one card since
-            they're facets of the same analysis. Plain small icons (no
-            colored circle badges) plus hairline dividers between rows. */}
-        <motion.div variants={iVariants} className="ui-card rounded-2xl p-4 divide-y divide-ink/10">
-          <div className="flex items-start gap-3 pb-3.5">
-            <Repeat size={16} className="text-ink/55 mt-0.5 shrink-0" />
-            <div className="min-w-0">
+        {/* moodByWeekday -- new field (see server/src/modules/retrospect/
+            routes.js), average mood score per day of week rather than a
+            simple entry count. Writing rhythm above already answers "when
+            do you write" -- this answers the different, more retrospective
+            question of "how do you tend to feel" on a given day, colored
+            with the same SCORE_COLOR palette as the emotional timeline bars
+            so a glance at either chart reads the same way. */}
+        <motion.div variants={iVariants} className="ui-card rounded-2xl p-4">
+          <h3 className="font-medium">Mood by weekday</h3>
+          <p className="text-xs text-ink/60 mt-1">Average tone, by day of week.</p>
+          <MoodByWeekday weekday={data?.moodByWeekday} />
+        </motion.div>
+
+        {/* Previously one card with plain icons and hairline dividers --
+            three facets of the same analysis, but visually indistinguishable
+            from a settings list. Now each gets its own tinted icon badge
+            (same rounded-full bg-COLOR/15 border-COLOR/30 convention as
+            StreakMilestone/MoodGlobeLauncher elsewhere in the app), reusing
+            the app's two existing accents rather than inventing new colors:
+            signal for the two observational facets, ember (reserved for
+            emphasis app-wide) for the one with the actual call to action. */}
+        <motion.div variants={iVariants} className="grid sm:grid-cols-2 gap-4">
+          <div className="ui-card rounded-2xl p-4">
+            <div className="flex items-center gap-2.5">
+              <span className="h-9 w-9 rounded-full bg-signal/15 border border-signal/30 flex items-center justify-center shrink-0">
+                <Repeat size={16} className="text-signal" />
+              </span>
               <p className="ui-kicker">Behavioral loops</p>
-              <p className="text-sm text-ink/80 mt-1">
-                {(data?.behavioralLoops || []).join(" • ") || "Not enough entries yet to detect a loop."}
-              </p>
             </div>
+            <p className="text-sm text-ink/80 mt-3">
+              {(data?.behavioralLoops || []).join(" • ") || "Not enough entries yet to detect a loop."}
+            </p>
           </div>
-          <div className="flex items-start gap-3 py-3.5">
-            <HeartPulse size={16} className="text-ink/55 mt-0.5 shrink-0" />
-            <div className="min-w-0">
+          <div className="ui-card rounded-2xl p-4">
+            <div className="flex items-center gap-2.5">
+              <span className="h-9 w-9 rounded-full bg-signal/15 border border-signal/30 flex items-center justify-center shrink-0">
+                <HeartPulse size={16} className="text-signal" />
+              </span>
               <p className="ui-kicker">Health correlation</p>
-              <p className="text-sm text-ink/80 mt-1">{data?.healthCorrelation || "No correlation data yet."}</p>
             </div>
+            <p className="text-sm text-ink/80 mt-3">{data?.healthCorrelation || "No correlation data yet."}</p>
           </div>
-          <div className="flex items-start gap-3 pt-3.5">
-            <HelpCircle size={16} className="text-ink/55 mt-0.5 shrink-0" />
-            <div className="min-w-0 flex-1">
-              <p className="ui-kicker">Socratic question</p>
-              <p className="text-ink/90 mt-1">
-                {data?.socraticQuestion || "What pattern feels most meaningful to reflect on next?"}
-              </p>
-              <button
-                type="button"
-                className="mt-3 px-4 py-2 min-h-11 ui-button-primary"
-                onClick={() => navigate("/chat", { state: { prefill: data?.socraticQuestion } })}
-              >
-                Continue reflection
-              </button>
-            </div>
+        </motion.div>
+
+        {/* Previously one lead AI question (socraticQuestion) with a
+            visually smaller, secondary list of computed ones tucked below
+            it. Flattened into one set of equal-weight cards -- every
+            question gets the same size and its own "Continue" button;
+            "source" only changes the icon tint (ember for the AI-generated
+            one, signal for the ones templated from a real computed pattern
+            -- see reflectivePrompts in server/src/modules/retrospect/
+            routes.js), not which one looks more important. */}
+        <motion.div variants={iVariants}>
+          <p className="ui-kicker mb-2">Reflect further</p>
+          <div className="grid sm:grid-cols-2 gap-4">
+            {reflectionQuestions.map((q, i) => (
+              <div key={i} className="ui-card rounded-2xl p-4 flex flex-col">
+                <div className="flex items-center gap-2.5">
+                  <span
+                    className={`h-9 w-9 rounded-full flex items-center justify-center shrink-0 border ${
+                      q.source === "ai" ? "bg-ember/15 border-ember/30" : "bg-signal/15 border-signal/30"
+                    }`}
+                  >
+                    <HelpCircle size={16} className={q.source === "ai" ? "text-ember" : "text-signal"} />
+                  </span>
+                  <p className="ui-kicker">{q.source === "ai" ? "From your recent entries" : "From a pattern"}</p>
+                </div>
+                <p className="text-ink/90 mt-3 flex-1">{q.text}</p>
+                <button
+                  type="button"
+                  className="mt-3 px-4 py-2 min-h-11 ui-button-primary self-start"
+                  onClick={() => navigate("/chat", { state: { prefill: q.text } })}
+                >
+                  Continue reflection
+                </button>
+              </div>
+            ))}
           </div>
         </motion.div>
 
@@ -477,6 +710,36 @@ function MoodBalance({ distribution }) {
   );
 }
 
+// Same ranked-bar treatment as MoodBalance above -- length encodes count
+// directly, and the list is already sorted most-to-least frequent server
+// side, so reading top-to-bottom IS reading in frequency order.
+function ThemeFrequency({ themes }) {
+  if (!themes.length) {
+    return <p className="text-xs text-ink/50">Not enough entries yet to detect a recurring theme.</p>;
+  }
+  const max = Math.max(1, ...themes.map((t) => t.count));
+  return (
+    <div className="space-y-2.5">
+      {themes.map((t) => (
+        <div key={t.theme} className="flex items-center gap-3">
+          <span className="w-28 shrink-0 text-xs text-ink/70 capitalize truncate">{t.theme.replace(/_/g, " ")}</span>
+          <div className="ui-bar-track flex-1 h-2 rounded-full bg-ink/8 overflow-hidden">
+            <div
+              className="h-full rounded-full"
+              style={{
+                width: `${Math.max(6, (t.count / max) * 100)}%`,
+                background:
+                  "linear-gradient(180deg, rgb(255 255 255 / 0.35), rgb(255 255 255 / 0) 65%), rgb(var(--signal))",
+              }}
+            />
+          </div>
+          <span className="w-6 shrink-0 text-right text-xs text-ink/55 ui-mono">{t.count}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // Four bars (Night/Morning/Afternoon/Evening) rather than a 24-hour
 // histogram -- a full hourly breakdown is more precision than "when do you
 // write" actually needs and would read as noisy at this card's size; the
@@ -488,6 +751,13 @@ function WritingRhythm({ rhythm }) {
     return <p className="text-xs text-ink/50 mt-4">Not enough entries yet to show a writing rhythm.</p>;
   }
   const max = Math.max(1, ...rhythm.byBucket.map((b) => b.count));
+  // byWeekday was already computed and sent by the backend (see
+  // writingRhythm in server/src/modules/retrospect/routes.js) purely to
+  // drive the "especially on Tuesdays" sentence above -- the actual
+  // Sun-Sat breakdown behind that sentence was never rendered anywhere.
+  // Same bar treatment as the time-of-day buckets, just seven narrower
+  // columns instead of four.
+  const maxWeekday = Math.max(1, ...(rhythm.byWeekday || []).map((d) => d.count));
   return (
     <div className="mt-3">
       <p className="text-sm text-ink/80">
@@ -516,6 +786,169 @@ function WritingRhythm({ rhythm }) {
               />
             </div>
             <p className="text-[10px] text-ink/55 mt-1.5">{b.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {rhythm.byWeekday?.length > 0 && (
+        <div className="mt-5">
+          <p className="ui-kicker">By weekday</p>
+          <div className="mt-2 grid grid-cols-7 gap-1.5">
+            {rhythm.byWeekday.map((d) => (
+              <div key={d.label} className="text-center">
+                <div className="h-10 flex items-end justify-center">
+                  <div
+                    className="w-full max-w-[14px] rounded-t-md transition-all"
+                    style={{
+                      height: `${Math.max(8, (d.count / maxWeekday) * 100)}%`,
+                      background:
+                        d.label === rhythm.dominantWeekday
+                          ? "linear-gradient(90deg, rgb(255 255 255 / 0.25), rgb(255 255 255 / 0) 55%), rgb(var(--signal))"
+                          : "rgb(var(--ink) / 0.15)",
+                    }}
+                    title={`${d.label}: ${d.count} ${d.count === 1 ? "entry" : "entries"}`}
+                  />
+                </div>
+                <p className="text-[9px] text-ink/45 mt-1">{d.label[0]}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function formatDateRange(range) {
+  if (!range?.from || !range?.to) return "Not enough entries yet";
+  const opts = { month: "short", day: "numeric" };
+  const from = new Date(range.from).toLocaleDateString(undefined, opts);
+  const to = new Date(range.to).toLocaleDateString(undefined, opts);
+  return from === to ? from : `${from} – ${to}`;
+}
+
+// analysisSource comes straight from the backend's own provider name (see
+// getOrRefreshRetrospectAnalysis/runGeneration in
+// server/src/modules/retrospect/service.js) -- "ollama"/"gemini"/"openai"
+// for a fresh AI generation, "heuristic" for the honest non-AI fallback,
+// "cached" for a still-fresh earlier result, "none" for a brand-new
+// account. Collapsed to plain language here since none of those internal
+// provider names mean anything to someone reading this page.
+function sourceLabel(source) {
+  if (source === "ollama" || source === "gemini" || source === "openai") return "AI-generated";
+  if (source === "cached") return "From your last analysis";
+  if (source === "heuristic") return "Computed from your entries";
+  return "Not enough entries yet";
+}
+
+// Plain SVG ring (stroke-dasharray trick), not a chart library -- this is
+// one number, not a dataset, so a whole Recharts RadialBarChart would be a
+// lot of weight for what a dozen lines of SVG already does.
+function ConfidenceRing({ pct }) {
+  const r = 15;
+  const c = 2 * Math.PI * r;
+  const offset = c - (Math.max(0, Math.min(100, pct)) / 100) * c;
+  return (
+    <svg width="36" height="36" viewBox="0 0 36 36" className="shrink-0 -rotate-90">
+      <circle cx="18" cy="18" r={r} fill="none" stroke="rgb(var(--ink) / 0.1)" strokeWidth="4" />
+      <circle
+        cx="18"
+        cy="18"
+        r={r}
+        fill="none"
+        stroke="rgb(var(--signal))"
+        strokeWidth="4"
+        strokeLinecap="round"
+        strokeDasharray={c}
+        strokeDashoffset={offset}
+      />
+    </svg>
+  );
+}
+
+// Hand-rolled sparkline (no axis, no tooltip library) rather than pulling
+// Recharts in for a third chart type on this page -- same "plain div bars"
+// approach as WritingRhythm/MoodBalance above, kept consistent rather than
+// switching visual language for one more card.
+function WordCountTrend({ avg, timeline }) {
+  const points = (timeline || []).filter((t) => Number.isFinite(t.wordCount));
+  if (points.length < 3) {
+    return <p className="text-xs text-ink/50 mt-4">Not enough entries yet to show a trend.</p>;
+  }
+  const max = Math.max(1, ...points.map((p) => p.wordCount));
+  return (
+    <div className="mt-3">
+      <p className="ui-hero-number text-3xl">{avg}</p>
+      <p className="text-xs text-ink/50 mt-1">words per entry, on average.</p>
+      <div className="mt-4 flex items-end gap-[3px] h-16">
+        {points.map((p, i) => (
+          <div
+            key={i}
+            className="flex-1 rounded-t-sm"
+            style={{
+              height: `${Math.max(6, (p.wordCount / max) * 100)}%`,
+              background: "rgb(var(--signal) / 0.55)",
+            }}
+            title={`${new Date(p.date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}: ${p.wordCount} words`}
+          />
+        ))}
+      </div>
+      <div className="flex justify-between text-[10px] text-ink/40 mt-1">
+        <span>Oldest</span>
+        <span>Newest</span>
+      </div>
+    </div>
+  );
+}
+
+// Same 7-column bar shape as WritingRhythm's weekday chart, but bars encode
+// average mood score (0-5, SCORE_COLOR-tinted) rather than entry count --
+// a genuinely different question ("how do you tend to feel" vs "when do
+// you write"), so it gets its own card rather than folding into that one.
+function MoodByWeekday({ weekday }) {
+  if (!weekday?.eligible) {
+    return (
+      <p className="text-xs text-ink/50 mt-4">
+        Not enough entries yet across enough different days to show a weekday pattern.
+      </p>
+    );
+  }
+  return (
+    <div className="mt-3">
+      {(weekday.bestWeekday || weekday.worstWeekday) && (
+        <p className="text-sm text-ink/80">
+          {weekday.bestWeekday && (
+            <>
+              Best tends to be <span className="font-medium text-ink">{weekday.bestWeekday}</span>
+            </>
+          )}
+          {weekday.bestWeekday && weekday.worstWeekday && ", "}
+          {weekday.worstWeekday && (
+            <>
+              hardest tends to be <span className="font-medium text-ink">{weekday.worstWeekday}</span>
+            </>
+          )}
+          .
+        </p>
+      )}
+      <div className="mt-4 grid grid-cols-7 gap-2">
+        {weekday.byWeekday.map((d) => (
+          <div key={d.label} className="text-center">
+            <div className="h-16 flex items-end justify-center">
+              {d.avgScore !== null ? (
+                <div
+                  className="w-full max-w-[24px] rounded-t-md transition-all"
+                  style={{
+                    height: `${Math.max(8, (d.avgScore / 5) * 100)}%`,
+                    background: SCORE_COLOR[Math.round(d.avgScore)] || "rgb(var(--signal))",
+                  }}
+                  title={`${d.label}: ${scoreToLabel(d.avgScore)} (${d.count} ${d.count === 1 ? "entry" : "entries"})`}
+                />
+              ) : (
+                <div className="w-full max-w-[24px] h-1 rounded-t-md bg-ink/10" title={`${d.label}: no entries yet`} />
+              )}
+            </div>
+            <p className="text-[10px] text-ink/55 mt-1.5">{d.label.slice(0, 3)}</p>
           </div>
         ))}
       </div>

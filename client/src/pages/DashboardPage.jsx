@@ -435,6 +435,45 @@ export default function DashboardPage() {
     : "reflective";
   const moodClass = `mood-${toneMood}`;
 
+  // This is the first page anyone sees after logging in, and previously had
+  // no loading state at all -- summary fetch takes a beat on a cold Render
+  // instance, during which every field on this page (`data?.foo || 0`-style
+  // fallbacks throughout) rendered its own "no data yet" empty/zero state
+  // simultaneously, which read as a flash of broken content rather than a
+  // page that's still loading. A skeleton matching the real layout (same
+  // shape JournalHistoryPage and YearInReviewPage already use) makes that
+  // beat read as "loading," not "empty."
+  if (!data && !loadError) {
+    return (
+      <main className="p-4 md:p-6 living-bg">
+        <div className="max-w-6xl mx-auto space-y-4">
+          <div className="ui-card-hero p-6 md:p-7 space-y-3">
+            <div className="skeleton h-3 w-28" />
+            <div className="skeleton h-7 w-72 max-w-full" />
+            <div className="skeleton h-4 w-full max-w-md" />
+            <div className="flex gap-3 mt-2">
+              <div className="skeleton h-11 w-32 rounded-lg" />
+              <div className="skeleton h-11 w-40 rounded-lg" />
+            </div>
+          </div>
+          <div className="ui-card rounded-2xl p-4 space-y-2.5">
+            <div className="skeleton h-3 w-56" />
+          </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="ui-card rounded-2xl p-5 space-y-3">
+              <div className="skeleton h-4 w-36" />
+              <div className="skeleton h-40 w-full" />
+            </div>
+            <div className="ui-card rounded-2xl p-5 space-y-3">
+              <div className="skeleton h-4 w-36" />
+              <div className="skeleton h-40 w-full" />
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className={`p-4 md:p-6 living-bg ${moodClass}`}>
       <motion.div

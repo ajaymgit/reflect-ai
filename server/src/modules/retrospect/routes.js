@@ -120,10 +120,131 @@ router.get(
         themeCounts.set(t, (themeCounts.get(t) || 0) + 1);
       }
     }
-    const recurringThemes = Array.from(themeCounts.entries())
+    const rankedThemes = Array.from(themeCounts.entries())
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .slice(0, 6)
-      .map(([theme]) => theme);
+      .slice(0, 6);
+    const recurringThemes = rankedThemes.map(([theme]) => theme);
+    // Same ranked list as recurringThemes above, but with counts attached --
+    // recurringThemes stays plain strings since DashboardPage's Retrospect
+    // preview card already consumes it in that shape; this is a separate
+    // field so RetrospectPage can render actual relative frequency (as
+    // bars) instead of uniform pills that all look equally common.
+    const themeFrequency = rankedThemes.map(([theme, count]) => ({ theme, count }));
+
+    // Mood trend + mood-by-weekday -- both purely computed from
+    // heatmapRows (the same up-to-400-row, mood+createdAt-only query
+    // already fetched above for moodHeatmap/writingRhythm), so both are
+    // free: no extra query, no AI involved. "Am I trending up or down" and
+    // "which day of the week is hardest" are two of the most basic
+    // questions a retrospective page can answer, and this route already
+    // had the raw data for both without surfacing either.
+    const MOOD_SCORE = { happy: 5, calm: 4, reflective: 3, sad: 2, stressed: 1, angry: 0 };
+    const moodRows = heatmapRows
+      .filter((r) => MOOD_SCORE[r.mood] !== undefined)
+      .map((r) => ({
+        score: MOOD_SCORE[r.mood],
+        date: new Date(r.createdAt),
+        weekday: new Date(r.createdAt).getDay(),
+      }))
+      .sort((a, b) => a.date - b.date);
+
+    const MOOD_WEEKDAY_MIN_COUNT = 2;
+    const moodByWeekdayRows = WEEKDAY_LABELS.map((label, i) => {
+      const rows = moodRows.filter((r) => r.weekday === i);
+      return {
+        label,
+        avgScore: rows.length ? rows.reduce((sum, r) => sum + r.score, 0) / rows.length : null,
+        count: rows.length,
+      };
+    });
+    const eligibleWeekdays = moodByWeekdayRows.filter((d) => d.count >= MOOD_WEEKDAY_MIN_COUNT);
+    const bestWeekday = eligibleWeekdays.length
+      ? eligibleWeekdays.reduce((best, d) => (d.avgScore > best.avgScore ? d : best))
+      : null;
+    const worstWeekday = eligibleWeekdays.length
+      ? eligibleWeekdays.reduce((worst, d) => (d.avgScore < worst.avgScore ? d : worst))
+      : null;
+    const moodByWeekday = {
+      eligible: eligibleWeekdays.length >= 3,
+      byWeekday: moodByWeekdayRows,
+      // Guard against best/worst collapsing onto the same day when only
+      // one weekday has enough entries yet -- "best and worst are both
+      // Tuesday" reads as a bug, not a pattern.
+      bestWeekday: bestWeekday && bestWeekday.label !== worstWeekday?.label ? bestWeekday.label : null,
+      worstWeekday: worstWeekday && worstWeekday.label !== bestWeekday?.label ? worstWeekday.label : null,
+    };
+
+    // Trend -- split the same chronologically-sorted rows into first/second
+    // half and compare average score. A real delta over the actual window,
+    // not a model's impression of the text.
+    const MOOD_TREND_MIN_ROWS = 10;
+    let moodTrend = { eligible: false, direction: "insufficient", delta: 0 };
+    if (moodRows.length >= MOOD_TREND_MIN_ROWS) {
+      const mid = Math.floor(moodRows.length / 2);
+      const avg = (rows) => rows.reduce((sum, r) => sum + r.score, 0) / rows.length;
+      const delta = avg(moodRows.slice(mid)) - avg(moodRows.slice(0, mid));
+      const direction = delta > 0.4 ? "improving" : delta < -0.4 ? "declining" : "steady";
+      moodTrend = { eligible: true, direction, delta: Math.round(delta * 100) / 100 };
+    }
+
+    // Theme-mood links -- which of the top recurring themes tends to show
+    // up alongside which mood, using the same 20 decrypted `entries` this
+    // route already has content+mood+themes for. Requires at least 2
+    // occurrences of both the theme and its dominant mood before naming a
+    // link, same honesty bar as everything else here -- a theme that
+    // appeared once isn't a pattern.
+    const themeMoodLinks = rankedThemes
+      .map(([theme, count]) => {
+        if (count < 2) return null;
+        const moodCountsForTheme = {};
+        for (const e of entries) {
+          if (Array.isArray(e.themes) && e.themes.includes(theme)) {
+            moodCountsForTheme[e.mood] = (moodCountsForTheme[e.mood] || 0) + 1;
+          }
+        }
+        const [dominantMood, dominantCount] =
+          Object.entries(moodCountsForTheme).sort((a, b) => b[1] - a[1])[0] || [];
+        if (!dominantMood || dominantCount < 2) return null;
+        return { theme, mood: dominantMood, count: dominantCount, of: count };
+      })
+      .filter(Boolean)
+      .slice(0, 3);
+
+    // Computed (non-AI) reflective prompts, templated from the real
+    // patterns just found above -- supplements the single AI-generated
+    // socraticQuestion below with a couple more that are always available
+    // (no model call, no "not enough data" risk beyond the same eligibility
+    // checks already applied to each pattern) and are traceable back to an
+    // actual number rather than a model's phrasing choice.
+    const reflectivePrompts = [];
+    if (moodByWeekday.worstWeekday) {
+      reflectivePrompts.push(
+        `You've tended to feel lower on ${moodByWeekday.worstWeekday}s. What's usually different about that day?`,
+      );
+    }
+    if (themeMoodLinks[0]) {
+      reflectivePrompts.push(
+        `"${themeMoodLinks[0].theme.replace(/_/g, " ")}" often comes up on days you felt ${themeMoodLinks[0].mood}. Is there a connection worth naming?`,
+      );
+    }
+    if (moodTrend.eligible && moodTrend.direction !== "steady") {
+      reflectivePrompts.push(
+        `Your mood has been ${moodTrend.direction} lately. What's changed recently that might explain that?`,
+      );
+    }
+
+    // Word count per entry -- a simple whitespace split, same rough
+    // convention as a text editor's word counter. Reuses the same 20
+    // recent, already-decrypted `entries` this route already loads for
+    // everything else above, so this is free: no extra query, no extra
+    // decryption. avgWordCount gives the page a real "how much you tend to
+    // write" number it didn't have before; per-entry counts (below, in
+    // `timeline`) let the client chart it over time instead of only
+    // showing a single flat average.
+    const wordCountOf = (content) => (content || "").trim().split(/\s+/).filter(Boolean).length;
+    const avgWordCount = entries.length
+      ? Math.round(entries.reduce((sum, e) => sum + wordCountOf(e.content), 0) / entries.length)
+      : 0;
 
     res.json({
       dateRange: {
@@ -134,6 +255,7 @@ router.get(
         ? `Most frequent emotional tone across recent entries: ${topMood}.`
         : "Not enough journal entries yet to identify a recurring emotional tone.",
       recurringThemes,
+      themeFrequency,
       // Previously computed for topMood's ranking and then discarded --
       // never actually sent to the client. Dashboard's Retrospect preview
       // card now uses this for a real mini mood-balance chart instead of
@@ -152,9 +274,14 @@ router.get(
       timeline: entries
         .slice()
         .reverse()
-        .map((e) => ({ date: e.createdAt, mood: e.mood, excerpt: e.content.slice(0, 80) })),
+        .map((e) => ({ date: e.createdAt, mood: e.mood, excerpt: e.content.slice(0, 80), wordCount: wordCountOf(e.content) })),
       moodHeatmap,
       writingRhythm,
+      avgWordCount,
+      moodTrend,
+      moodByWeekday,
+      themeMoodLinks,
+      reflectivePrompts,
       confidence: latest?.confidence ?? 0,
       analysisSource: latest?.source || "none",
     });

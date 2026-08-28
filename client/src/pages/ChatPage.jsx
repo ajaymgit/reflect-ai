@@ -71,6 +71,12 @@ export default function ChatPage() {
   const [message, setMessage] = useState(location.state?.prefill || "");
   const [turns, setTurns] = useState([]);
   const [sessionLoadError, setSessionLoadError] = useState(false);
+  // True only until the initial /api/chat/session fetch settles. Without
+  // this, a returning user with real history saw the "Start with anything"
+  // empty-chat placeholder for a beat (turns.length === 0 while the fetch
+  // was in flight) before their actual thread popped in -- same
+  // flash-of-wrong-content bug as Dashboard/Retrospect/Health had.
+  const [sessionLoading, setSessionLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [quickEntry, setQuickEntry] = useState("");
   const [quickEntryStatus, setQuickEntryStatus] = useState("");
@@ -147,7 +153,8 @@ export default function ChatPage() {
     // see the turns.length === 0 block below.
     apiFetch("/api/chat/session")
       .then((data) => setTurns(data.turns || []))
-      .catch(() => setSessionLoadError(true));
+      .catch(() => setSessionLoadError(true))
+      .finally(() => setSessionLoading(false));
     apiFetch("/api/journal/recent")
       .then((data) => {
         const entries = data.entries || [];
@@ -550,7 +557,21 @@ export default function ChatPage() {
             )}
 
             <div ref={listRef} className="flex-1 overflow-y-auto scroll-area p-4 md:p-6 space-y-4">
-              {turns.length === 0 && sessionLoadError && (
+              {sessionLoading && (
+                <div className="space-y-4">
+                  <div className="rounded-2xl p-3 max-w-2xl ml-auto bg-signal/30 soft-border w-2/3 space-y-2">
+                    <div className="skeleton h-2.5 w-10" />
+                    <div className="skeleton h-3 w-full" />
+                  </div>
+                  <div className="glass rounded-2xl p-4 max-w-2xl space-y-2">
+                    <div className="skeleton h-2.5 w-16" />
+                    <div className="skeleton h-3 w-full" />
+                    <div className="skeleton h-3 w-4/5" />
+                  </div>
+                </div>
+              )}
+
+              {!sessionLoading && turns.length === 0 && sessionLoadError && (
                 <div className="text-[15px] leading-7 text-ink/75 glass rounded-2xl p-4 max-w-2xl border border-ember/30">
                   <p>Couldn't load your previous conversation. This may just be empty, or the connection dropped.</p>
                   <button
@@ -568,7 +589,7 @@ export default function ChatPage() {
                 </div>
               )}
 
-              {turns.length === 0 && !sessionLoadError && (
+              {!sessionLoading && turns.length === 0 && !sessionLoadError && (
                 <div className="text-[15px] leading-7 text-ink/75 glass rounded-2xl p-4 max-w-2xl">
                   Start with anything. ReflectAI will respond like a normal chat and adapt as your topic changes.
                 </div>

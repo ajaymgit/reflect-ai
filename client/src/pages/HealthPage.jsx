@@ -158,6 +158,48 @@ export default function HealthPage() {
   // at all, regardless of which path put it there.
   const hasAnyHealthData = Boolean(data?.latest);
 
+  // Same reasoning as Dashboard/Retrospect's skeleton guard -- this page is
+  // chart-heavy (four trend lines, four correlation scatterplots), so a
+  // "still loading" beat with no dedicated state previously looked
+  // identical to "you have never logged anything," the genuinely-empty
+  // state a couple hundred lines below.
+  if (!data && !loadError) {
+    return (
+      <main className="ui-page">
+        <div className="max-w-4xl mx-auto space-y-4">
+          <div className="ui-card-hero p-4 space-y-2">
+            <div className="skeleton h-3 w-32" />
+            <div className="skeleton h-6 w-64 max-w-full" />
+            <div className="skeleton h-4 w-40" />
+          </div>
+          <div className="ui-quote py-1 space-y-2">
+            <div className="skeleton h-3 w-28" />
+            <div className="skeleton h-5 w-full max-w-md" />
+          </div>
+          <div className="ui-card rounded-2xl p-4 space-y-3">
+            <div className="skeleton h-3 w-16" />
+            <div className="grid sm:grid-cols-3 gap-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="space-y-2">
+                  <div className="skeleton h-9 w-16" />
+                  <div className="skeleton h-3 w-20" />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="ui-card rounded-2xl p-4 space-y-3">
+                <div className="skeleton h-4 w-24" />
+                <div className="skeleton h-32 w-full" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="ui-page">
       <motion.div className="max-w-4xl mx-auto space-y-4" variants={cVariants} initial="hidden" animate="visible">
