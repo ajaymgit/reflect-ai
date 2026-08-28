@@ -142,6 +142,7 @@ router.get(
     const moodRows = heatmapRows
       .filter((r) => MOOD_SCORE[r.mood] !== undefined)
       .map((r) => ({
+        mood: r.mood,
         score: MOOD_SCORE[r.mood],
         date: new Date(r.createdAt),
         weekday: new Date(r.createdAt).getDay(),
@@ -151,9 +152,21 @@ router.get(
     const MOOD_WEEKDAY_MIN_COUNT = 2;
     const moodByWeekdayRows = WEEKDAY_LABELS.map((label, i) => {
       const rows = moodRows.filter((r) => r.weekday === i);
+      // dominantMood -- the single most-frequently-felt mood on this
+      // weekday, separate from avgScore. Averaging several different moods
+      // into one 0-5 number tends to land every day in the same murky
+      // middle value, which made every weekday's bar render as roughly the
+      // same color even on days that felt genuinely different. This is
+      // "which emotion actually showed up most," not "what's the mean."
+      const moodCounts = {};
+      for (const r of rows) moodCounts[r.mood] = (moodCounts[r.mood] || 0) + 1;
+      const dominantMood = rows.length
+        ? Object.entries(moodCounts).sort((a, b) => b[1] - a[1])[0][0]
+        : null;
       return {
         label,
         avgScore: rows.length ? rows.reduce((sum, r) => sum + r.score, 0) / rows.length : null,
+        dominantMood,
         count: rows.length,
       };
     });
@@ -233,19 +246,6 @@ router.get(
       );
     }
 
-    // Word count per entry -- a simple whitespace split, same rough
-    // convention as a text editor's word counter. Reuses the same 20
-    // recent, already-decrypted `entries` this route already loads for
-    // everything else above, so this is free: no extra query, no extra
-    // decryption. avgWordCount gives the page a real "how much you tend to
-    // write" number it didn't have before; per-entry counts (below, in
-    // `timeline`) let the client chart it over time instead of only
-    // showing a single flat average.
-    const wordCountOf = (content) => (content || "").trim().split(/\s+/).filter(Boolean).length;
-    const avgWordCount = entries.length
-      ? Math.round(entries.reduce((sum, e) => sum + wordCountOf(e.content), 0) / entries.length)
-      : 0;
-
     res.json({
       dateRange: {
         from: entries[entries.length - 1]?.createdAt || null,
@@ -274,10 +274,9 @@ router.get(
       timeline: entries
         .slice()
         .reverse()
-        .map((e) => ({ date: e.createdAt, mood: e.mood, excerpt: e.content.slice(0, 80), wordCount: wordCountOf(e.content) })),
+        .map((e) => ({ date: e.createdAt, mood: e.mood, excerpt: e.content.slice(0, 80) })),
       moodHeatmap,
       writingRhythm,
-      avgWordCount,
       moodTrend,
       moodByWeekday,
       themeMoodLinks,

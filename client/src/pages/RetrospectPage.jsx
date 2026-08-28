@@ -177,10 +177,6 @@ export default function RetrospectPage() {
                 <div className="skeleton h-4 w-32" />
                 <div className="skeleton h-16 w-full" />
               </div>
-              <div className="ui-card rounded-2xl p-4 space-y-3">
-                <div className="skeleton h-4 w-28" />
-                <div className="skeleton h-16 w-full" />
-              </div>
             </div>
           </div>
         </div>
@@ -465,17 +461,6 @@ export default function RetrospectPage() {
               <h3 className="font-medium">Writing rhythm</h3>
               <p className="text-xs text-ink/60 mt-1">When you actually tend to write.</p>
               <WritingRhythm rhythm={data?.writingRhythm} />
-            </div>
-
-            {/* avgWordCount + per-entry wordCount are new fields (see
-                server/src/modules/retrospect/routes.js) computed from the
-                same 20 recent entries this page already has -- previously
-                nothing on this page spoke to how MUCH someone tends to
-                write, only mood and timing. */}
-            <div className="ui-card rounded-2xl p-4">
-              <h3 className="font-medium">Entry length</h3>
-              <p className="text-xs text-ink/60 mt-1">How much you tend to write, per entry.</p>
-              <WordCountTrend avg={data?.avgWordCount} timeline={data?.timeline} />
             </div>
           </div>
         </motion.div>
@@ -866,45 +851,11 @@ function ConfidenceRing({ pct }) {
   );
 }
 
-// Hand-rolled sparkline (no axis, no tooltip library) rather than pulling
-// Recharts in for a third chart type on this page -- same "plain div bars"
-// approach as WritingRhythm/MoodBalance above, kept consistent rather than
-// switching visual language for one more card.
-function WordCountTrend({ avg, timeline }) {
-  const points = (timeline || []).filter((t) => Number.isFinite(t.wordCount));
-  if (points.length < 3) {
-    return <p className="text-xs text-ink/50 mt-4">Not enough entries yet to show a trend.</p>;
-  }
-  const max = Math.max(1, ...points.map((p) => p.wordCount));
-  return (
-    <div className="mt-3">
-      <p className="ui-hero-number text-3xl">{avg}</p>
-      <p className="text-xs text-ink/50 mt-1">words per entry, on average.</p>
-      <div className="mt-4 flex items-end gap-[3px] h-16">
-        {points.map((p, i) => (
-          <div
-            key={i}
-            className="flex-1 rounded-t-sm"
-            style={{
-              height: `${Math.max(6, (p.wordCount / max) * 100)}%`,
-              background: "rgb(var(--signal) / 0.55)",
-            }}
-            title={`${new Date(p.date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}: ${p.wordCount} words`}
-          />
-        ))}
-      </div>
-      <div className="flex justify-between text-[10px] text-ink/40 mt-1">
-        <span>Oldest</span>
-        <span>Newest</span>
-      </div>
-    </div>
-  );
-}
-
-// Same 7-column bar shape as WritingRhythm's weekday chart, but bars encode
-// average mood score (0-5, SCORE_COLOR-tinted) rather than entry count --
-// a genuinely different question ("how do you tend to feel" vs "when do
-// you write"), so it gets its own card rather than folding into that one.
+// Same 7-column bar shape as WritingRhythm's weekday chart, but height
+// encodes average mood score and color encodes the dominant (most-felt)
+// mood for that weekday, rather than entry count -- a genuinely different
+// question ("how do you tend to feel" vs "when do you write"), so it gets
+// its own card rather than folding into that one.
 function MoodByWeekday({ weekday }) {
   if (!weekday?.eligible) {
     return (
@@ -940,9 +891,18 @@ function MoodByWeekday({ weekday }) {
                   className="w-full max-w-[24px] rounded-t-md transition-all"
                   style={{
                     height: `${Math.max(8, (d.avgScore / 5) * 100)}%`,
-                    background: SCORE_COLOR[Math.round(d.avgScore)] || "rgb(var(--signal))",
+                    // Colored by the mood most often actually felt on this
+                    // weekday (dominantMood), not the rounded average score
+                    // -- averaging several different moods into one 0-5
+                    // number tends to land every day in the same murky
+                    // middle bucket, so every bar came out the same color
+                    // even when the days felt very different. Height still
+                    // carries the average (how good/bad, on the whole);
+                    // color now carries which specific emotion actually
+                    // showed up most.
+                    background: MOOD_COLOR[d.dominantMood] || "rgb(var(--signal))",
                   }}
-                  title={`${d.label}: ${scoreToLabel(d.avgScore)} (${d.count} ${d.count === 1 ? "entry" : "entries"})`}
+                  title={`${d.label}: mostly ${d.dominantMood || "reflective"} (${d.count} ${d.count === 1 ? "entry" : "entries"})`}
                 />
               ) : (
                 <div className="w-full max-w-[24px] h-1 rounded-t-md bg-ink/10" title={`${d.label}: no entries yet`} />
