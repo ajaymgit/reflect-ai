@@ -41,10 +41,19 @@ router.get(
     // aggregate stats (mood counts, word totals, streaks, correlation
     // highlight) and `memberSince` could even resolve to a still-sealed
     // capsule's date, all before its reveal date.
-    const [entries, healthRows, firstEverEntry] = await Promise.all([
+    // Deliberately NOT run through visibleJournalFilter -- a sealed capsule's
+    // content/mood must stay hidden until its reveal date, but the fact that
+    // one exists is not a secret (the Journal page's own capsules sidebar
+    // already tells the sender "you have N sealed"). Counting them here (no
+    // .select, so nothing but the _id needed for a count actually loads)
+    // just ties that same fact into the year's overall story instead of
+    // leaving Time Capsule as the one feature with zero presence anywhere
+    // outside the Journal page it was created on.
+    const [entries, healthRows, firstEverEntry, capsulesSealed] = await Promise.all([
       JournalEntry.find(visibleJournalFilter({ userId, createdAt: { $gte: yearAgo } })).sort({ createdAt: 1 }),
       HealthData.find({ userId, date: { $gte: yearAgo } }).sort({ date: 1 }),
       JournalEntry.findOne(visibleJournalFilter({ userId })).sort({ createdAt: 1 }).select("createdAt"),
+      JournalEntry.countDocuments({ userId, createdAt: { $gte: yearAgo }, revealAt: { $ne: null } }),
     ]);
 
     if (entries.length === 0) {
@@ -153,6 +162,7 @@ router.get(
         ? { label: labelMonth(hardestMonth.month), avg: hardestMonth.avg, count: hardestMonth.count }
         : null,
       monthlyMood,
+      capsulesSealed,
       correlationHighlight,
     });
   }),

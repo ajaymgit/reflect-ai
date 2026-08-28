@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Download, Printer } from "lucide-react";
+import { Download, Mail, Printer } from "lucide-react";
 import { apiFetch } from "../api";
 import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
 import { moodDotStyle, MOOD_HEX } from "../utils/moodColors";
@@ -329,12 +329,21 @@ export default function YearInReviewPage() {
               across {data.daysJournaled} {data.daysJournaled === 1 ? "day" : "days"} -- {data.totalWords.toLocaleString()} words in total
             </p>
           </div>
-          <div className="grid grid-cols-2 mt-6 pt-5 border-t border-ink/10 max-w-sm mx-auto">
+          {/* Third column only appears once there's a real capsule to talk
+              about -- capsulesSealed was computed server-side for the first
+              time this pass (see server/src/modules/yearInReview/routes.js)
+              specifically so Time Capsule, previously invisible outside the
+              Journal page it's created on, shows up in the one place this
+              app already tells its "your year, reflected" story. Letters
+              sealed to a future self are exactly that story's shape --
+              reflection that hasn't paid off yet -- so it belongs here, not
+              bolted on as an unrelated feature callout. */}
+          <div className={`grid ${data.capsulesSealed > 0 ? "grid-cols-3" : "grid-cols-2"} mt-6 pt-5 border-t border-ink/10 max-w-sm mx-auto`}>
             <div className="text-center border-r border-ink/10">
               <p className="ui-hero-number text-2xl">{data.longestStreak}</p>
               <p className="text-xs text-ink/55 mt-0.5">longest streak</p>
             </div>
-            <div className="text-center">
+            <div className={`text-center ${data.capsulesSealed > 0 ? "border-r border-ink/10" : ""}`}>
               {data.topMood ? (
                 <p className="ui-hero-number text-2xl capitalize flex items-center justify-center gap-1.5">
                   <span className="h-2.5 w-2.5 rounded-full" style={moodDotStyle(data.topMood)} />
@@ -345,6 +354,17 @@ export default function YearInReviewPage() {
               )}
               <p className="text-xs text-ink/55 mt-0.5">most common mood</p>
             </div>
+            {data.capsulesSealed > 0 && (
+              <div className="text-center">
+                <p className="ui-hero-number text-2xl flex items-center justify-center gap-1.5">
+                  <Mail size={16} className="text-ink/50" />
+                  {data.capsulesSealed}
+                </p>
+                <p className="text-xs text-ink/55 mt-0.5">
+                  {data.capsulesSealed === 1 ? "letter sealed" : "letters sealed"}
+                </p>
+              </div>
+            )}
           </div>
         </motion.div>
 

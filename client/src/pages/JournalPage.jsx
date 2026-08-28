@@ -69,6 +69,26 @@ function daysUntil(dateStr) {
   return `in ${years} ${years === 1 ? "year" : "years"}`;
 }
 
+// Past-tense counterpart to daysUntil, above -- grounds each capsule card in
+// when it was actually written, not just when it opens. "Still sealed" or a
+// bare "Opens Nov 12" on its own says nothing about the gap between then and
+// now, which is the actual point of a letter to a future self: the writing
+// is real time passed, not an abstract countdown.
+function daysSince(dateStr) {
+  const past = new Date(dateStr);
+  past.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = Math.round((today.getTime() - past.getTime()) / 86400000);
+  if (days <= 0) return "today";
+  if (days === 1) return "1 day ago";
+  if (days < 30) return `${days} days ago`;
+  const months = Math.round(days / 30.44);
+  if (months < 12) return `${months} ${months === 1 ? "month" : "months"} ago`;
+  const years = Math.round(days / 365.25);
+  return `${years} ${years === 1 ? "year" : "years"} ago`;
+}
+
 // Same mid-word-cutoff problem as the server's recentEntries titles (see
 // dashboard/routes.js) -- a plain slice() with no ellipsis on the related
 // entry preview below.
@@ -186,7 +206,7 @@ function EntryAura({ mood, keepsake, capsule }) {
       >
         {capsule && (
           <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-[#161f19] border border-ink/25 flex items-center justify-center">
-            <Clock size={9} className="text-ink/70" />
+            <Mail size={9} className="text-ink/70" />
           </span>
         )}
       </div>
@@ -597,9 +617,8 @@ export default function JournalPage() {
             )}
           </div>
           <FirstTimeTip id="composer-keepsake-capsule">
-            Turn on <strong>Keepsake</strong> to flag an entry as one worth revisiting later, or write it as a{" "}
-            <strong>Time Capsule</strong> to seal it until a future date -- both are optional, and independent of
-            each other.
+            Turn on <strong>Keepsake</strong> to flag an entry as one worth revisiting later, or seal it as a{" "}
+            <strong>letter to your future self</strong> -- both are optional, and independent of each other.
           </FirstTimeTip>
 
           {/* Keepsake and Time Capsule -- both opt-in, off by default, and
@@ -631,12 +650,16 @@ export default function JournalPage() {
                   : "border-ink/15 bg-ink/5 text-ink/60 hover:border-ink/25 hover:text-ink/85"
               }`}
             >
-              <Clock size={14} className={isCapsule ? "text-[#a989b2]" : "text-ink/55"} />
-              {isCapsule ? "Sealed as a Time Capsule" : "Write it as a Time Capsule"}
+              <Mail size={14} className={isCapsule ? "text-[#a989b2]" : "text-ink/55"} />
+              {isCapsule
+                ? capsuleDate
+                  ? `Sealed, opens ${new Date(`${capsuleDate}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
+                  : "Sealed until it opens"
+                : "Seal a letter to your future self"}
             </button>
             {isCapsule && (
               <label className="inline-flex items-center gap-2 text-xs text-ink/60">
-                Reveal on
+                Opens
                 <input
                   type="date"
                   className="ui-input py-1.5 px-2.5 w-auto text-xs"
@@ -648,9 +671,7 @@ export default function JournalPage() {
             )}
           </div>
           {isCapsule && (
-            <p className="text-xs text-ink/55 -mt-1">
-              This entry won't appear anywhere in your journal -- not even to you -- until that date.
-            </p>
+            <p className="text-xs text-ink/55 -mt-1">This letter won't appear anywhere -- not even to you -- until it opens.</p>
           )}
 
           {/* Mood now comes right before Save, not after it -- previously
@@ -795,14 +816,20 @@ export default function JournalPage() {
           <div className="pb-3 border-b border-ink/10 space-y-2">
             <h3 className="font-medium flex items-center gap-1.5">
               <Mail size={14} className="text-ink/50" />
-              Time capsules
+              Letters to your future self
             </h3>
             {capsules.waiting.length === 0 && capsules.ready.length === 0 && (
               <p className="text-xs text-ink/50 leading-relaxed">
-                Seal a letter to your future self -- toggle "Time Capsule" while writing below, pick a reveal date,
-                and it won't appear anywhere (not even to you) until then.
+                Write something for a future version of yourself -- toggle "Seal a letter to your future self" while
+                writing below, pick a date, and it won't appear anywhere (not even to you) until then.
               </p>
             )}
+            {/* Leads with when it was written, not a generic "ready to open"
+                status word -- the elapsed time between then and now is the
+                actual point of a letter to a future self, so it's the
+                headline, not an afterthought. Fallback title dropped
+                "sealed" entirely (a self-contradiction on a card that just
+                said this one has arrived). */}
             {capsules.ready.map((entry) => (
                 <button
                   key={entry._id}
@@ -811,24 +838,25 @@ export default function JournalPage() {
                   className="w-full text-left surface p-2.5 hover:bg-ink/10 transition"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] text-signal">Ready to open</span>
+                    <span className="text-[11px] text-signal font-medium">This one's arrived</span>
                     <span className="h-1.5 w-1.5 rounded-full" style={moodDotStyle(entry.mood)} />
                   </div>
-                  <p className="text-sm mt-1">{entry.title || "A sealed entry, now open"}</p>
+                  <p className="text-sm mt-1">{entry.title || "A letter, untitled"}</p>
+                  <p className="text-[11px] text-ink/40 mt-0.5">Written {daysSince(entry.createdAt)}</p>
                 </button>
               ))}
               {capsules.waiting.map((c) => (
                 <div key={c._id} className="surface p-2.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] text-ink/50">
-                      Opens{" "}
-                      {new Date(c.revealAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
-                      {" "}
-                      <span className="text-ink/35">· {daysUntil(c.revealAt)}</span>
-                    </span>
+                    <span className="text-[11px] text-ink/45">Written {daysSince(c.createdAt)}</span>
                     <span className="h-1.5 w-1.5 rounded-full" style={moodDotStyle(c.mood)} />
                   </div>
-                  <p className="text-sm mt-1 text-ink/50">Still sealed</p>
+                  <p className="text-sm mt-1 text-ink/70">
+                    Opens{" "}
+                    {new Date(c.revealAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                    {" "}
+                    <span className="text-ink/40">· {daysUntil(c.revealAt)}</span>
+                  </p>
                 </div>
               ))}
           </div>

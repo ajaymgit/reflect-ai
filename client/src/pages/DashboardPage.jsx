@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowRight, Flame, Gem } from "lucide-react";
+import { ArrowRight, Flame, Gem, Mail } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, YAxis } from "recharts";
 import { apiFetch, describeError } from "../api";
@@ -144,6 +144,24 @@ function relativeDay(dateStr) {
   const diffDays = Math.floor(diffH / 24);
   if (diffDays < 7) return date.toLocaleDateString(undefined, { weekday: "short" });
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+// "tomorrow" / "in 5 days" / "on Mar 4" -- the future-facing counterpart to
+// relativeDay() above, used for a waiting time capsule's revealAt instead of
+// a past createdAt. Someone checking in on a sealed capsule wants "how much
+// longer," not a bare ISO-ish date.
+function formatFutureDate(dateStr) {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffDays = Math.ceil((date - now) / (1000 * 60 * 60 * 24));
+  if (diffDays <= 0) return "very soon";
+  if (diffDays === 1) return "tomorrow";
+  if (diffDays < 30) return `in ${diffDays} days`;
+  return `on ${date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+  })}`;
 }
 
 // Reuses GET /api/dashboard/summary's existing `quickHealthSummary` field
@@ -304,6 +322,33 @@ function QuickLogHealthForm({ onSaved }) {
 
 const MOOD_COLOR = MOOD_HEX;
 
+// A ready capsule (revealAt already passed) stays "ready" forever in GET
+// /api/journal/capsules -- there's no server-side read/acknowledged flag on
+// JournalEntry, so without something client-side, this banner would keep
+// announcing the same already-opened letter every single time Home loads.
+// localStorage-backed dismissal (same pattern FirstTimeTip.jsx already
+// uses elsewhere in this app) fixes that per-device: once you've opened a
+// capsule from this banner, its id is remembered and it drops out of the
+// "unseen" list, while a genuinely new capsule becoming ready later still
+// gets its own announcement.
+const CAPSULE_SEEN_KEY = "equoria-capsules-opened";
+function getSeenCapsuleIds() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(CAPSULE_SEEN_KEY) || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+function markCapsuleSeen(id) {
+  try {
+    const seen = getSeenCapsuleIds();
+    seen.add(id);
+    localStorage.setItem(CAPSULE_SEEN_KEY, JSON.stringify(Array.from(seen)));
+  } catch {
+    // localStorage unavailable -- banner will just reappear next load.
+  }
+}
+
 // Teaser for the Retrospect page -- backed by its own GET
 // /api/retrospect/analysis (a separate, lightweight request; the endpoint
 // caches its AI-generated analysis for 12h server-side, so this doesn't
@@ -376,6 +421,8 @@ export default function DashboardPage() {
   const [data, setData] = useState(null);
   const [loadError, setLoadError] = useState(false);
   const [retro, setRetro] = useState(null);
+  const [capsules, setCapsules] = useState({ waiting: [], ready: [] });
+  const [seenCapsuleIds, setSeenCapsuleIds] = useState(() => getSeenCapsuleIds());
   const [range] = useState("week");
   const [entryLimit, setEntryLimit] = useState(6);
   const [entryFilter, setEntryFilter] = useState("all");
@@ -411,6 +458,24 @@ export default function DashboardPage() {
       .then(setRetro)
       .catch(() => {});
   }, []);
+
+  // Journal's own capsules sidebar was, until now, the only place in the
+  // whole app that knew Time Capsule existed. Home is where "here's
+  // something for you today" actually belongs -- a light fetch of the same
+  // endpoint Journal already calls, no new backend route needed.
+  useEffect(() => {
+    apiFetch("/api/journal/capsules")
+      .then(setCapsules)
+      .catch(() => {});
+  }, []);
+
+  const unseenReadyCapsules = (capsules.ready || []).filter((c) => !seenCapsuleIds.has(c._id));
+
+  function openCapsule(id) {
+    setOpenEntryId(id);
+    markCapsuleSeen(id);
+    setSeenCapsuleIds(getSeenCapsuleIds());
+  }
 
   // Was 3/5/7 -- previously "recent entries" meant an almost-full second
   // copy of the archive (mood legend row, filter chips, up to 7 full entry
@@ -500,6 +565,65 @@ export default function DashboardPage() {
             </button>
           </motion.div>
         )}
+        {/* A ready time capsule is a genuine surprise ("past-you left you
+            something") and time-bound in spirit even though the data isn't
+            -- it belongs above the hero, the same "notice this before
+            anything else" slot an error banner gets, not folded quietly
+            into a sidebar. Ember accent (not signal) matches how this app
+            already reserves ember for things that deserve emphasis. */}
+        {unseenReadyCapsules.length > 0 && (
+          <motion.div
+            variants={iVariants}
+            className="ui-card rounded-2xl p-5 border-ember/30 bg-ember/5 flex items-center justify-between gap-3 flex-wrap"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="h-9 w-9 rounded-full bg-ember/15 flex items-center justify-center shrink-0">
+                <Mail size={16} className="text-accent-ember" />
+              </span>
+              <div className="min-w-0">
+                <p className="ui-kicker">Time capsule</p>
+                {/* Names when it was actually written instead of a generic
+                    "from your past self" -- the real gap between then and
+                    now is the whole point of a letter like this, so it's
+                    named directly rather than left implied. */}
+                <p className="text-sm font-medium mt-0.5">
+                  {unseenReadyCapsules.length === 1
+                    ? `Your letter from ${relativeDay(unseenReadyCapsules[0].createdAt)} has arrived.`
+                    : `${unseenReadyCapsules.length} letters you wrote have arrived.`}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => openCapsule(unseenReadyCapsules[0]._id)}
+              className="inline-flex px-4 py-2 min-h-9 text-sm ui-button-primary shrink-0"
+            >
+              Open it
+            </button>
+          </motion.div>
+        )}
+
+        {/* Softer, non-dismissible nudge for capsules still sealed -- only
+            shown when there's no ready one competing for attention, so this
+            page never announces two capsule things at once. Points at the
+            Journal page (where the full capsules list and the "write one"
+            toggle both live) rather than duplicating that list here. */}
+        {unseenReadyCapsules.length === 0 && (capsules.waiting || []).length > 0 && (
+          <motion.div
+            variants={iVariants}
+            className="ui-card rounded-2xl px-5 py-3.5 flex items-center justify-between gap-3 flex-wrap"
+          >
+            <p className="text-sm text-ink/75">
+              {capsules.waiting.length === 1
+                ? `You wrote a letter to your future self ${relativeDay(capsules.waiting[0].createdAt)} -- it opens ${formatFutureDate(capsules.waiting[0].revealAt)}.`
+                : `${capsules.waiting.length} letters are on their way to future you -- next opens ${formatFutureDate(capsules.waiting[0].revealAt)}.`}
+            </p>
+            <Link to="/journal/new" className="text-xs text-ink/50 hover:text-ink/80 shrink-0 inline-flex items-center gap-1">
+              View letters <ArrowRight size={12} />
+            </Link>
+          </motion.div>
+        )}
+
         {/* .ui-card-hero (wider radius) instead of .ui-card -- this is the
             one card on the page someone should register as "the main
             event" before anything else, so it gets the app's biggest-radius
