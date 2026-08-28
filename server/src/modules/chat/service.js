@@ -90,10 +90,10 @@ const openaiClient = env.OPENAI_API_KEY
 // generously above what a schema-conformant JSON reply actually needs.
 const CLOUD_MAX_OUTPUT_TOKENS = 400;
 const fallbackTemplates = [
-  "I might be missing context, so I do not want to assume. What feels most important for you right now?",
-  "I want to understand you properly. Which part of this should we explore first?",
-  "Thank you for sharing that. What feels heaviest or most important in this moment?",
-  "I am here with you. Where would you like to begin?",
+  "I might be missing some context, so I don't want to assume -- what feels most important for you right now?",
+  "I want to really understand where you're at. Which part of this should we start with?",
+  "Thanks for sharing that. What feels heaviest or most important in this moment?",
+  "I'm here with you. Where would you like to begin?",
 ];
 
 const topicSwitchRegex =
@@ -102,6 +102,17 @@ const greetingRegex = /\b(hi|hello|hey|yo|good morning|good evening)\b/i;
 const positiveRegex = /\b(happy|great|good|excited|grateful|better|awesome|nice)\b/i;
 const openChatRegex =
   /\b(let'?s talk|let us talk|open chat|free talk|just chat|talk about anything|random talk)\b/i;
+// Catches ordinary small talk that isn't about the user's own feelings or
+// journal patterns at all -- previously anything not matching a specific
+// intent above (greeting/gratitude/relationship/etc.) fell straight through
+// to "reflection", which always routes to a randomly-assigned emotional
+// pattern question (buildHeuristicPayload), even for something as plain as
+// "what's up" or "do you have a favorite color." This gives the heuristic
+// path a real "just chatting" mode for that case too, matching the AI
+// prompt's own new rule that generic conversation doesn't need to be
+// redirected back to reflection every time.
+const genericChatRegex =
+  /\b(what'?s up|how'?s it going|how are you( doing)?|what do you think|your opinion|do you like|what'?s your favorite|favourite|tell me a joke|fun fact|who are you|what can you do|what are you|random question|wanna chat|want to chat|can we talk about|chat about)\b/i;
 const relationshipRegex = /\b(relationship|relationships|friend|friends|partner|family|dating)\b/i;
 const gratitudeRegex = /\b(thank you|thanks|appreciate)\b/i;
 const distressRegex = /\b(anxious|panic|hopeless|worthless|overwhelmed|burnout|depressed)\b/i;
@@ -451,28 +462,35 @@ function normalizeChatSettings(raw = {}) {
 
 function humanizeQuestion(question = "", focus = "general_reflection") {
   const cleaned = String(question || "").trim();
-  if (!cleaned) return "I am here with you. What feels most important to talk about right now?";
+  if (!cleaned) return "I'm here with you. What feels most important to talk about right now?";
   const lower = cleaned.toLowerCase();
   if (/^hi\b|^hey\b/.test(lower)) return cleaned;
 
+  // Widened from 2 options per focus to 3-4 -- two options meant a 50/50
+  // coin flip on repeating the exact same lead within a couple of turns on
+  // the same topic, which is common (most conversations stay on one focus
+  // for several turns in a row), and a repeated lead reads as scripted.
+  // Contractions throughout ("I'm" not "I am", "That's" not "That is") --
+  // the stiffer full forms were a small but real part of why this read as
+  // formal/clinical instead of like an actual friend texting back.
   const leadByFocus = {
-    relationships: ["That sounds meaningful.", "I can feel this matters to you."],
-    workload: ["That sounds draining.", "That is a lot to carry."],
-    emotional_safety: ["I hear you.", "I am really glad you shared that."],
-    positive_state: ["I love hearing that.", "That is beautiful to hear."],
+    relationships: ["That sounds meaningful.", "I can feel this matters to you.", "That's clearly on your mind."],
+    workload: ["That sounds draining.", "That's a lot to carry.", "No wonder that's wearing on you."],
+    emotional_safety: ["I hear you.", "I'm really glad you shared that.", "Thank you for trusting me with that."],
+    positive_state: ["I love hearing that.", "That's beautiful to hear.", "That's genuinely great to hear!"],
     // Previously unlisted, so every one of these focuses fell through to the
     // same general_reflection pair ("I hear you." / "Thanks for sharing
     // that.") -- fine on its own, but combined with the old "growth every
     // time" default-focus bug, it meant a long run of unrelated messages
     // could sound almost identical turn after turn.
-    growth: ["That makes sense.", "Good, let's dig into that."],
-    motivation: ["I get that.", "That's a real thing to sit with."],
-    self_worth: ["That's worth pausing on.", "I hear that."],
-    calm: ["Makes sense.", "Good to know."],
-    creativity: ["I like that.", "That's worth exploring."],
-    energy: ["That tracks.", "I hear you."],
-    user_selected: ["Of course.", "No pressure."],
-    general_reflection: ["I hear you.", "Thanks for sharing that."],
+    growth: ["That makes sense.", "Good, let's dig into that.", "I can see you're really thinking this through."],
+    motivation: ["I get that.", "That's a real thing to sit with.", "A lot of people hit that same wall."],
+    self_worth: ["That's worth sitting with for a second.", "I hear that.", "That sounds like a heavy thought to carry."],
+    calm: ["Makes sense.", "Good to know.", "That's a good thing to notice about yourself."],
+    creativity: ["I like that.", "That's worth exploring.", "There's something real there."],
+    energy: ["That tracks.", "I hear you.", "That's a lot to run on empty with."],
+    user_selected: ["Of course.", "No pressure.", "Sure thing."],
+    general_reflection: ["I hear you.", "Thanks for sharing that.", "Appreciate you telling me that."],
   };
   const leads = leadByFocus[focus] || leadByFocus.general_reflection;
   const lead = leads[Math.floor(Math.random() * leads.length)];
@@ -559,6 +577,7 @@ export function detectIntent(userMessage) {
   if (simpleOpenChat) return "open_chat";
   if (openChatRegex.test(text)) return "open_chat";
   if (greetingRegex.test(text)) return "greeting";
+  if (genericChatRegex.test(text)) return "open_chat";
   if (uncertainRegex.test(text)) return "uncertain";
   if (affirmativeRegex.test(text)) return "affirmative";
   if (positiveRegex.test(text)) return "positive_checkin";
@@ -642,14 +661,27 @@ function buildHeuristicPayload({ userMessage, candidates, themes, healthQuality,
 
   const patternPhrase = themeText === "energy" ? "energy regulation" : themeText;
   const isProblemSignal = problemSignalRegex.test(normalizeText(userMessage));
+  // Expanded from 3 to 7 -- with only 3 openers, a longer conversation (the
+  // heuristic path runs on every turn when no AI provider is reachable, not
+  // just occasionally) had roughly a 1-in-3 chance of repeating the exact
+  // same opener within just a couple of turns, which reads as canned rather
+  // than as someone actually listening.
   const supportiveOpeners = [
     "I hear you.",
     "Thanks for sharing that.",
-    "I am with you on this.",
+    "I'm with you on this.",
+    "That makes sense.",
+    "I appreciate you telling me that.",
+    "Okay, I'm following.",
+    "I get where you're coming from.",
   ];
   const opener = supportiveOpeners[Math.floor(Math.random() * supportiveOpeners.length)];
+  // Previously "There may be a pattern around X" -- accurate, but reads like
+  // a clinical note rather than something a friend would actually say.
+  // Softened to plain conversational phrasing without changing what it's
+  // claiming (still hedged, still only said when hasEvidence is true).
   const friendlyInsight = isProblemSignal && hasEvidence
-    ? `${opener} There may be a pattern around ${patternPhrase}.${healthHint}`
+    ? `${opener} It sounds like ${patternPhrase} keeps coming up for you.${healthHint}`
     : isProblemSignal
       ? `${opener} I don't have journal history to spot a pattern yet, but I'm listening.`
       : `${opener} We can keep this simple and talk through what matters most today.`;
@@ -672,8 +704,13 @@ function buildIntentPayload({ intent, candidates }) {
   if (intent === "greeting") {
     return {
       schemaVersion: "1.0",
-      insight: "Good to see you here.",
-      question: "Hey, I am glad you are here. How are you feeling right now?",
+      // insight left empty here (rather than a second "glad to see you"
+      // line) since the question below already carries that warmth -- with
+      // insight and question now shown together (see processChatTurn's
+      // aiResponse combining), two back-to-back "good to see you" sentiments
+      // would read as repetitive rather than extra-warm.
+      insight: "",
+      question: "Hey! Really glad you're here -- how are you feeling right now?",
       evidence,
       confidence: evidence.length ? 0.66 : 0,
       reasoning: "Greeting intent detected; using friend-like opener.",
@@ -684,8 +721,8 @@ function buildIntentPayload({ intent, candidates }) {
   if (intent === "positive_checkin") {
     return {
       schemaVersion: "1.0",
-      insight: "I hear a positive shift in your mood.",
-      question: "Love that. What do you think made today feel better for you?",
+      insight: "I love hearing that shift in your mood.",
+      question: "What do you think made today feel better for you?",
       evidence,
       confidence: evidence.length ? 0.67 : 0,
       reasoning: "Positive check-in intent detected; reinforcing positive state.",
@@ -696,8 +733,8 @@ function buildIntentPayload({ intent, candidates }) {
   if (intent === "relationship_request") {
     return {
       schemaVersion: "1.0",
-      insight: "Got it, we can focus on relationships.",
-      question: "Of course. Tell me a little about what is happening in your relationships right now.",
+      insight: "Of course, let's focus on that.",
+      question: "Tell me a little about what's happening in your relationships right now.",
       evidence,
       confidence: evidence.length ? 0.66 : 0,
       reasoning: "Direct relationship request detected.",
@@ -708,8 +745,8 @@ function buildIntentPayload({ intent, candidates }) {
   if (intent === "gratitude") {
     return {
       schemaVersion: "1.0",
-      insight: evidence.length ? "I hear appreciation and openness in what you shared." : "",
-      question: "That is lovely. What part of this moment do you want to carry into tomorrow?",
+      insight: evidence.length ? "I can hear real appreciation and openness in what you shared." : "",
+      question: "That's lovely. What part of this moment do you want to carry into tomorrow?",
       evidence,
       confidence: evidence.length ? 0.66 : 0.62,
       reasoning: "Gratitude intent detected.",
@@ -722,7 +759,7 @@ function buildIntentPayload({ intent, candidates }) {
       schemaVersion: "1.0",
       insight: "",
       question:
-        "I mean the moments, habits, or people that made you feel better today. Which one stands out most?",
+        "I mean the moments, habits, or people that made you feel better today -- which one stands out most?",
       evidence: [],
       confidence: 0.64,
       reasoning: "Clarification intent detected.",
@@ -734,7 +771,7 @@ function buildIntentPayload({ intent, candidates }) {
     return {
       schemaVersion: "1.0",
       insight: "",
-      question: "No pressure at all. We can start small - mood, relationships, work, or energy?",
+      question: "No pressure at all -- we can start small. Mood, relationships, work, or energy?",
       evidence: [],
       confidence: 0.6,
       reasoning: "Uncertain intent detected; offering simple structured choices.",
@@ -746,7 +783,7 @@ function buildIntentPayload({ intent, candidates }) {
     return {
       schemaVersion: "1.0",
       insight: "",
-      question: "Great, let us keep it simple. Which one should we start with: mood, relationships, work, or energy?",
+      question: "Great, let's keep it simple -- which one should we start with: mood, relationships, work, or energy?",
       evidence: [],
       confidence: 0.6,
       reasoning: "Affirmative short reply detected; prompting user to choose a clear direction.",
@@ -757,8 +794,8 @@ function buildIntentPayload({ intent, candidates }) {
   if (intent === "distress_signal") {
     return {
       schemaVersion: "1.0",
-      insight: "It sounds like things feel heavy right now.",
-      question: "I am sorry it feels heavy. What feels strongest right now - thoughts, body tension, or the situation itself?",
+      insight: "It sounds like things feel really heavy right now.",
+      question: "I'm sorry you're carrying that. What feels strongest right now -- thoughts, body tension, or the situation itself?",
       evidence,
       confidence: evidence.length ? 0.67 : 0.62,
       reasoning: "Distress signal intent detected; using supportive non-medical grounding prompt.",
@@ -770,7 +807,7 @@ function buildIntentPayload({ intent, candidates }) {
     return {
       schemaVersion: "1.0",
       insight: "",
-      question: "Sure. I am here with you. What do you feel like talking about now?",
+      question: "Sure, I'm all ears -- what do you feel like talking about now?",
       evidence: [],
       confidence: 0,
       reasoning: "User requested open chat/topic switch; prioritizing conversational flow.",
@@ -858,6 +895,8 @@ function avoidRepeatedQuestion(payload, recentTurns = []) {
     "If you had to name the main feeling in one word, what would it be?",
     "What happened right before this feeling became stronger?",
     "What would make this conversation most useful for you today?",
+    "What's underneath this, if you had to guess?",
+    "Is there anything about this you haven't said out loud yet?",
   ];
   const alternatives = [...(byFocus[payload.currentFocus] || []), ...generic];
   const nextQuestion =
@@ -927,7 +966,7 @@ function buildContextFollowUp({ userMessage, sessionTurns = [] }) {
   ) {
     return {
       schemaVersion: "1.0",
-      insight: "That is meaningful and kind.",
+      insight: "That's really meaningful and kind of you.",
       question: "How did helping them make you feel afterward?",
       evidence: [],
       confidence: 0.66,
@@ -1129,7 +1168,7 @@ async function generateInsight(context, userMessage) {
     throw new AppError("AI_PARSE_FAILED", "AI key missing; AI generation unavailable", 502);
   }
   const prompt = `
-You are ReflectAI, a reflective non-medical coach.
+You are ReflectAI: part reflective non-medical coach, part genuine conversational companion. You do not need a therapy angle on every single message -- sometimes the user just wants to chat, and that is a completely normal, welcome thing to do here, not a detour from your "real" job.
 Return ONLY valid JSON with this exact shape:
 {
   "schemaVersion":"1.0",
@@ -1143,19 +1182,21 @@ Return ONLY valid JSON with this exact shape:
 }
 Rules:
 - Never diagnose, never give medical advice, never prescribe solutions.
-- Ask open-ended Socratic question.
+- Ask open-ended Socratic question. But this is a conversation, not an interview: the insight and question together should read as ONE natural reply a caring friend would actually say out loud, not "clinical observation. Then: formal probing question?" Phrase the question the way a genuinely curious friend would ask it in conversation, not the way a therapist opens an intake form.
+- Sound genuinely friendly, not just "supportive" in the abstract: use contractions (I'm, that's, you're, don't -- never the stiff full forms I am/that is/you are/do not), casual everyday phrasing over formal or therapy-coded language ("that sounds rough" over "that sounds worth pausing on"), and let real warmth or excitement come through when it fits (an occasional exclamation mark for good news is fine, this doesn't need to stay flat and neutral every time).
 - Use at least one evidence object from evidenceCandidates when fallback=false.
 - If evidence is weak, set fallback=true and keep insight empty.
 - confidence is REQUIRED and must be your real, calibrated certainty as a number strictly between 0 and 1 (never 0, never exactly the 0.78 shown in the shape above -- that is only an example of the format, not a value to copy). If fallback=false, confidence must be at least 0.65, since fallback=false is itself a claim that you are reasonably certain. If you are not that certain, set fallback=true instead of writing a low confidence number.
 - If user requests topic shift, do not repeat prior focus.
-- Sound human, warm, and natural (like a supportive friend), not robotic or clinical.
+- Sound human, warm, and natural (like a supportive friend), not robotic or clinical. Never sound stern, formal, or like you're running a checklist -- warmth is the default, not an occasional garnish on top of an otherwise clinical reply.
 - Keep wording simple and conversational. Avoid corporate phrases and avoid repeating the same sentence patterns.
-- Start from empathy first, then one clear reflective question.
+- Start from empathy first, then one clear reflective question -- but let the two blend into one natural thought (e.g. "That sounds like a lot to carry -- what's been weighing on you most?"), not two disconnected sentences bolted together.
 - Never ask more than one main question per turn.
 - Keep question under 24 words.
 - Keep insight under 28 words.
 - If user says only a short opener like "hi", respond with a friendly check-in question.
 - If user says "chat", "lets talk", or "open chat", do NOT force a theme; invite free conversation.
+- If the message is ordinary small talk or a generic question not about the user's own feelings/journal (e.g. "what's up", asking your opinion, a fact, a joke, chatting about a hobby, pop culture, or anything else two people might casually talk about), just respond like a normal, friendly conversation partner would -- answer it, react to it, banter a little if it fits. You do NOT need to redirect this back to reflection, cite evidence, or force an emotional/probing question onto it. Set fallback=true and evidence=[] for a purely generic reply like this (there is nothing personal to ground), and let the "question" field just be your natural conversational reply -- it does not have to literally be a question every time; "question" here just means "what you say back," even if it's a statement, a joke, or an answer to what they asked.
 - If user says "something else" or asks topic switch, acknowledge and ask what they want to discuss now.
 - If user asks clarification ("what worked today?", "what do you mean?"), clarify the previous question in plain language.
 - Mirror and validate emotion before analysis.
@@ -1419,7 +1460,7 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {}, 
       if (rateLimited) {
         payload = fallbackPayload({
           question:
-            "I am still here with you. The AI is briefly overloaded right now - can we try again in about a minute?",
+            "I'm still here with you -- just a little overloaded for a moment. Mind trying again in about a minute?",
           insight: "",
           evidence: [],
           currentFocus: "user_selected",
@@ -1446,7 +1487,7 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {}, 
 
   if (!payload) {
     payload = fallbackPayload({
-      question: "I am here with you. I had a brief connection issue. Could you send that once more?",
+      question: "I'm here with you -- just had a brief connection hiccup. Mind sending that once more?",
       insight: "",
       evidence: [],
       currentFocus: "user_selected",
@@ -1488,6 +1529,19 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {}, 
   finalPayload.source = accepted ? responseSource : "fallback";
   finalPayload.chatSettings = normalizedSettings;
 
+  // Previously only `finalPayload.question` was persisted as aiResponse --
+  // `insight` (the empathetic/validating line the prompt explicitly asks
+  // for, e.g. "That sounds draining." before the question) was generated on
+  // every turn and then silently dropped here, so it never made it into chat
+  // history at all, and the client's live POST response had the same gap
+  // (see ChatPage.jsx's message-send handler). Combining once here, before
+  // both the audit log's generatedQuestion and appendChatTurn below, is the
+  // single place both a live reply and every future GET /session load derive
+  // their displayed text from, so a page reload shows the same warmer text
+  // as the live turn did, not the bare question it used to fall back to.
+  finalPayload.aiResponse =
+    [finalPayload.insight, finalPayload.question].filter(Boolean).join(" ").trim() || finalPayload.question;
+
   const audit = await AuditLog.create({
     userId,
     triggerReason: "chat_turn",
@@ -1513,7 +1567,7 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {}, 
 
   const session = await appendChatTurn(userId, {
     userMessage,
-    aiResponse: finalPayload.question,
+    aiResponse: finalPayload.aiResponse,
     evidence: finalPayload.evidence,
     confidence: finalPayload.confidence,
     fallback: finalPayload.fallback,

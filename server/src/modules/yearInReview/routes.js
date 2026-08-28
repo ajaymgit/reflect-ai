@@ -113,6 +113,23 @@ router.get(
     const bestMonth = monthlyAvgs.length ? monthlyAvgs.slice().sort((a, b) => b.avg - a.avg)[0] : null;
     const hardestMonth = monthlyAvgs.length ? monthlyAvgs.slice().sort((a, b) => a.avg - b.avg)[0] : null;
 
+    // monthlyAvgs above was already being computed for bestMonth/hardestMonth
+    // and then discarded -- only the two extremes ever reached the client.
+    // Re-derived here (from monthlyScores directly, not monthlyAvgs, so
+    // lower-count months still show up as a real but low-confidence point
+    // instead of a gap) as a full chronological trajectory so the client can
+    // draw a "shape of the year" chart, not just its peak and trough.
+    // monthlyScores is a Map built while iterating `entries` in ascending
+    // createdAt order, so insertion order already IS chronological order --
+    // no separate sort needed.
+    const monthlyMood = Array.from(monthlyScores.entries()).map(([month, v]) => ({
+      month,
+      shortLabel: monthNames[Number(month.slice(5, 7)) - 1].slice(0, 3),
+      avg: v.sum / v.count,
+      count: v.count,
+      eligible: v.count >= 3,
+    }));
+
     let correlationHighlight = null;
     try {
       const correlations = computeHealthMoodCorrelations({ healthRows, journalRows: entries });
@@ -135,6 +152,7 @@ router.get(
       hardestMonth: hardestMonth
         ? { label: labelMonth(hardestMonth.month), avg: hardestMonth.avg, count: hardestMonth.count }
         : null,
+      monthlyMood,
       correlationHighlight,
     });
   }),

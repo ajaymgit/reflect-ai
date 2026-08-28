@@ -47,6 +47,8 @@ const METRIC_ACCENT = {
 
 const MOOD_SCORE_LABEL = { 0: "Angry", 1: "Stressed", 2: "Sad", 3: "Reflective", 4: "Calm", 5: "Happy" };
 
+const WEEKDAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
 const CORRELATION_METRIC_LABELS = {
   steps: "Steps",
   sleepHours: "Sleep",
@@ -150,6 +152,32 @@ export default function HealthPage() {
   // average shouldn't change just because the chart rendering underneath it
   // now makes gaps visually honest.
   const denseWeekly = useMemo(() => denseByDay(data?.weekly), [data?.weekly]);
+  // Which day of the week you actually tend to be most/least active --
+  // computed client-side from the same 30-day data.weekly series everything
+  // else on this page already uses, no extra request. Real per-day steps
+  // values only (not the gap-filled denseWeekly, since nulls would just
+  // drag every weekday's average down for having fewer real entries, not
+  // because that weekday is actually lower).
+  const stepsByWeekday = useMemo(() => {
+    const rows = (data?.weekly || []).filter((r) => Number.isFinite(r.steps));
+    const byWeekday = WEEKDAY_LABELS.map((label, i) => {
+      const dayRows = rows.filter((r) => new Date(r.date).getDay() === i);
+      return {
+        label,
+        avgSteps: dayRows.length ? Math.round(dayRows.reduce((sum, r) => sum + r.steps, 0) / dayRows.length) : null,
+        count: dayRows.length,
+      };
+    });
+    const eligible = byWeekday.filter((d) => d.count >= 2);
+    const best = eligible.length ? eligible.reduce((a, b) => (b.avgSteps > a.avgSteps ? b : a)) : null;
+    const worst = eligible.length ? eligible.reduce((a, b) => (b.avgSteps < a.avgSteps ? b : a)) : null;
+    return {
+      eligible: eligible.length >= 3,
+      byWeekday,
+      bestLabel: best && best.label !== worst?.label ? best.label : null,
+      worstLabel: worst && worst.label !== best?.label ? worst.label : null,
+    };
+  }, [data?.weekly]);
   // The Apple Health companion app (see Settings -> Integrations) was
   // previously the ONLY way a HealthData row ever got created -- anyone
   // trying the web app on its own had no way to put a number in at all, so
@@ -293,7 +321,7 @@ export default function HealthPage() {
               </p>
             )}
             <div className="pt-5 mt-5 border-t border-ink/10">
-              <p className="text-xs text-signal uppercase tracking-wider mb-3 ui-kicker">This month</p>
+              <p className="ui-kicker mb-3">This month</p>
               <StatStrip
                 items={[
                   { label: "Avg steps", value: data?.averages?.monthly?.steps ?? "--", kind: "steps" },
@@ -311,7 +339,7 @@ export default function HealthPage() {
                 put a number in at all, which is why the wellness score and
                 every chart on this page could stay permanently empty. */}
             <div className="pt-5 mt-5 border-t border-ink/10">
-              <p className="text-xs text-signal uppercase tracking-wider mb-2 ui-kicker">Log today's data</p>
+              <p className="ui-kicker mb-2">Log today's data</p>
               <p className="text-xs text-ink/50 mb-3">
                 {hasAnyHealthData
                   ? "No Apple Health sync? Enter today's numbers by hand -- this is what your wellness score and every chart here is built from."
@@ -364,6 +392,17 @@ export default function HealthPage() {
                 onPointClick={setSelectedDate}
               />
             </div>
+
+            {/* Which day of the week you're actually most/least active --
+                same "day-of-week pattern" idea Retrospect's mood-by-weekday
+                chart uses, applied here to steps since it's the most
+                behavior-driven of the three metrics (sleep and stress are
+                more circumstantial). Purely computed from the same 30-day
+                data.weekly series the charts above already have. */}
+            <div className="pt-4 border-t border-ink/10">
+              <p className="ui-kicker">Steps by weekday</p>
+              <StepsByWeekday weekday={stepsByWeekday} />
+            </div>
             <DayEntryPreview date={selectedDate} />
           </div>
         </motion.div>
@@ -373,7 +412,7 @@ export default function HealthPage() {
           <div className="ui-card rounded-2xl p-4">
             <p className="ui-kicker">Real correlation</p>
             <h3 className="font-medium mt-1">Which health metric relates to your mood most?</h3>
-              <p className="text-xs text-ink/60 mt-2">
+              <p className="text-xs text-ink/60 mt-1">
                 A real Pearson correlation computed from your own paired health + journal days -- not an AI guess. Longer
                 bar means a stronger relationship.
               </p>
@@ -384,7 +423,7 @@ export default function HealthPage() {
               <div className="ui-card rounded-2xl p-4">
                 <p className="ui-kicker">See the actual data</p>
                 <h3 className="font-medium mt-1">Every day, plotted</h3>
-                <p className="text-xs text-ink/60 mt-2">
+                <p className="text-xs text-ink/60 mt-1">
                   Each dot is one real day: how much of that metric you had, against your mood. A tight diagonal line
                   of dots is a strong relationship; a scattered cloud is a weak one -- the r value above is just a
                   single number summarizing what these dots show directly.
@@ -861,6 +900,63 @@ function splitRuns(data, key) {
   }
   if (current.length) runs.push(current);
   return runs;
+}
+
+// Hand-rolled bars (no Recharts) for a 7-column weekday breakdown -- same
+// approach RetrospectPage.jsx's WritingRhythm/MoodByWeekday use, kept
+// consistent across pages rather than reaching for a full chart library for
+// something this simple.
+function StepsByWeekday({ weekday }) {
+  if (!weekday?.eligible) {
+    return (
+      <p className="text-xs text-ink/50 mt-3">Not enough days logged yet across enough different weekdays to show a pattern.</p>
+    );
+  }
+  const max = Math.max(1, ...weekday.byWeekday.map((d) => d.avgSteps || 0));
+  return (
+    <div className="mt-3">
+      {(weekday.bestLabel || weekday.worstLabel) && (
+        <p className="text-sm text-ink/80">
+          {weekday.bestLabel && (
+            <>
+              Most active on <span className="font-medium text-ink">{weekday.bestLabel}</span>
+            </>
+          )}
+          {weekday.bestLabel && weekday.worstLabel && ", "}
+          {weekday.worstLabel && (
+            <>
+              least active on <span className="font-medium text-ink">{weekday.worstLabel}</span>
+            </>
+          )}
+          .
+        </p>
+      )}
+      <div className="mt-4 grid grid-cols-7 gap-2">
+        {weekday.byWeekday.map((d) => (
+          <div key={d.label} className="text-center">
+            <div className="h-16 flex items-end justify-center">
+              {d.avgSteps !== null ? (
+                <div
+                  className="w-full max-w-[24px] rounded-t-md transition-all"
+                  style={{
+                    height: `${Math.max(8, (d.avgSteps / max) * 100)}%`,
+                    background:
+                      d.label === weekday.bestLabel
+                        ? "linear-gradient(90deg, rgb(255 255 255 / 0.25), rgb(255 255 255 / 0) 55%), #e8ab5f"
+                        : "rgb(var(--ink) / 0.15)",
+                  }}
+                  title={`${d.label}: ${d.avgSteps.toLocaleString()} avg steps (${d.count} ${d.count === 1 ? "day" : "days"})`}
+                />
+              ) : (
+                <div className="w-full max-w-[24px] h-1 rounded-t-md bg-ink/10" title={`${d.label}: no data yet`} />
+              )}
+            </div>
+            <p className="text-[10px] text-ink/55 mt-1.5">{d.label.slice(0, 3)}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function TrendChart({ title, data, dataKey, accent, valueLabel, axisLabel, onPointClick }) {

@@ -319,6 +319,7 @@ export default function SettingsPage() {
         <motion.div variants={iVariants} className="ui-card rounded-2xl p-5">
           <p className="ui-kicker">Settings</p>
           <h2 className="ui-title mt-1">Preferences</h2>
+          <p className="text-sm text-ink/70 mt-2">Account, security, and how ReflectAI works for you.</p>
         </motion.div>
 
         {/* Two columns on desktop instead of one long vertical stack --

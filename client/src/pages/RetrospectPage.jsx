@@ -114,7 +114,14 @@ export default function RetrospectPage() {
   // aggregate. Ties broken toward the more recent date. Requires a handful
   // of different logged days before naming an "extreme" out of them.
   const dayExtremes = useMemo(() => {
-    const rows = (data?.moodHeatmap || []).filter((r) => r.mood);
+    // Same HEATMAP_DAYS trailing window MoodHeatmap itself renders --
+    // moodHeatmap from the API isn't date-bounded (see
+    // server/src/modules/retrospect/routes.js), so without this filter the
+    // "best/hardest day, this window" callouts could point at a day from
+    // outside the six-month grid actually shown above them.
+    const windowStart = new Date();
+    windowStart.setDate(windowStart.getDate() - HEATMAP_DAYS);
+    const rows = (data?.moodHeatmap || []).filter((r) => r.mood && r.rawDate && new Date(r.rawDate) >= windowStart);
     if (rows.length < 5) return null;
     const scored = rows.map((r) => ({ ...r, score: moodToScore(r.mood) }));
     const best = scored.reduce((a, b) => (b.score > a.score || (b.score === a.score && b.date > a.date) ? b : a));
@@ -147,6 +154,11 @@ export default function RetrospectPage() {
     return (
       <main className="ui-page">
         <div className="max-w-6xl mx-auto space-y-4">
+          <div className="ui-card rounded-2xl p-5 space-y-2">
+            <div className="skeleton h-3 w-16" />
+            <div className="skeleton h-6 w-40" />
+            <div className="skeleton h-3 w-56" />
+          </div>
           <div className="ui-quote py-1 space-y-2">
             <div className="skeleton h-3 w-32" />
             <div className="skeleton h-6 w-full max-w-lg" />
@@ -198,6 +210,22 @@ export default function RetrospectPage() {
             </button>
           </motion.div>
         )}
+        {/* Page header -- previously this page jumped straight into the
+            pull-quote below with no page-level heading at all, the one page
+            among Dashboard/Health/Journal History/Settings/Year in Review
+            that skipped .ui-title entirely. Same header-card shape Health
+            uses right before its own pull-quote (kicker + ui-title +
+            one-line description), for a consistent "here's the page, here's
+            the headline finding" structure across every insights page. */}
+        <motion.div variants={iVariants} className="ui-card rounded-2xl p-5">
+          <p className="ui-kicker">Insights</p>
+          <h2 className="ui-title mt-1">Retrospect</h2>
+          <p className="text-sm text-ink/70 mt-2">
+            Patterns across your mood, writing, and health
+            {data?.timeline?.length ? `, built from your last ${data.timeline.length} entries.` : "."}
+          </p>
+        </motion.div>
+
         {/* Headline finding -- pull-quote treatment (left rule + serif),
             matching Health's "This month's finding" and Year in Review's "A
             pattern worth knowing" -- the same generated-sentence pattern
@@ -271,54 +299,57 @@ export default function RetrospectPage() {
           </div>
           <MoodHeatmap entries={data?.moodHeatmap || []} onSelect={setSelectedDate} />
           <DayEntryPreview date={selectedDate} />
-        </motion.div>
 
-        {/* Best/hardest single day within the same window the heatmap
-            above covers -- a more specific companion to that calendar and
-            to Mood balance's aggregate view. Clicking either reuses the
-            same selectedDate/DayEntryPreview wiring the heatmap squares
-            already use, so it opens right above rather than needing its
-            own separate preview. */}
-        {dayExtremes && (
-          <motion.div variants={iVariants} className="grid sm:grid-cols-2 gap-4">
-            <button
-              type="button"
-              onClick={() => setSelectedDate(dayExtremes.best.date)}
-              className="ui-card rounded-2xl p-4 text-left hover:bg-ink/5 transition"
-            >
-              <p className="ui-kicker">Best day, this window</p>
-              <p className="ui-hero-number text-2xl mt-1 capitalize" style={{ color: MOOD_COLOR[dayExtremes.best.mood] }}>
-                {dayExtremes.best.mood}
-              </p>
-              <p className="text-xs text-ink/50 mt-1">
-                {new Date(dayExtremes.best.rawDate || dayExtremes.best.date).toLocaleDateString(undefined, {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })}{" "}
-                · click to read
-              </p>
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedDate(dayExtremes.worst.date)}
-              className="ui-card rounded-2xl p-4 text-left hover:bg-ink/5 transition"
-            >
-              <p className="ui-kicker">Hardest day, this window</p>
-              <p className="ui-hero-number text-2xl mt-1 capitalize" style={{ color: MOOD_COLOR[dayExtremes.worst.mood] }}>
-                {dayExtremes.worst.mood}
-              </p>
-              <p className="text-xs text-ink/50 mt-1">
-                {new Date(dayExtremes.worst.rawDate || dayExtremes.worst.date).toLocaleDateString(undefined, {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })}{" "}
-                · click to read
-              </p>
-            </button>
-          </motion.div>
-        )}
+          {/* Best/hardest single day within the same window this card
+              already covers -- previously its own separate full-width row
+              right below, which read as two back-to-back cards both about
+              "which day, when" data. Nested here instead, behind a hairline
+              divider (same convention the loops/correlation card below
+              uses), so it reads as a detail of the calendar above it rather
+              than a second, competing section. Clicking either reuses the
+              same selectedDate/DayEntryPreview wiring the heatmap squares
+              use, so the preview opens right above within the same card. */}
+          {dayExtremes && (
+            <div className="mt-4 pt-4 border-t border-ink/10 grid sm:grid-cols-2 gap-4">
+              <button
+                type="button"
+                onClick={() => setSelectedDate(dayExtremes.best.date)}
+                className="rounded-xl p-3 text-left hover:bg-ink/5 transition"
+              >
+                <p className="ui-kicker">Best day, this window</p>
+                <p className="ui-hero-number text-2xl mt-1 capitalize" style={{ color: MOOD_COLOR[dayExtremes.best.mood] }}>
+                  {dayExtremes.best.mood}
+                </p>
+                <p className="text-xs text-ink/50 mt-1">
+                  {new Date(dayExtremes.best.rawDate || dayExtremes.best.date).toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}{" "}
+                  · click to read
+                </p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedDate(dayExtremes.worst.date)}
+                className="rounded-xl p-3 text-left hover:bg-ink/5 transition"
+              >
+                <p className="ui-kicker">Hardest day, this window</p>
+                <p className="ui-hero-number text-2xl mt-1 capitalize" style={{ color: MOOD_COLOR[dayExtremes.worst.mood] }}>
+                  {dayExtremes.worst.mood}
+                </p>
+                <p className="text-xs text-ink/50 mt-1">
+                  {new Date(dayExtremes.worst.rawDate || dayExtremes.worst.date).toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}{" "}
+                  · click to read
+                </p>
+              </button>
+            </div>
+          )}
+        </motion.div>
 
         {/* items-start -- CSS grid stretches row items to match the tallest
             sibling by default, so the Emotional timeline card (a fixed h-64

@@ -435,6 +435,13 @@ export default function DashboardPage() {
     : "reflective";
   const moodClass = `mood-${toneMood}`;
 
+  // recentEntries[0] is now shown in full in the "Last time you wrote"
+  // recap right after the hero -- without this, the exact same entry also
+  // showed up again as the first card in the "Recent entries" grid further
+  // down, the same content twice on one page. The grid below now only ever
+  // shows entries OTHER than the one already recapped.
+  const olderEntries = (data?.recentEntries || []).slice(1);
+
   // This is the first page anyone sees after logging in, and previously had
   // no loading state at all -- summary fetch takes a beat on a cold Render
   // instance, during which every field on this page (`data?.foo || 0`-style
@@ -593,6 +600,46 @@ export default function DashboardPage() {
           </div>
         </motion.div>
 
+        {/* Quick recap of the single most recent entry -- placed right after
+            the hero, before anything else, so there's a moment of "here's
+            where you left off" before writing today's. Distinct from the
+            "Recent entries" grid further down (which is a browsable list of
+            several entries): this is specifically the ONE most recent one,
+            given more room (full excerpt, not truncated to grid-card size).
+            Reuses recentEntries[0] from the same GET /api/dashboard/summary
+            response the rest of this page already has -- no extra fetch. */}
+        {data?.recentEntries?.[0] && (
+          <motion.div variants={iVariants} className="ui-card rounded-2xl p-5">
+            <div className="flex items-center justify-between gap-3">
+              <p className="ui-kicker">Last time you wrote</p>
+              <span className="text-[11px] text-ink/50 ui-mono shrink-0">{relativeDay(data.recentEntries[0].createdAt)}</span>
+            </div>
+            <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+              <span
+                className="h-2 w-2 rounded-full shrink-0"
+                style={{ backgroundColor: moodDotColor[data.recentEntries[0].mood] || "rgb(var(--ink) / 0.2)" }}
+              />
+              <p className="font-medium text-sm capitalize">{data.recentEntries[0].mood}</p>
+              {data.recentEntries[0].title && (
+                <>
+                  <span className="text-ink/30">·</span>
+                  <p className="font-medium text-sm truncate">{data.recentEntries[0].title}</p>
+                </>
+              )}
+            </div>
+            {data.recentEntries[0].excerpt && (
+              <p className="text-sm text-ink/70 mt-2 leading-relaxed line-clamp-3">{data.recentEntries[0].excerpt}</p>
+            )}
+            <button
+              type="button"
+              onClick={() => setOpenEntryId(data.recentEntries[0].id)}
+              className="mt-3 text-xs text-signal hover:text-signal-soft font-medium"
+            >
+              Read the full entry
+            </button>
+          </motion.div>
+        )}
+
         {/* Surfaces GET /api/dashboard/summary's `retrospectAlert` field --
             already being sent by the server, previously never rendered
             anywhere on the client. A one-line nudge toward the feature
@@ -683,7 +730,7 @@ export default function DashboardPage() {
                   yet don't see a filter that would always show "no
                   results." Filters client-side over the already-fetched
                   list (capped at 8 by the server), not a new request. */}
-              {(data?.recentEntries || []).some((e) => e.isKeepsake) && (
+              {olderEntries.some((e) => e.isKeepsake) && (
                 <div className="flex items-center gap-2 mt-3">
                   {[
                     { id: "all", label: "All" },
@@ -718,7 +765,7 @@ export default function DashboardPage() {
                   the real content via GET /api/journal/:id, since this list
                   only ever has a truncated excerpt). */}
               <div className="mt-3 grid sm:grid-cols-2 gap-3">
-                {(data?.recentEntries || [])
+                {olderEntries
                   .filter((e) => entryFilter === "all" || e.isKeepsake)
                   .slice(0, entryLimit)
                   .map((entry) => (
@@ -758,12 +805,18 @@ export default function DashboardPage() {
                     most recent entries regardless of date (see
                     dashboard/routes.js) -- it's empty here if and only if
                     hasAnyEntries is also false, so this no longer needs a
-                    separate "wrote before, just not this week" branch. */}
+                    separate "wrote before, just not this week" branch. Note
+                    this checks the full recentEntries, not olderEntries --
+                    a brand-new account with zero entries still needs this
+                    message; an account with exactly one entry (so
+                    olderEntries is empty but recentEntries isn't) already
+                    got the full story from the recap above and doesn't need
+                    a message repeating "no entries" when that's not true. */}
                 {(data?.recentEntries || []).length === 0 && (
                   <p className="text-sm text-ink/50 py-3 sm:col-span-2">No entries yet -- write your first one above.</p>
                 )}
-                {(data?.recentEntries || []).length > 0 &&
-                  (data?.recentEntries || []).filter((e) => entryFilter === "all" || e.isKeepsake).length === 0 && (
+                {olderEntries.length > 0 &&
+                  olderEntries.filter((e) => entryFilter === "all" || e.isKeepsake).length === 0 && (
                     <p className="text-sm text-ink/50 py-3 sm:col-span-2">No Keepsakes among your recent entries yet.</p>
                   )}
               </div>

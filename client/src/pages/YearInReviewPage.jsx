@@ -4,7 +4,57 @@ import { Link } from "react-router-dom";
 import { Download, Printer } from "lucide-react";
 import { apiFetch } from "../api";
 import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
-import { moodDotStyle } from "../utils/moodColors";
+import { moodDotStyle, MOOD_HEX } from "../utils/moodColors";
+
+// Same score-to-color mapping Retrospect's mood-by-weekday/timeline charts
+// use (kept as a local duplicate rather than a shared import, matching the
+// existing pattern in this codebase where each page's chart owns its own
+// copy of small derived constants like this). Lets a month's bar carry its
+// actual tone at a glance instead of every bar being one flat color.
+const SCORE_COLOR = {
+  5: MOOD_HEX.happy,
+  4: MOOD_HEX.calm,
+  3: MOOD_HEX.reflective,
+  2: MOOD_HEX.sad,
+  1: MOOD_HEX.stressed,
+  0: MOOD_HEX.angry,
+};
+
+// The full month-by-month trajectory the server now computes but previously
+// discarded (only the single best/hardest month ever reached this page).
+// bestMonth/hardestMonth are just this chart's peak and trough -- showing
+// the whole shape in between is what actually earns the "year in review"
+// name instead of two isolated stat cards.
+function MonthlyMoodChart({ months }) {
+  if (!months?.length) return null;
+  return (
+    <div className="ui-card rounded-2xl p-6">
+      <p className="ui-kicker">Mood across the year</p>
+      <p className="text-xs text-ink/45 mt-0.5">Average tone, month by month.</p>
+      <div className="mt-5 flex items-end gap-2 h-32">
+        {months.map((m) => {
+          const heightPct = Math.max(6, (m.avg / 5) * 100);
+          const color = SCORE_COLOR[Math.round(m.avg)] || "rgb(var(--ink) / 0.15)";
+          return (
+            <div key={m.month} className="flex-1 flex flex-col items-center justify-end h-full min-w-0">
+              <div
+                className="w-full rounded-t-md"
+                style={{
+                  height: `${heightPct}%`,
+                  backgroundColor: color,
+                  opacity: m.eligible ? 1 : 0.35,
+                }}
+                title={`${m.shortLabel}: ${m.count} ${m.count === 1 ? "entry" : "entries"}`}
+              />
+              <span className="mt-1.5 text-[10px] text-ink/45 ui-mono truncate">{m.shortLabel}</span>
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[11px] text-ink/40 mt-3">Faded months had too few entries to weigh heavily.</p>
+    </div>
+  );
+}
 
 const containerVariants = { hidden: {}, visible: { transition: { staggerChildren: 0.09 } } };
 const itemVariants = {
@@ -273,7 +323,7 @@ export default function YearInReviewPage() {
             space and empty padding now share one. */}
         <motion.div variants={iVariants} className="ui-card-hero p-6 md:p-8">
           <div className="text-center">
-            <p className="text-xs text-ink/60 uppercase tracking-wide">Entries written</p>
+            <p className="ui-kicker">Entries written</p>
             <p className="ui-hero-number text-6xl mt-2 text-accent-ember">{data.totalEntries}</p>
             <p className="text-sm text-ink/60 mt-2">
               across {data.daysJournaled} {data.daysJournaled === 1 ? "day" : "days"} -- {data.totalWords.toLocaleString()} words in total
@@ -281,17 +331,17 @@ export default function YearInReviewPage() {
           </div>
           <div className="grid grid-cols-2 mt-6 pt-5 border-t border-ink/10 max-w-sm mx-auto">
             <div className="text-center border-r border-ink/10">
-              <p className="text-xl font-medium">{data.longestStreak}</p>
+              <p className="ui-hero-number text-2xl">{data.longestStreak}</p>
               <p className="text-xs text-ink/55 mt-0.5">longest streak</p>
             </div>
             <div className="text-center">
               {data.topMood ? (
-                <p className="text-xl font-medium capitalize flex items-center justify-center gap-1.5">
+                <p className="ui-hero-number text-2xl capitalize flex items-center justify-center gap-1.5">
                   <span className="h-2.5 w-2.5 rounded-full" style={moodDotStyle(data.topMood)} />
                   {data.topMood}
                 </p>
               ) : (
-                <p className="text-xl font-medium">--</p>
+                <p className="ui-hero-number text-2xl">--</p>
               )}
               <p className="text-xs text-ink/55 mt-0.5">most common mood</p>
             </div>
@@ -303,7 +353,7 @@ export default function YearInReviewPage() {
               the "most common mood" stat above is a summary of. */}
           {moodEntries.length > 0 && (
             <div className="ui-card rounded-2xl p-6">
-              <p className="text-xs text-ink/60 uppercase tracking-wide">Mood balance</p>
+              <p className="ui-kicker">Mood balance</p>
               <p className="text-xs text-ink/45 mt-0.5">The whole year, by proportion.</p>
               <div className="mt-4 space-y-2.5">
                 {moodEntries.map(([mood, count]) => {
@@ -331,7 +381,7 @@ export default function YearInReviewPage() {
 
           {data.topThemes?.length > 0 && (
             <div className="ui-card rounded-2xl p-6">
-              <p className="text-xs text-ink/60 uppercase tracking-wide">What you wrote about most</p>
+              <p className="ui-kicker">What you wrote about most</p>
               <p className="text-xs text-ink/45 mt-0.5">Most-recurring themes, ranked.</p>
               {/* Consistent chip size + a count badge instead of the
                   font-size-implies-rank pattern used before (and the theme
@@ -355,19 +405,25 @@ export default function YearInReviewPage() {
           )}
         </motion.div>
 
+        {data.monthlyMood?.length > 0 && (
+          <motion.div variants={iVariants}>
+            <MonthlyMoodChart months={data.monthlyMood} />
+          </motion.div>
+        )}
+
         {(data.bestMonth || data.hardestMonth) && (
           <motion.div variants={iVariants} className="grid sm:grid-cols-2 gap-4">
             {data.bestMonth && (
               <div className="ui-card rounded-2xl p-6 text-center">
-                <p className="text-xs text-ink/60 uppercase tracking-wide">Brightest stretch</p>
-                <p className="text-xl font-medium mt-2">{data.bestMonth.label}</p>
+                <p className="ui-kicker">Brightest stretch</p>
+                <p className="ui-hero-number text-2xl mt-2">{data.bestMonth.label}</p>
                 <p className="text-xs text-ink/50 mt-1">{data.bestMonth.count} entries</p>
               </div>
             )}
             {data.hardestMonth && data.hardestMonth.label !== data.bestMonth?.label && (
               <div className="ui-card rounded-2xl p-6 text-center">
-                <p className="text-xs text-ink/60 uppercase tracking-wide">Hardest stretch</p>
-                <p className="text-xl font-medium mt-2">{data.hardestMonth.label}</p>
+                <p className="ui-kicker">Hardest stretch</p>
+                <p className="ui-hero-number text-2xl mt-2">{data.hardestMonth.label}</p>
                 <p className="text-xs text-ink/50 mt-1">{data.hardestMonth.count} entries</p>
               </div>
             )}

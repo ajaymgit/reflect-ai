@@ -139,8 +139,24 @@ router.get(
     // questions a retrospective page can answer, and this route already
     // had the raw data for both without surfacing either.
     const MOOD_SCORE = { happy: 5, calm: 4, reflective: 3, sad: 2, stressed: 1, angry: 0 };
+    // heatmapRows itself isn't date-bounded (just the most recent 400 rows,
+    // which for a long-lived account can stretch back well over a year) --
+    // the calendar heatmap gets away with that because MoodHeatmap on the
+    // client independently re-derives a trailing 182-day grid from today,
+    // so it only ever displays the recent slice regardless of how far back
+    // the raw data goes. moodTrend/moodByWeekday don't have that client-side
+    // trim, so without this filter "this window" (as the UI literally calls
+    // it) could silently mean "your entire account history," which both
+    // mutes real day-to-day pattern by drowning it in old data and makes
+    // the trend comparison meaningless for an older account. 182 days here
+    // matches HEATMAP_DAYS in RetrospectPage.jsx so every "this window"
+    // label on this page actually means the same window.
+    const RECENT_WINDOW_DAYS = 182;
+    const recentWindowStart = new Date();
+    recentWindowStart.setDate(recentWindowStart.getDate() - RECENT_WINDOW_DAYS);
+    recentWindowStart.setHours(0, 0, 0, 0);
     const moodRows = heatmapRows
-      .filter((r) => MOOD_SCORE[r.mood] !== undefined)
+      .filter((r) => MOOD_SCORE[r.mood] !== undefined && new Date(r.createdAt) >= recentWindowStart)
       .map((r) => ({
         mood: r.mood,
         score: MOOD_SCORE[r.mood],

@@ -260,9 +260,24 @@ export default function ChatPage() {
       if (elapsed < minHumanDelay) {
         await sleep(minHumanDelay - elapsed);
       }
+      // Previously only `data.payload.question` was shown as the bot's
+      // message -- `data.payload.insight` (the empathetic/validating line
+      // the prompt explicitly asks the model to lead with, e.g. "That
+      // sounds draining." or "I hear you.") was generated on every turn and
+      // then silently discarded here, never rendered anywhere in the UI.
+      // That's very likely the whole "sounds too stern and only
+      // questioning" complaint: the warmth was always being produced, it
+      // just never reached the screen -- every reply landed as a bare
+      // question with nothing softening it first. The server now combines
+      // and persists these as `payload.aiResponse` (see processChatTurn in
+      // server/src/modules/chat/service.js) so a page reload shows the same
+      // text a live reply did; the local join here is just a safety net in
+      // case an older cached response shape shows up mid-rollout.
+      const aiResponse =
+        data.payload.aiResponse || [data.payload.insight, data.payload.question].filter(Boolean).join(" ").trim();
       const next = {
         userMessage: userMsg,
-        aiResponse: data.payload.question,
+        aiResponse: aiResponse || data.payload.question,
         evidence: data.payload.evidence,
         confidence: data.payload.confidence,
         fallback: data.payload.fallback,
@@ -697,7 +712,7 @@ export default function ChatPage() {
           <aside className="glass rounded-2xl p-4 md:p-5 space-y-4 xl:w-80 xl:shrink-0 xl:h-full xl:overflow-y-auto scroll-area">
             <div className="flex items-center gap-2">
               <PenSquare size={16} className="text-ink/50" />
-              <p className="text-base font-medium">Quick journal</p>
+              <h3 className="font-medium">Quick journal</h3>
             </div>
             <FirstTimeTip id="chat-quickjournal-keepsake">
               This composer now supports Keepsakes too -- flag an entry here the same way you can from Write.
@@ -780,7 +795,7 @@ export default function ChatPage() {
             <div className="border-t border-ink/10 pt-4 space-y-3">
               <div className="flex items-center gap-2">
                 <Feather size={16} className="text-ink/50" />
-                <p className="text-base font-medium">Emotional timeline</p>
+                <h3 className="font-medium">Emotional timeline</h3>
               </div>
               {/* One horizontal scrollable strip instead of two separate
                   elements (a bar-chart sparkline, then a whole separate

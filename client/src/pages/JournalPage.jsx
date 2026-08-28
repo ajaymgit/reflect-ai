@@ -783,15 +783,27 @@ export default function JournalPage() {
 
           {/* Time capsules waiting to open, and any that have already
               passed their reveal date -- see GET /api/journal/capsules.
-              Only rendered once there's actually at least one, same honest
-              "nothing to show yet" pattern as On This Day above. */}
-          {(capsules.waiting.length > 0 || capsules.ready.length > 0) && (
-            <div className="pb-3 border-b border-ink/10 space-y-2">
-              <h3 className="font-medium flex items-center gap-1.5">
-                <Mail size={14} className="text-ink/50" />
-                Time capsules
-              </h3>
-              {capsules.ready.map((entry) => (
+              Previously only rendered once there's actually at least one --
+              matched "On This Day"'s honest empty-state pattern, but unlike
+              On This Day (which is passive, nothing to opt into), Time
+              Capsule is a real feature someone opts into via the composer's
+              toggle, and with zero nav entry or dedicated page anywhere in
+              the app, hiding this section whenever it was empty meant the
+              feature was invisible until you already knew to use it. Always
+              showing it now, with an explanation, so it's actually
+              discoverable. */}
+          <div className="pb-3 border-b border-ink/10 space-y-2">
+            <h3 className="font-medium flex items-center gap-1.5">
+              <Mail size={14} className="text-ink/50" />
+              Time capsules
+            </h3>
+            {capsules.waiting.length === 0 && capsules.ready.length === 0 && (
+              <p className="text-xs text-ink/50 leading-relaxed">
+                Seal a letter to your future self -- toggle "Time Capsule" while writing below, pick a reveal date,
+                and it won't appear anywhere (not even to you) until then.
+              </p>
+            )}
+            {capsules.ready.map((entry) => (
                 <button
                   key={entry._id}
                   type="button"
@@ -819,8 +831,7 @@ export default function JournalPage() {
                   <p className="text-sm mt-1 text-ink/50">Still sealed</p>
                 </div>
               ))}
-            </div>
-          )}
+          </div>
 
           {/* Previously the only way to see an old entry from this page was
               the single-line "Related previous entry" card below -- no way
@@ -935,7 +946,7 @@ export default function JournalPage() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="ui-kicker">What you write about</p>
-                <p className="text-xs text-ink/50 mt-1">
+                <p className="text-xs text-ink/60 mt-1">
                   Your most recurring journal themes, most-written-about first. Click one to search for it.
                 </p>
               </div>
