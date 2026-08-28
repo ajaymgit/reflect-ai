@@ -141,9 +141,16 @@ export default function RetrospectPage() {
             chart plus a couple lines of text) was being stretched down to
             match the right column's full stacked height (Mood balance +
             Recurring themes + Writing rhythm), leaving a large empty void
-            under the chart bounded by nothing but the card's own border. */}
+            under the chart bounded by nothing but the card's own border.
+            items-start stopped that void from being enclosed in a card
+            border, but the left column (just the chart) was still much
+            shorter than the right column's three stacked cards, leaving a
+            plain, unbounded empty gap in its place -- so Recurring themes
+            (the shortest of the three right-column cards) now lives under
+            the chart instead, roughly balancing both columns' heights. */}
         <motion.div variants={iVariants} className="grid lg:grid-cols-3 gap-4 items-start">
-          <div className="ui-card rounded-2xl p-4 lg:col-span-2">
+          <div className="ui-card rounded-2xl p-4 lg:col-span-2 space-y-4">
+            <div>
             <h3 className="font-medium">Emotional timeline</h3>
             <p className="text-xs text-ink/60 mt-2">
               Each bar shows the emotional tone of that day, colored to match. Click a bar to see what you wrote.
@@ -231,18 +238,14 @@ export default function RetrospectPage() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </div>
-
-          <div className="space-y-4">
-            {/* Mood distribution donut -- the proportional counterpart to
-                the day-by-day bar chart on the left: not "what happened
-                when" but "how much of each, overall." */}
-            <div className="ui-card rounded-2xl p-4">
-              <h3 className="font-medium">Mood balance</h3>
-              <p className="text-xs text-ink/60 mt-1">Last six months, by proportion.</p>
-              <MoodBalance distribution={moodDistribution} />
             </div>
 
+            {/* Moved here from the right column -- see the items-start
+                comment above the grid for why. Recurring themes is the
+                shortest of the three right-column cards, so it's the one
+                that best balances the left column's height against the
+                right column's remaining two (Mood balance + Writing
+                rhythm) without making the left column overshoot instead. */}
             <div className="ui-card rounded-2xl p-4 space-y-3">
               <h3 className="font-medium">Recurring themes</h3>
               {/* Neutral pills instead of colored/tinted ones -- functions as
@@ -260,6 +263,17 @@ export default function RetrospectPage() {
                   <p className="text-xs text-ink/50">Not enough entries yet to detect a recurring theme.</p>
                 )}
               </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {/* Mood distribution donut -- the proportional counterpart to
+                the day-by-day bar chart on the left: not "what happened
+                when" but "how much of each, overall." */}
+            <div className="ui-card rounded-2xl p-4">
+              <h3 className="font-medium">Mood balance</h3>
+              <p className="text-xs text-ink/60 mt-1">Last six months, by proportion.</p>
+              <MoodBalance distribution={moodDistribution} />
             </div>
 
             {/* Purely computed from entry timestamps (see writingRhythm in

@@ -324,7 +324,15 @@ export default function SettingsPage() {
         {/* Two columns on desktop instead of one long vertical stack --
             matching the card-grid pattern Dashboard already uses for its
             Health/Retrospect preview row, so each section reads as its own
-            card rather than one more box in an undifferentiated list. */}
+            card rather than one more box in an undifferentiated list.
+            items-start keeps each column's own height instead of both
+            columns stretching to match whichever is taller (see the
+            equivalent comment on RetrospectPage's grid). The 8 account/
+            security/data sections used to all sit in the right column while
+            the left only ever held Appearance/Account/Reminders -- 3 cards
+            against 8 left a large empty gap under the shorter left column.
+            Active sessions, Two-factor, and App lock moved left to roughly
+            balance both columns' total height instead. */}
         <div className="grid md:grid-cols-2 gap-4 items-start">
           <motion.div variants={iVariants} className="space-y-4">
             {/* Theme mode + the two hue sliders used to be two separate,
@@ -430,6 +438,32 @@ export default function SettingsPage() {
               <ReminderSection user={user} setUser={setUser} />
               <WeeklyDigestSection user={user} setUser={setUser} />
             </SectionCard>
+
+            {/* Moved here from the right column -- see the items-start
+                comment above the grid for why. These three plus Reminders
+                above now roughly match the right column's remaining five
+                sections in total height. */}
+            <SectionCard icon={Monitor} title="Active sessions">
+              <ActiveSessionsSection />
+            </SectionCard>
+
+            {/* Split out from Security into its own card -- previously both
+                lived under one "Security" heading and the combined block
+                was the single busiest, most text-heavy section on the
+                page. */}
+            <SectionCard icon={ShieldCheck} title="Two-factor authentication">
+              <TwoFactorSection user={user} setUser={setUser} />
+            </SectionCard>
+
+            {/* Client-only, no server route at all -- separate from 2FA/
+                password below in the same way Change password got its own
+                card: this is a device-level "quick glance" deterrent (locks
+                the app after the tab closes), not part of the account's
+                real security boundary. See useAppLock.js for the full
+                reasoning. */}
+            <SectionCard icon={Lock} title="App lock">
+              <AppLockSection userId={user?.id} />
+            </SectionCard>
           </motion.div>
 
           <motion.div variants={iVariants} className="space-y-4">
@@ -454,17 +488,6 @@ export default function SettingsPage() {
               {logoutStatus && <p role="alert" className="text-xs text-red-300 mt-2">{logoutStatus}</p>}
             </SectionCard>
 
-            {/* The granular counterpart to "Log out everywhere" above --
-                that's an all-or-nothing wipe; this lets someone actually see
-                what's signed in (an old laptop, a browser they don't
-                recognize) and end just that one. Its own card rather than
-                folded into Security, same reasoning every other split here
-                already follows: this has its own list + per-row actions, not
-                a single button. */}
-            <SectionCard icon={Monitor} title="Active sessions">
-              <ActiveSessionsSection />
-            </SectionCard>
-
             {/* Previously the only way to change a password at all was the
                 forgot-password email flow -- no way to just rotate it while
                 already logged in. Its own card rather than folding into
@@ -473,24 +496,6 @@ export default function SettingsPage() {
                 action. */}
             <SectionCard icon={KeyRound} title="Change password">
               <ChangePasswordSection />
-            </SectionCard>
-
-            {/* Split out from Security into its own card -- previously both
-                lived under one "Security" heading and the combined block
-                was the single busiest, most text-heavy section on the
-                page. */}
-            <SectionCard icon={ShieldCheck} title="Two-factor authentication">
-              <TwoFactorSection user={user} setUser={setUser} />
-            </SectionCard>
-
-            {/* Client-only, no server route at all -- separate from 2FA/
-                password above in the same way Change password got its own
-                card: this is a device-level "quick glance" deterrent (locks
-                the app after the tab closes), not part of the account's
-                real security boundary. See useAppLock.js for the full
-                reasoning. */}
-            <SectionCard icon={Lock} title="App lock">
-              <AppLockSection userId={user?.id} />
             </SectionCard>
 
             <SectionCard icon={HeartPulse} title="Integrations">
