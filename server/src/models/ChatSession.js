@@ -57,6 +57,25 @@ const chatTurnSchema = new mongoose.Schema(
     },
     focus: { type: String, default: "general_reflection" },
     createdAt: { type: Date, default: Date.now },
+    // A lightweight reference, not the audio itself -- the real bytes live
+    // in their own VoiceNote document (see models/VoiceNote.js) and are
+    // fetched on demand only when someone presses play, not on every chat
+    // history load. id/durationSec/mimeType are just enough metadata to
+    // render a voice-note bubble (duration label, waveform placeholder)
+    // without a fetch. Not encrypted -- unlike userMessage/aiResponse, none
+    // of these three values is itself content; the actual recording is
+    // encrypted where it's actually stored.
+    voiceNote: {
+      type: new mongoose.Schema(
+        {
+          id: { type: mongoose.Schema.Types.ObjectId, ref: "VoiceNote" },
+          durationSec: Number,
+          mimeType: String,
+        },
+        { _id: false },
+      ),
+      default: null,
+    },
   },
   { _id: false, toJSON: { getters: true }, toObject: { getters: true } },
 );

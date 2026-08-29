@@ -5,9 +5,11 @@ import { BookOpen, Lightbulb, Mail, Share2, Shuffle, Sparkles } from "lucide-rea
 import { apiFetch, describeError } from "../api";
 import EntryModal, { EntryModalById } from "../components/EntryModal";
 import FirstTimeTip from "../components/FirstTimeTip";
+import MicButton from "../components/MicButton";
 import JournalHistoryView from "./JournalHistoryPage";
 import { suggestMoodFromText } from "../utils/moodSuggestion";
 import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
+import useSpeechToText from "../hooks/useSpeechToText";
 
 // Same stagger/entrance pattern Dashboard, Retrospect, Health, and Year in
 // Review all use -- Journal (the single most-visited page in the app, and
@@ -391,6 +393,16 @@ export default function JournalPage() {
   }, [content]);
   const suggestedMood = useMemo(() => suggestMoodFromText(content), [content]);
 
+  // Voice-to-text for the composer -- dictate instead of type. Appends each
+  // finalized phrase to whatever's already in the box rather than replacing
+  // it, so someone can type a bit, dictate a bit, type more. See
+  // hooks/useSpeechToText.js for why this is dictation-into-text, not audio
+  // recording.
+  const speech = useSpeechToText({
+    onResult: (text) =>
+      setContent((c) => (c && !/\s$/.test(c) ? `${c} ${text}` : `${c}${text}`)),
+  });
+
   // "A memory from your past" -- a genuinely random past entry (never
   // today's own), the fallback for the sidebar's nostalgia slot on the
   // (much more common) days On This Day has nothing for this exact
@@ -723,20 +735,35 @@ export default function JournalPage() {
           />
           <div className="relative">
             <textarea
-              className="ui-input min-h-72"
+              className={`ui-input min-h-72 ${speech.supported ? "pr-11" : ""}`}
               placeholder="Write freely..."
               value={content}
               onChange={(e) => setContent(e.target.value)}
             />
+            <MicButton speech={speech} className="absolute top-2.5 right-2.5" />
             {/* Live word count -- small, functional, bottom-right corner of
                 the textarea itself rather than a separate row, so it doesn't
-                compete for attention with anything else on the page. */}
-            {wordCount > 0 && (
+                compete for attention with anything else on the page. Hidden
+                while dictating so it doesn't collide with the interim
+                caption occupying the same corner. */}
+            {wordCount > 0 && !speech.interimText && (
               <span className="absolute bottom-2.5 right-3 text-[11px] text-ink/50 ui-mono pointer-events-none">
                 {wordCount} {wordCount === 1 ? "word" : "words"}
               </span>
             )}
+            {/* Live "ghost" caption of what's currently being heard, before
+                it's finalized into `content` -- without this, nothing
+                visibly happens for the first second or two of a sentence,
+                which reads as "is this even working?" the same complaint
+                real dictation UIs (Google Docs voice typing, Otter) solve
+                with exactly this kind of interim preview. */}
+            {speech.interimText && (
+              <span className="absolute bottom-2.5 right-3 left-3 text-[13px] italic text-ink/45 truncate pointer-events-none text-right">
+                {speech.interimText}
+              </span>
+            )}
           </div>
+          {speech.error && <p className="text-xs text-ember">{speech.error}</p>}
           <FirstTimeTip id="composer-keepsake-capsule">
             Turn on <strong>Keepsake</strong> to flag an entry as one worth revisiting later, or seal it as a{" "}
             <strong>letter to your future self</strong> -- both are optional, and independent of each other.

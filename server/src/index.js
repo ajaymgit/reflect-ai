@@ -5,9 +5,11 @@ import chatRoutes from "./modules/chat/routes.js";
 import dashboardRoutes from "./modules/dashboard/routes.js";
 import exportRoutes from "./modules/export/routes.js";
 import googleHealthRoutes from "./modules/googleHealth/routes.js";
+import habitRoutes from "./modules/habits/routes.js";
 import healthRoutes from "./modules/health/routes.js";
 import journalRoutes from "./modules/journal/routes.js";
 import retrospectRoutes from "./modules/retrospect/routes.js";
+import voiceNoteRoutes from "./modules/voiceNotes/routes.js";
 import yearInReviewRoutes from "./modules/yearInReview/routes.js";
 import { env } from "./shared/config/env.js";
 import { errorHandler, notFoundHandler } from "./shared/middleware/errorHandler.js";
@@ -85,7 +87,15 @@ app.use(
     credentials: true,
   }),
 );
-app.use(express.json({ limit: "1mb" }));
+// Raised from 1mb -- voice notes (see modules/voiceNotes/routes.js) upload
+// their audio as a base64 string in a normal JSON body, which after
+// base64's ~33% inflation plus encryptField's own overhead can approach a
+// few MB for a couple minutes of speech even at a low bitrate.
+// createVoiceNoteSchema's own 8M-character cap is the real ceiling; this
+// limit just needs enough headroom above that cap to not clip a legitimate
+// upload before validation even gets a chance to reject an oversized one
+// with a clear error.
+app.use(express.json({ limit: "9mb" }));
 app.use(requestIdMiddleware);
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
@@ -96,6 +106,8 @@ app.use("/api/journal", journalRoutes);
 app.use("/api/retrospect", retrospectRoutes);
 app.use("/api/health-data", healthRoutes);
 app.use("/api/google-health", googleHealthRoutes);
+app.use("/api/habits", habitRoutes);
+app.use("/api/voice-notes", voiceNoteRoutes);
 app.use("/api/export", exportRoutes);
 app.use("/api/year-in-review", yearInReviewRoutes);
 

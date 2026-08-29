@@ -16,6 +16,7 @@ import {
 import { apiFetch, describeError } from "../api";
 import { isoDay } from "../utils/date";
 import DayEntryPreview from "../components/DayEntryPreview";
+import HabitTracker from "../components/HabitTracker";
 import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
 import { MOOD_HEX } from "../utils/moodColors";
 
@@ -347,6 +348,17 @@ export default function HealthPage() {
               </p>
               <LogHealthDataForm onSaved={loadOverview} />
             </div>
+          </div>
+        </motion.div>
+
+        {/* Habits/goals live here (not their own nav page) since this is
+            already the natural pillar-home for daily self-tracking -- same
+            reasoning as HealthData itself, one row per user per day. Full
+            variant: add, toggle any of the last 7 days, streaks, delete. */}
+        <motion.div variants={iVariants}>
+          <p className="ui-kicker mb-2">Habits</p>
+          <div className="ui-card rounded-2xl p-4">
+            <HabitTracker />
           </div>
         </motion.div>
 

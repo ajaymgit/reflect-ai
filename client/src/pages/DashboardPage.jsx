@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, YAxis } from "recharts";
 import { apiFetch, describeError } from "../api";
 import AnimatedNumber from "../components/AnimatedNumber";
+import HabitTracker from "../components/HabitTracker";
 import MoodCalendar from "../components/MoodCalendar";
 import KeepsakesLauncher from "../components/MoodGlobeLauncher";
 import { EntryModalById } from "../components/EntryModal";
@@ -814,6 +815,20 @@ export default function DashboardPage() {
             <RetrospectPreviewCard retro={retro} />
           </motion.div>
         </div>
+
+        {/* Compact habit tracker -- today's toggle + streak only, no 7-day
+            history or delete controls (those live on the full Health page).
+            Reuses the exact same /api/habits data HealthPage's full
+            HabitTracker instance reads, just a shorter render of it. */}
+        <motion.div variants={iVariants} className="ui-card rounded-2xl p-5">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <p className="ui-kicker">Habits</p>
+            <Link to="/health" className="text-xs text-ink/50 hover:text-ink/80 inline-flex items-center gap-1">
+              Full page <ArrowRight size={11} />
+            </Link>
+          </div>
+          <HabitTracker compact />
+        </motion.div>
 
         <motion.div variants={iVariants}>
             <div className="ui-card rounded-2xl p-5">

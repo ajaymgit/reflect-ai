@@ -1,11 +1,16 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Feather, PenSquare, RotateCcw, Sparkles, SlidersHorizontal } from "lucide-react";
+import { ChevronDown, Feather, Phone, PenSquare, RotateCcw, Sparkles, SlidersHorizontal } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { apiFetch, describeError } from "../api";
 import { useAuth } from "../context/AuthContext";
 import FirstTimeTip from "../components/FirstTimeTip";
+import MicButton from "../components/MicButton";
+import VoiceChatOverlay from "../components/VoiceChatOverlay";
+import VoiceNotePlayer from "../components/VoiceNotePlayer";
+import VoiceRecorder from "../components/VoiceRecorder";
 import usePrefersReducedMotion from "../hooks/usePrefersReducedMotion";
+import useSpeechToText from "../hooks/useSpeechToText";
 import { suggestMoodFromText } from "../utils/moodSuggestion";
 import { MOODS as moodOptions, moodDotStyle } from "../utils/moodColors";
 
@@ -69,6 +74,13 @@ export default function ChatPage() {
   const { user } = useAuth();
   const location = useLocation();
   const [message, setMessage] = useState(location.state?.prefill || "");
+  // Same voice-input hook as JournalPage's composer -- see
+  // hooks/useSpeechToText.js. Appends onto whatever's already typed rather
+  // than replacing it.
+  const speech = useSpeechToText({
+    onResult: (text) =>
+      setMessage((m) => (m && !/\s$/.test(m) ? `${m} ${text}` : `${m}${text}`)),
+  });
   const [turns, setTurns] = useState([]);
   const [sessionLoadError, setSessionLoadError] = useState(false);
   // True only until the initial /api/chat/session fetch settles. Without
@@ -96,6 +108,17 @@ export default function ChatPage() {
   const [useMemory, setUseMemory] = useState(true);
   const [statusText, setStatusText] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Full hands-free voice conversation mode (see VoiceChatOverlay.jsx) --
+  // separate from the WhatsApp-style voice NOTE feature (VoiceRecorder):
+  // that records and sends one message; this is a continuous spoken
+  // back-and-forth that keeps listening/speaking turn after turn until
+  // closed.
+  const [voiceChatOpen, setVoiceChatOpen] = useState(false);
+  const voiceChatSupported =
+    typeof window !== "undefined" &&
+    Boolean(window.SpeechRecognition || window.webkitSpeechRecognition) &&
+    Boolean(window.speechSynthesis) &&
+    Boolean(navigator.mediaDevices?.getUserMedia);
   const [resettingChat, setResettingChat] = useState(false);
   const reducedMotion = usePrefersReducedMotion();
   const hydratedDraft = useRef(false);
@@ -225,22 +248,17 @@ export default function ChatPage() {
     }
   }
 
-  async function sendMessage(e) {
-    e.preventDefault();
-    // `loading` guard here, not just the disabled Send button -- the same
-    // double-submit class of bug already fixed for journal saves (see
-    // JournalPage's save()). The button's disabled state is set from
-    // `loading`, but that only takes effect after React commits the
-    // re-render; a fast Enter-key repeat (or Enter immediately followed by
-    // a Send click) can call sendMessage a second time before that commit
-    // happens, firing two POST /api/chat/message for what was meant to be
-    // one message and appending two turns to the transcript.
-    if (loading || !message.trim()) return;
+  // Shared by the normal text composer and the voice-note Send button --
+  // both end up posting one turn to POST /api/chat/message, differing only
+  // in whether `extra` carries a voiceNote reference. Pulled out of
+  // sendMessage (which used to be the only caller) so the voice-note flow
+  // doesn't duplicate the whole request/optimistic-turn/error-handling
+  // block.
+  async function postChatMessage(userMsg, extra = {}) {
+    if (loading) return;
     setLoading(true);
     setStatusText(chatMode === "analysis" ? "Analyzing patterns..." : "Thinking...");
-    const userMsg = message;
     const startedAt = Date.now();
-    setMessage("");
     try {
       const data = await apiFetch("/api/chat/message", {
         method: "POST",
@@ -252,6 +270,7 @@ export default function ChatPage() {
             useMemory,
             persona,
           },
+          ...(extra.voiceNote ? { voiceNote: extra.voiceNote } : {}),
         }),
       });
       const complexityBoost = Math.min(1000, Math.floor(userMsg.trim().length * 18));
@@ -283,6 +302,14 @@ export default function ChatPage() {
         fallback: data.payload.fallback,
         reasoning: data.payload.reasoning,
         focus: data.payload.currentFocus || "general_reflection",
+        // Client-only fields (never sent to/read from the server as such) --
+        // voiceNote is the same { id, durationSec, mimeType } reference the
+        // server stored; localUrl/localBars let this device's own bubble
+        // play back instantly without re-fetching audio it just uploaded
+        // (see VoiceNotePlayer.jsx).
+        voiceNote: extra.voiceNote || null,
+        localUrl: extra.localUrl || null,
+        localBars: extra.localBars || null,
       };
       setTurns((prev) => [...prev, next]);
       setMeta({ readiness: data.readiness, confidence: data.payload.confidence });
@@ -301,12 +328,41 @@ export default function ChatPage() {
           fallback: true,
           reasoning: `Request failed before the chatbot could respond safely: ${error?.message || "unknown_error"}.`,
           focus: "general_reflection",
+          voiceNote: extra.voiceNote || null,
+          localUrl: extra.localUrl || null,
+          localBars: extra.localBars || null,
         },
       ]);
     } finally {
       setLoading(false);
       setStatusText("");
     }
+  }
+
+  async function sendMessage(e) {
+    e.preventDefault();
+    // `loading` guard here, not just the disabled Send button -- the same
+    // double-submit class of bug already fixed for journal saves (see
+    // JournalPage's save()). The button's disabled state is set from
+    // `loading`, but that only takes effect after React commits the
+    // re-render; a fast Enter-key repeat (or Enter immediately followed by
+    // a Send click) can call sendMessage a second time before that commit
+    // happens, firing two POST /api/chat/message for what was meant to be
+    // one message and appending two turns to the transcript.
+    if (loading || !message.trim()) return;
+    const userMsg = message;
+    setMessage("");
+    await postChatMessage(userMsg);
+  }
+
+  // Called by VoiceRecorder once a note has finished uploading -- `transcript`
+  // is whatever Web Speech API produced (editable by the user in the
+  // recorder's preview step before sending), falling back to a plain label
+  // so the AI backend (which only ever reads `message`) still has something
+  // to respond to even in a browser with no speech recognition at all.
+  async function sendVoiceNote({ voiceNote, transcript, localUrl, localBars }) {
+    const userMsg = transcript?.trim() || "(voice note)";
+    await postChatMessage(userMsg, { voiceNote, localUrl, localBars });
   }
 
   async function saveQuickEntry() {
@@ -435,6 +491,23 @@ export default function ChatPage() {
                   >
                     <RotateCcw size={11} />
                     New chat
+                  </button>
+                )}
+                {/* Only offered when this browser genuinely supports all
+                    three pieces it needs (speech recognition, speech
+                    synthesis, mic access) -- hidden rather than shown
+                    disabled, same graceful-degradation pattern as the
+                    dictation mic and voice-note recorder elsewhere in this
+                    app. */}
+                {voiceChatSupported && (
+                  <button
+                    type="button"
+                    onClick={() => setVoiceChatOpen(true)}
+                    title="Start a hands-free voice conversation"
+                    className="text-xs px-3 py-1 rounded-full bg-ink/5 border border-ink/10 hover:bg-ink/10 inline-flex items-center gap-1.5"
+                  >
+                    <Phone size={11} />
+                    Voice chat
                   </button>
                 )}
                 <Link to="/dashboard" className="text-xs px-3 py-1 rounded-full bg-ink/5 border border-ink/10 hover:bg-ink/10">
@@ -620,7 +693,22 @@ export default function ChatPage() {
                 >
                   <div className="rounded-2xl p-3 max-w-2xl ml-auto bg-signal/30 soft-border">
                     <p className="text-xs text-signal mb-1">You</p>
-                    <p className="text-[15px] leading-7">{turn.userMessage}</p>
+                    {turn.voiceNote ? (
+                      <div className="space-y-1.5">
+                        <VoiceNotePlayer voiceNote={turn.voiceNote} localUrl={turn.localUrl} localBars={turn.localBars} />
+                        {/* Transcript caption underneath the player, same as
+                            WhatsApp's own voice-message transcription
+                            feature -- turn.userMessage IS the transcript
+                            (that's what the AI actually read to respond),
+                            just also shown here so a played-back voice note
+                            reads the same way a typed one would. */}
+                        {turn.userMessage && turn.userMessage !== "(voice note)" && (
+                          <p className="text-[13px] leading-6 text-ink/60 italic">{turn.userMessage}</p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-[15px] leading-7">{turn.userMessage}</p>
+                    )}
                   </div>
                   <div className="glass rounded-2xl p-4 max-w-2xl">
                     <p className="text-xs text-signal mb-1">ReflectAI</p>
@@ -675,29 +763,52 @@ export default function ChatPage() {
                   </button>
                 ))}
               </div>
-              <form onSubmit={sendMessage} className="flex gap-2 items-end">
-                <textarea
-                  rows={2}
-                  // .ui-input -- same composer treatment JournalPage's
-                  // textarea uses, instead of a one-off hardcoded
-                  // bg-[#1f2a22]/border-ink/10 combo that looked like a
-                  // different, unstyled input next to the rest of the app.
-                  className={`ui-input flex-1 resize-none min-h-11 ${
-                    writingMode === "typewriter" ? "text-lg leading-8" : ""
-                  }`}
-                  placeholder="Message ReflectAI... (Enter to send, Shift+Enter for new line)"
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  onKeyDown={onComposerKeyDown}
-                />
-                <motion.button
-                  whileTap={reducedMotion || loading || !message.trim() ? undefined : { scale: 0.94 }}
-                  className="px-5 min-h-11 ui-button-primary"
-                  disabled={loading || !message.trim()}
-                >
-                  Send
-                </motion.button>
-              </form>
+              {/* Same swap WhatsApp itself does: an empty composer shows the
+                  voice-note mic in the send button's slot; typing anything
+                  swaps it back to the normal text form. Once a recording
+                  starts, VoiceRecorder expands to fill this whole row on its
+                  own (see its "recording"/"preview" phases) rather than
+                  sitting next to a form someone could still type into --
+                  matches WhatsApp's own behavior of the input being fully
+                  replaced while recording. */}
+              {message.trim() || loading ? (
+                <form onSubmit={sendMessage} className="flex gap-2 items-end">
+                  <div className="relative flex-1">
+                    <textarea
+                      rows={2}
+                      // .ui-input -- same composer treatment JournalPage's
+                      // textarea uses, instead of a one-off hardcoded
+                      // bg-[#1f2a22]/border-ink/10 combo that looked like a
+                      // different, unstyled input next to the rest of the app.
+                      className={`ui-input w-full resize-none min-h-11 ${
+                        speech.supported ? "pr-11" : ""
+                      } ${writingMode === "typewriter" ? "text-lg leading-8" : ""}`}
+                      placeholder="Message ReflectAI... (Enter to send, Shift+Enter for new line)"
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      onKeyDown={onComposerKeyDown}
+                    />
+                    <MicButton speech={speech} className="absolute top-2 right-2" />
+                  </div>
+                  <motion.button
+                    whileTap={reducedMotion || loading || !message.trim() ? undefined : { scale: 0.94 }}
+                    className="px-5 min-h-11 ui-button-primary"
+                    disabled={loading || !message.trim()}
+                  >
+                    Send
+                  </motion.button>
+                </form>
+              ) : (
+                <div className="flex gap-2 items-end justify-end w-full">
+                  <VoiceRecorder onSend={sendVoiceNote} />
+                </div>
+              )}
+              {/* Live "ghost" caption of what's currently being heard -- the
+                  textarea here is only 2 rows, too short to overlay interim
+                  text inside it the way JournalPage's much taller composer
+                  does, so it renders as its own line instead. */}
+              {speech.interimText && <p className="text-xs italic text-ink/50">"{speech.interimText}"</p>}
+              {speech.error && <p className="text-xs text-ember">{speech.error}</p>}
               <p className="text-xs text-ink/60">
                 ReflectAI supports self-reflection and is not a medical service.
               </p>
@@ -839,6 +950,11 @@ export default function ChatPage() {
           </aside>
         </motion.div>
       </main>
+      <AnimatePresence>
+        {voiceChatOpen && (
+          <VoiceChatOverlay turns={turns} onSubmit={postChatMessage} onClose={() => setVoiceChatOpen(false)} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

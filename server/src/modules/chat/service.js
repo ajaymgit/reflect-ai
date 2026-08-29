@@ -1418,7 +1418,7 @@ export function buildHeuristicResponse({ userMessage, context, evidenceCandidate
   return payload;
 }
 
-export async function processChatTurn({ userId, userMessage, chatSettings = {}, ablation = {} }) {
+export async function processChatTurn({ userId, userMessage, chatSettings = {}, ablation = {}, voiceNote = null }) {
   const normalizedSettings = normalizeChatSettings(chatSettings);
   const context = await buildChatContext(userId);
   const journalPool = normalizedSettings.useMemory ? context.journals : [];
@@ -1631,6 +1631,9 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {}, 
     reasoning: finalPayload.reasoning,
     focus: finalPayload.currentFocus || "general_reflection",
     createdAt: new Date(),
+    // See models/ChatSession.js's chatTurnSchema.voiceNote -- just the
+    // { id, durationSec, mimeType } reference, never the audio itself.
+    voiceNote,
   });
 
   return {

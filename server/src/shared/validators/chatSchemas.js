@@ -11,6 +11,22 @@ export const chatMessageSchema = z.object({
         persona: z.enum(["gentle", "stoic", "cbt"]).optional(),
       })
       .optional(),
+    // Set when this turn was sent as a voice note -- the client already
+    // uploaded the actual audio to POST /api/voice-notes (see
+    // modules/voiceNotes/routes.js) and just references it here by id;
+    // `message` itself is still the transcribed text (or a placeholder if
+    // transcription produced nothing), so every existing AI-processing path
+    // that reads `message` keeps working unchanged. Zod strips unrecognized
+    // keys by default -- this has to be listed explicitly or it would
+    // silently never reach the server (the same class of bug already hit
+    // once with chat's `persona` field).
+    voiceNote: z
+      .object({
+        id: z.string().min(1),
+        durationSec: z.number().min(0),
+        mimeType: z.string().min(1).max(100),
+      })
+      .optional(),
   }),
   params: z.object({}).optional(),
   query: z.object({}).optional(),

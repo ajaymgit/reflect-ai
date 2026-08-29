@@ -32,6 +32,7 @@ router.post(
       userId: req.user._id,
       userMessage: req.validated.body.message,
       chatSettings: req.validated.body.settings || {},
+      voiceNote: req.validated.body.voiceNote || null,
     });
 
     res.json(result);
