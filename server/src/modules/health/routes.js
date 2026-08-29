@@ -17,7 +17,15 @@ const router = Router();
 // variability), not a medical-grade measurement. Baseline 50, nudged by how
 // each present signal deviates from a normal-ish reference point; any
 // missing signal just contributes nothing rather than being guessed at.
-function estimateStressScore({ restingHeartRate, sleepHours, heartRateVariability }) {
+// Exported (not just used locally) so googleHealth/service.js's sync job
+// can derive the same stress score from the same heuristic instead of a
+// second, independently-drifting copy -- unlike chat/service.js and
+// retrospect/service.js's deliberately-duplicated AI provider config (see
+// those files' comments), this is a small, stable, non-safety-critical pure
+// function where sharing is the lower-risk choice: a future tuning change
+// to the heuristic should apply identically regardless of which platform's
+// data triggered it.
+export function estimateStressScore({ restingHeartRate, sleepHours, heartRateVariability }) {
   let score = 50;
   if (Number.isFinite(restingHeartRate)) score += (restingHeartRate - 62) * 1.1;
   if (Number.isFinite(sleepHours)) score += (7 - sleepHours) * 6;
@@ -59,7 +67,7 @@ function getStatus(stressScore = 0) {
 // and falls back to it for any signal the current request didn't send, so
 // the derived stressScore reflects the day's best-known data, not just
 // whatever happened to be in this one request.
-async function resolveStressInputs(userId, date, { restingHeartRate, sleepHours, heartRateVariability }) {
+export async function resolveStressInputs(userId, date, { restingHeartRate, sleepHours, heartRateVariability }) {
   const existing = await HealthData.findOne({ userId, date }).select("restingHeartRate sleepHours");
   return {
     restingHeartRate: restingHeartRate !== undefined ? restingHeartRate : existing?.restingHeartRate,
@@ -84,7 +92,12 @@ async function resolveStressInputs(userId, date, { restingHeartRate, sleepHours,
 // on top of it -- the net result is the same as if the two requests had
 // been strictly sequential, and no request ever fails or silently loses its
 // data because of timing.
-async function upsertHealthDataDay(filter, update) {
+// Exported for the same reason as estimateStressScore above -- the race-
+// condition handling here is real data-integrity logic (see the comment
+// block above this function); a second, hand-copied implementation in the
+// Google Health sync job would be a real risk of the two silently drifting
+// apart, not just extra typing.
+export async function upsertHealthDataDay(filter, update) {
   try {
     return await HealthData.findOneAndUpdate(
       filter,

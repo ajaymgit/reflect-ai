@@ -5,6 +5,7 @@ import AuthRedirect from "./components/AuthRedirect";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { applyStoredTheme } from "./utils/theme";
 
+const LandingPage = lazy(() => import("./pages/LandingPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
 const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
@@ -47,6 +48,24 @@ export default function App() {
 
   return (
     <Routes>
+      {/* Public marketing front door -- ProtectedRoute sends any logged-out
+          visitor here (including the bare "/" domain root) instead of
+          straight to /login, per docs/ux-comparison-2026-08.md: the app
+          previously had no public-facing page at all, unlike every
+          competitor audited there. Wrapped in AuthRedirect like /login and
+          /register so an already-authenticated visitor who lands here
+          (an old link, a bookmark) goes straight back into the app instead
+          of seeing a sign-up pitch for a product they already use. */}
+      <Route
+        path="/welcome"
+        element={
+          <AuthRedirect>
+            <Suspense fallback={routeFallback}>
+              <LandingPage />
+            </Suspense>
+          </AuthRedirect>
+        }
+      />
       <Route
         path="/login"
         element={

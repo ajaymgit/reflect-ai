@@ -359,6 +359,51 @@ router.get(
   }),
 );
 
+// "Then vs. now" -- the one thing nobody else in the category can do (see
+// docs/competitive-brief-2026-08.md's positioning analysis: pattern
+// detection + health correlation + Time Capsule + annual recap together is
+// the actual whitespace, not any single feature). FutureMe can deliver a
+// letter; only Equoria can also tell you, honestly and from real data,
+// whether the mood/themes in that letter still match who you are now.
+// Deliberately computed the same way heuristicAnalysis() in
+// retrospect/service.js works -- real counts from real entries, zero AI
+// call -- so this never fabricates a comparison and stays fast/free on
+// every /capsules fetch. Returns null (not a guess) when there isn't at
+// least one other visible entry to compare against.
+function topThemesFrom(entries) {
+  const counts = {};
+  for (const e of entries) {
+    for (const t of e.themes || []) {
+      counts[t] = (counts[t] || 0) + 1;
+    }
+  }
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([t]) => t);
+}
+
+function buildThenVsNow(entry, recentPool) {
+  if (!recentPool.length) return null;
+  const moodCounts = recentPool.reduce((acc, e) => {
+    acc[e.mood] = (acc[e.mood] || 0) + 1;
+    return acc;
+  }, {});
+  const [moodNow] = Object.entries(moodCounts).sort((a, b) => b[1] - a[1])[0];
+  const themesThen = (entry.themes || []).slice(0, 3);
+  const themesNow = topThemesFrom(recentPool);
+  const stillTrue = themesThen.filter((t) => themesNow.includes(t));
+  return {
+    moodThen: entry.mood,
+    moodNow,
+    sameMood: entry.mood === moodNow,
+    themesThen,
+    themesNow,
+    stillTrue,
+    daysSince: Math.max(0, Math.round((Date.now() - new Date(entry.createdAt).getTime()) / 86400000)),
+  };
+}
+
 // Time capsules -- letters to a future version of yourself (see
 // JournalEntry.revealAt). Split into two lists: `waiting` capsules only ever
 // expose mood/createdAt/revealAt -- never title or content, since the whole
@@ -373,7 +418,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const now = new Date();
     const entries = await JournalEntry.find({ userId: req.user._id, revealAt: { $ne: null } })
-      .select("_id content mood title tags isKeepsake createdAt revealAt")
+      .select("_id content mood title tags themes isKeepsake createdAt revealAt")
       .sort({ revealAt: 1 });
 
     const waiting = [];
@@ -388,13 +433,37 @@ router.get(
           content: e.content,
           mood: e.mood,
           tags: e.tags,
+          themes: e.themes,
           isKeepsake: e.isKeepsake,
           createdAt: e.createdAt,
           revealAt: e.revealAt,
         });
       }
     }
-    res.json({ waiting, ready });
+
+    // One shared "now" baseline for every ready capsule in this response
+    // (not one query per capsule) -- ordinary recent writing, explicitly
+    // excluding every time-capsule entry (including already-opened ones),
+    // since a capsule's mood/themes reflect the day it was sealed, not
+    // organic "how have I been lately" data.
+    let thenVsNowById = new Map();
+    if (ready.length) {
+      const recentPool = await JournalEntry.find({
+        userId: req.user._id,
+        revealAt: null,
+      })
+        .select("mood themes createdAt")
+        .sort({ createdAt: -1 })
+        .limit(10);
+      for (const e of ready) {
+        thenVsNowById.set(String(e._id), buildThenVsNow(e, recentPool));
+      }
+    }
+
+    res.json({
+      waiting,
+      ready: ready.map((e) => ({ ...e, thenVsNow: thenVsNowById.get(String(e._id)) || null })),
+    });
   }),
 );
 

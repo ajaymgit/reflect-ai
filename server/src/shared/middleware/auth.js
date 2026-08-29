@@ -38,8 +38,17 @@ export async function requireAuth(req, _res, next) {
     // response echoes back what was just sent) but "revert" to the default
     // on the very next page load or login, even though the real value was
     // correctly sitting in the database the whole time.
+    // googleHealthConnectedAt/googleHealthNeedsReconnect added for
+    // GET /api/google-health/status to read directly off req.user -- see
+    // this comment block's own account of the identical bug happening once
+    // already with reminderEnabled/reminderHour/weeklyDigestEnabled.
+    // Deliberately NOT including googleHealthRefreshToken here: every route
+    // that actually needs it (sync-now, disconnect) re-fetches the user with
+    // an explicit .select() of its own, so the encrypted refresh token is
+    // never sitting on every single authenticated request's req.user by
+    // default.
     const user = await User.findById(decoded.userId).select(
-      "_id name email tokenVersion twoFactorEnabled reminderEnabled reminderHour weeklyDigestEnabled",
+      "_id name email tokenVersion twoFactorEnabled reminderEnabled reminderHour weeklyDigestEnabled googleHealthConnectedAt googleHealthNeedsReconnect",
     );
     if (!user) {
       return next(new AppError("AUTH_INVALID", "Invalid authentication token", 401));

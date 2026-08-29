@@ -11,6 +11,7 @@
     "send-reminders": "node src/scripts/sendJournalingReminders.js",
     "send-weekly-digest": "node src/scripts/sendWeeklyDigest.js",
     "send-capsule-notifications": "node src/scripts/sendCapsuleReadyNotifications.js",
+    "sync-google-health": "node src/scripts/syncGoogleHealth.js",
     "embed-journals": "node src/scripts/embedJournalEntries.js",
     "seed-demo-journal": "node src/scripts/seedDemoJournal.js",
     "seed-showcase": "node src/scripts/seedShowcaseAccount.js",

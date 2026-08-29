@@ -109,6 +109,24 @@ const envSchema = z.object({
   // instead of emailing it, rather than crashing at startup.
   RESEND_API_KEY: z.string().optional(),
   RESEND_FROM_EMAIL: z.string().default("ReflectAI <onboarding@resend.dev>"),
+  // Google Health API (health.googleapis.com/v4) -- the live REST successor
+  // to the legacy Fitbit Web API (sunsetting September 2026) and the legacy
+  // Google Fit APIs (retiring end of 2026), covering Fitbit and Pixel Watch
+  // data. See server/src/modules/googleHealth/ and
+  // docs/wearable-health-integration-spec.md. All three optional, matching
+  // OPENAI_API_KEY's pattern -- the app boots fine without them, the
+  // "Connect Google Health" button in Settings just stays hidden (see
+  // GET /api/google-health/status). Get CLIENT_ID/CLIENT_SECRET from a
+  // Google Cloud project with the Google Health API enabled (OAuth client
+  // type: Web application) -- see docs/wearable-health-integration-spec.md's
+  // Open Questions for the setup checklist. REDIRECT_URI must exactly match
+  // one of the "Authorized redirect URIs" registered on that OAuth client,
+  // and must point at this SERVER (not the client app) since it's this
+  // server that exchanges the authorization code for tokens -- e.g.
+  // https://reflectai-server-ruhp.onrender.com/api/google-health/callback.
+  GOOGLE_HEALTH_CLIENT_ID: z.string().optional(),
+  GOOGLE_HEALTH_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_HEALTH_REDIRECT_URI: z.string().optional(),
   // Controls Express's "trust proxy" setting (see src/index.js), which
   // determines whether req.ip comes from the real client or gets taken from
   // an X-Forwarded-For header. Every rate limiter in this app (login,

@@ -1023,6 +1023,31 @@ export default function JournalPage() {
                   </div>
                   <p className="text-sm mt-1">{entry.title || "A letter, untitled"}</p>
                   <p className="text-[11px] text-ink/40 mt-0.5">Written {daysSince(entry.createdAt)}</p>
+                  {/* The one comparison nobody else in the category can offer
+                      (see docs/competitive-brief-2026-08.md): FutureMe
+                      delivers the letter, but only Equoria can also say,
+                      honestly and from real recent entries -- not a guess --
+                      whether who you were then still matches who you are
+                      now. Computed server-side with zero AI call (see
+                      buildThenVsNow in journal/routes.js), so this is always
+                      real counts from real entries, never a fabricated
+                      comparison; absent entirely (thenVsNow is null) until
+                      there's at least one other entry to compare against. */}
+                  {entry.thenVsNow && (
+                    <p className="text-[11px] text-ink/50 mt-1 leading-relaxed">
+                      {entry.thenVsNow.sameMood ? (
+                        <>You're still mostly <span className="text-ink/70">{entry.thenVsNow.moodNow}</span>.</>
+                      ) : (
+                        <>
+                          You tagged this <span className="text-ink/70">{entry.thenVsNow.moodThen}</span> -- lately
+                          you've been mostly <span className="text-ink/70">{entry.thenVsNow.moodNow}</span>.
+                        </>
+                      )}
+                      {entry.thenVsNow.stillTrue.length > 0 && (
+                        <> Still on your mind: {entry.thenVsNow.stillTrue.join(", ")}.</>
+                      )}
+                    </p>
+                  )}
                 </button>
               ))}
               {capsules.waiting.map((c) => (

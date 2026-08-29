@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Bell, Download, HeartPulse, KeyRound, Lock, LogOut, Monitor, Palette, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { apiFetch, describeError } from "../api";
@@ -501,6 +501,9 @@ export default function SettingsPage() {
 
             <SectionCard icon={HeartPulse} title="Integrations">
               <AppleHealthSection />
+              <div className="border-t border-ink/10 pt-4 mt-4">
+                <GoogleHealthSection />
+              </div>
             </SectionCard>
 
             <SectionCard icon={Download} title="Your data">
@@ -1117,6 +1120,163 @@ function AppleHealthSection() {
             </div>
           </div>
           <p className="text-xs text-ink/50">Sync endpoint: <span className="font-mono">{syncUrl}</span></p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Android/cross-platform counterpart to AppleHealthSection above -- same
+// slot in the Integrations card, but OAuth-based (Fitbit/Pixel Watch via the
+// Google Health API) instead of a paste-a-token companion app, since this
+// one *can* run as a pure server-side integration (see
+// docs/wearable-health-integration-spec.md). Deliberately a separate
+// component/status fetch rather than folded into AppleHealthSection: the two
+// have almost nothing in common mechanically (OAuth redirect vs. long-lived
+// bearer token) even though they end up filling the same HealthData rows.
+function GoogleHealthSection() {
+  const [status, setStatus] = useState(null); // null while loading
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [syncResult, setSyncResult] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    apiFetch("/api/google-health/status")
+      .then(setStatus)
+      .catch(() => setStatus({ available: false, connected: false }));
+  }, []);
+
+  // The OAuth callback (server-side, see googleHealth/routes.js) redirects
+  // back here with ?googleHealth=connected|declined|error -- read it once,
+  // show the right message, then strip it from the URL so refreshing the
+  // page doesn't keep re-showing a stale result from a previous visit.
+  useEffect(() => {
+    const result = searchParams.get("googleHealth");
+    if (!result) return;
+    if (result === "connected") {
+      setNotice("Google Health connected. Your first sync will pick up recent days automatically.");
+      apiFetch("/api/google-health/status").then(setStatus).catch(() => {});
+    } else if (result === "declined") {
+      setNotice("Connection cancelled -- nothing was changed.");
+    } else {
+      setError("Something went wrong connecting Google Health. Try again.");
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete("googleHealth");
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only ever
+    // needs to run once per redirect landing, not on every searchParams
+    // identity change (setSearchParams itself creates a new one).
+  }, []);
+
+  async function connect() {
+    setError("");
+    setBusy(true);
+    try {
+      const data = await apiFetch("/api/google-health/connect");
+      window.location.href = data.url;
+    } catch (err) {
+      setError(describeError(err));
+      setBusy(false);
+    }
+  }
+
+  async function disconnect() {
+    if (!window.confirm("Disconnect Google Health? Past synced data stays, but nothing new will sync.")) return;
+    setError("");
+    setBusy(true);
+    try {
+      await apiFetch("/api/google-health/disconnect", { method: "POST" });
+      setStatus((prev) => ({ ...prev, connected: false, connectedAt: null, needsReconnect: false }));
+      setSyncResult("");
+    } catch (err) {
+      setError(describeError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function syncNow() {
+    setError("");
+    setSyncResult("");
+    setBusy(true);
+    try {
+      const data = await apiFetch("/api/google-health/sync-now", { method: "POST" });
+      setSyncResult(
+        data.syncedDays > 0
+          ? `Synced ${data.syncedDays} day${data.syncedDays === 1 ? "" : "s"} of data.`
+          : "Connected, but no new data was found for the last few days.",
+      );
+    } catch (err) {
+      setError(describeError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Still loading, or the server has no Google Cloud credentials configured
+  // at all (see env.js's GOOGLE_HEALTH_CLIENT_ID/SECRET/REDIRECT_URI) --
+  // nothing useful to show either way, rather than a button that would just
+  // 503 on click.
+  if (!status || !status.available) return null;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <p className="text-sm font-medium">Google Health (Fitbit / Pixel Watch)</p>
+          <p className="text-xs text-ink/70 mt-1 max-w-md">
+            Sync real steps, sleep, and resting heart rate from a connected Fitbit or Pixel Watch, the Android
+            counterpart to Apple Health above -- no companion app needed.
+          </p>
+        </div>
+        {status.connected ? (
+          <button
+            type="button"
+            onClick={disconnect}
+            disabled={busy}
+            className="ui-button-ghost px-4 py-2.5 min-h-11 text-sm disabled:opacity-60"
+          >
+            Disconnect
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={connect}
+            disabled={busy}
+            className="ui-button-ghost px-4 py-2.5 min-h-11 text-sm disabled:opacity-60"
+          >
+            {busy ? "Connecting..." : "Connect Google Health"}
+          </button>
+        )}
+      </div>
+
+      {notice && <p className="text-xs text-signal mt-2">{notice}</p>}
+      {error && <p role="alert" className="text-xs text-red-300 mt-2">{error}</p>}
+
+      {status.connected && (
+        <div className="mt-3 space-y-2 border-t border-ink/10 pt-3">
+          {status.needsReconnect ? (
+            <p className="text-xs text-accent-ember">
+              Google stopped accepting this connection (often because access was revoked from your Google Account, or
+              it hasn't been used in a while). Disconnect and reconnect to fix it.
+            </p>
+          ) : (
+            <p className="text-xs text-ink/70">
+              Connected{status.connectedAt ? ` on ${new Date(status.connectedAt).toLocaleDateString()}` : ""}.
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={syncNow}
+            disabled={busy || status.needsReconnect}
+            className="ui-button-ghost px-3 py-2 text-xs disabled:opacity-60"
+          >
+            {busy ? "Syncing..." : "Sync now"}
+          </button>
+          {syncResult && <p className="text-xs text-ink/50">{syncResult}</p>}
         </div>
       )}
     </div>

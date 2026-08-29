@@ -1202,6 +1202,8 @@ Rules:
 - Mirror and validate emotion before analysis.
 - Use Socratic "gentle nudges", never commands.
 - Use long-term memory naturally when relevant: mention old patterns without sounding creepy.
+- context.retrospectDetail (when present) holds the same detected patterns, behavioral loops, and health correlation Retrospect already shows this person on its own page. You MAY reference at most ONE of these, briefly and in your own conversational words, but ONLY when what the user just said genuinely connects to it -- never as an unprompted "did you know" aside, never on a schedule, and never if retrospectDetail.confidence is low (below roughly 0.6). If nothing in retrospectDetail is actually relevant to this message, say nothing about it -- silence is the correct default, not a missed opportunity.
+- context.capsuleContext (when present, otherwise this person has never sealed one) tells you only whether they have Time Capsule letters waiting or arrived, and roughly when -- never their content, because you were never given it. Mention this ONLY when the conversation itself makes it relevant (e.g. they're reflecting on change over time, or ask directly). Never volunteer it otherwise, never state it as a fact detached from what they're actually talking about, and never guess, imply, or ask leading questions about what a still-sealed letter says.
 - If context.blueprint.depthLevel is "deep", switch to deeper analysis while keeping a friend-like tone.
 - If distress is severe, pivot to supportive grounding language first (safety valve), then one gentle question.
 - Respect context.settings:
@@ -1334,7 +1336,18 @@ export async function buildChatContext(userId) {
   // content could be pulled in as evidence and the AI could quote or
   // paraphrase it straight back to the user in a chat reply, before its
   // reveal date.
-  const [journals, retrospect, health, session] = await Promise.all([
+  // capsuleEntries: same underlying data GET /api/journal/capsules exposes,
+  // fetched here directly rather than calling that route -- deliberately
+  // minimal projection (revealAt/createdAt only, never title/content/mood),
+  // since chat only ever needs to know a letter EXISTS and roughly when, not
+  // what's in it. This is what lets chat mention "you have a letter arriving
+  // soon" without the underlying query ever giving it anything a still-
+  // sealed capsule's content could leak through (see buildCapsuleContext
+  // below, and the prompt rule added in generateInsight() -- the same
+  // "even the sender can't peek early" invariant journal/routes.js's own
+  // /capsules endpoint enforces for waiting capsules is enforced here at the
+  // query level, not just by asking the model nicely not to guess).
+  const [journals, retrospect, health, session, capsuleEntries] = await Promise.all([
     JournalEntry.find(visibleJournalFilter({ userId })).sort({ createdAt: -1 }).limit(20).select("+embedding"),
     RetrospectAnalysis.findOne({ userId }).sort({ createdAt: -1 }),
     HealthData.find({
@@ -1342,10 +1355,12 @@ export async function buildChatContext(userId) {
       date: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
     }).sort({ date: -1 }),
     ChatSession.findOne({ userId }),
+    JournalEntry.find({ userId, revealAt: { $ne: null } }).select("revealAt createdAt"),
   ]);
   const themes = detectThemes(journals);
   const healthQuality = calculateHealthQuality(health);
   const readiness = buildReadiness({ journals, healthQuality, themes });
+  const capsules = buildCapsuleContext(capsuleEntries);
 
   return {
     journals,
@@ -1355,6 +1370,26 @@ export async function buildChatContext(userId) {
     themes,
     healthQuality,
     readiness,
+    capsules,
+  };
+}
+
+// Deliberately just counts/dates -- never content -- see buildChatContext's
+// comment above for why. Returns null (not zeros) when the user has never
+// sealed a capsule at all, so the prompt rule added in generateInsight()
+// can skip mentioning Time Capsule entirely for someone who's never used the
+// feature, rather than the model having to infer that from a zeroed-out
+// object.
+function buildCapsuleContext(entries) {
+  if (!entries.length) return null;
+  const now = Date.now();
+  const waiting = entries.filter((e) => new Date(e.revealAt).getTime() > now).sort((a, b) => new Date(a.revealAt) - new Date(b.revealAt));
+  const ready = entries.filter((e) => new Date(e.revealAt).getTime() <= now).sort((a, b) => new Date(b.revealAt) - new Date(a.revealAt));
+  return {
+    waitingCount: waiting.length,
+    nextRevealDate: waiting[0]?.revealAt || null,
+    readyCount: ready.length,
+    mostRecentArrivalDate: ready[0]?.revealAt || null,
   };
 }
 
@@ -1430,6 +1465,28 @@ export async function processChatTurn({ userId, userMessage, chatSettings = {}, 
           evidenceCandidates,
           themes: context.themes,
           latestRetrospect: context.retrospect?.summary || "",
+          // Previously only `summary` (one sentence) made it into chat's
+          // context, even though buildChatContext already fetches the full
+          // RetrospectAnalysis -- detectedPatterns/behavioralLoops/
+          // healthCorrelation/confidence were computed and sitting right
+          // there, unused, every single chat turn. This is the "chat that
+          // knows what Retrospect already found" wiring: the same specific,
+          // evidence-backed pattern callouts Retrospect shows on its own
+          // page (and the kind of thing Rosebud's "three Sundays in a row"
+          // works because it's specific, not vague) are now available for
+          // chat to draw on -- gated by the explicit relevance/frequency
+          // rule added below in generateInsight()'s prompt, not a free pass
+          // to recite stats every turn.
+          retrospectDetail: context.retrospect
+            ? {
+                detectedPatterns: context.retrospect.detectedPatterns || [],
+                behavioralLoops: context.retrospect.behavioralLoops || [],
+                healthCorrelation: context.retrospect.healthCorrelation || "",
+                confidence: context.retrospect.confidence,
+              }
+            : null,
+          // See buildCapsuleContext -- counts/dates only, never content.
+          capsuleContext: context.capsules,
           healthQuality: context.healthQuality,
           blueprint,
           settings: normalizedSettings,

@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { encryptField } from "../shared/utils/encryption.js";
 
 const userSchema = new mongoose.Schema(
   {
@@ -46,6 +47,28 @@ const userSchema = new mongoose.Schema(
     // Regenerating replaces this hash, which immediately invalidates any
     // previously issued token (only one can be active at a time).
     healthSyncTokenHash: { type: String, default: null },
+    // Google Health API (Fitbit/Pixel Watch) -- see
+    // server/src/modules/googleHealth/. Unlike healthSyncTokenHash above,
+    // this genuinely needs to be read back later (it's handed to Google's
+    // token endpoint to mint fresh access tokens on the server's behalf),
+    // so it's reversibly encrypted with the same AES-256-GCM field-level
+    // encryption used for journal content/health metrics -- not hashed.
+    // Deliberately NOT given a getter here (unlike JournalEntry/HealthData's
+    // encrypted fields): every existing place that sends a User back to the
+    // client already hand-picks an explicit allowlist of fields (see
+    // issueLoginTokens in auth/routes.js) rather than serializing the whole
+    // document, so a getter isn't needed for the app to work -- and skipping
+    // it means there's no toJSON path that could ever accidentally include a
+    // decrypted refresh token in a response by omission. googleHealth/
+    // service.js calls decryptField/encryptField on this directly.
+    googleHealthRefreshToken: { type: String, default: null, set: encryptField },
+    googleHealthConnectedAt: { type: Date, default: null },
+    // Flips true when Google rejects the stored refresh token (revoked by
+    // the user from their Google Account, or expired from 6 months of
+    // disuse) -- see googleHealth/service.js's getAccessToken. Settings
+    // shows a "Needs reconnecting" state instead of silently failing every
+    // sync forever.
+    googleHealthNeedsReconnect: { type: Boolean, default: false },
   },
   { timestamps: true },
 );

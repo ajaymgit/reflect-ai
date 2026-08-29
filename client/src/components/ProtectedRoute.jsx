@@ -17,7 +17,13 @@ export default function ProtectedRoute({ children }) {
       </div>
     );
   }
-  if (!user) return <Navigate to="/login" replace />;
+  // Previously went straight to /login -- meant the bare "/" domain root
+  // (and any deep link like /journal/new) dropped a logged-out visitor
+  // straight into a bare sign-in form with zero context, the #1 gap flagged
+  // in docs/ux-comparison-2026-08.md. /welcome (LandingPage.jsx) is the new
+  // public front door and has its own "Log in" button for anyone who
+  // already has an account and just followed an old bookmark.
+  if (!user) return <Navigate to="/welcome" replace />;
   // Sits between the real auth check above and the app itself -- a
   // convenience deterrent layered on top of the JWT boundary, not a
   // replacement for it. Renders in place of the route entirely (rather than

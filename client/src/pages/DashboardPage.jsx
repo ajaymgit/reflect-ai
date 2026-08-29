@@ -565,6 +565,18 @@ export default function DashboardPage() {
                     ? `Your letter from ${relativeDay(unseenReadyCapsules[0].createdAt)} has arrived.`
                     : `${unseenReadyCapsules.length} letters you wrote have arrived.`}
                 </p>
+                {/* Only for the single-capsule case -- with several arriving
+                    at once, "then vs. now" for just the first one would read
+                    like it applies to all of them. See JournalPage.jsx's
+                    sidebar card for the fuller version of this same signal;
+                    thenVsNow is real, zero-AI computed data from
+                    journal/routes.js, never a fabricated comparison. */}
+                {unseenReadyCapsules.length === 1 && unseenReadyCapsules[0].thenVsNow && !unseenReadyCapsules[0].thenVsNow.sameMood && (
+                  <p className="text-xs text-ink/60 mt-1">
+                    You tagged it {unseenReadyCapsules[0].thenVsNow.moodThen} -- lately you've been mostly{" "}
+                    {unseenReadyCapsules[0].thenVsNow.moodNow}.
+                  </p>
+                )}
               </div>
             </div>
             <button

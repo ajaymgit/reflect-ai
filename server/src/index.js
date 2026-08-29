@@ -4,6 +4,7 @@ import authRoutes from "./modules/auth/routes.js";
 import chatRoutes from "./modules/chat/routes.js";
 import dashboardRoutes from "./modules/dashboard/routes.js";
 import exportRoutes from "./modules/export/routes.js";
+import googleHealthRoutes from "./modules/googleHealth/routes.js";
 import healthRoutes from "./modules/health/routes.js";
 import journalRoutes from "./modules/journal/routes.js";
 import retrospectRoutes from "./modules/retrospect/routes.js";
@@ -94,6 +95,7 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/journal", journalRoutes);
 app.use("/api/retrospect", retrospectRoutes);
 app.use("/api/health-data", healthRoutes);
+app.use("/api/google-health", googleHealthRoutes);
 app.use("/api/export", exportRoutes);
 app.use("/api/year-in-review", yearInReviewRoutes);
 
